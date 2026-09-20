@@ -61,6 +61,32 @@ Install the Python packages with `Scripts/install_requirements.bat`, or run:
 ```bat
 python -m pip install --upgrade mido python-rtmidi pyyaml
 ```
+## Tested With
+
+- GrandOrgue v3.17.3-1
+- Arturia KeyLab Essential 61 mk2, firmware 1.1.10, in DAW mode
+- Windows 11, Python 3.13
+- LoopBe1 as the virtual MIDI cable
+
+This has been tried on one setup only. Pad numbering and some DAW-mode behaviour
+can differ between keyboards and firmware versions (see the control reference).
+
+## GrandOrgue Setup
+
+In GrandOrgue open **Audio/MIDI > Settings > MIDI Devices** and enable:
+
+- the KeyLab **MAIN** input (keys, pitch and mod wheels, sustain pedal),
+- the virtual cable as both an **input** and an **output**.
+
+Leave the KeyLab **DAW** input **disabled** in GrandOrgue. Its button messages are
+ordinary notes and would sound pipes. Only the bridge reads that port.
+
+Put the keyboard in DAW mode by pressing the **DAW** pad.
+
+The bridge also reads the KeyLab MAIN port (for the pads) while GrandOrgue is using
+it. That worked on the test machine, which has Windows MIDI Services installed. If
+the bridge prints "cannot read the KeyLab main port", the pad lights still work but
+pad presses will not.
 
 ## Quick Start
 
@@ -85,6 +111,38 @@ python Scripts/keylab_go_bridge.py --go "LoopBe" --kl-in "DAW" --kl-out "KeyLab"
 
 Use `--verbose` for MIDI diagnostics. Use `--learn-pads` to identify the pad
 CC numbers and update `config.yaml`.
+
+## Importing the MIDI Settings
+
+GrandOrgue's MIDI Objects **Import** clears every object that is *not* in the file
+you import, and `Settings/Friesach-midi-settings-KeyLab.yaml` contains the author's
+own device names. Before importing:
+
+1. In GrandOrgue open the MIDI Objects dialog and **Export** your current settings.
+2. Merge the bridge's assignments into your export:
+
+   ```bat
+   python Scripts/make_go_midi_import.py your-export.yaml merged.yaml
+   ```
+
+3. **Import** `merged.yaml`.
+4. Open the GrandOrgue log. An "Unused MIDI object path" warning names an object that
+   does not exist in your organ.
+
+The assignments target the Friesach sample set. Its panel knobs are GrandOrgue
+*Switch* objects, so the paths are of the form `manuals/<n>/switches/<m>`. Another
+organ needs its own stop names and switch numbers in `Scripts/keylab_go_bridge.py`.
+
+## Troubleshooting
+
+- `--list` prints the exact MIDI port names on the machine.
+- `--verbose` prints every message the bridge sends and receives.
+- `--test-stop 11 --test-off` switches one stop off without touching a fader
+  (11 is the Hauptwerk Principal 8'). Run it again without `--test-off` to switch it back on.
+- LCD stays blank: try the other KeyLab output port with `--kl-out`.
+- Pad presses do nothing: check `--learn-pads`, then the pad CC list in `config.yaml`.
+- `keylab_sniffer.py` shows the raw messages of every KeyLab port, labelled MAIN or DAW.
+
 
 ## Repository Layout
 
@@ -112,3 +170,51 @@ The repository contains source code, documentation, text configuration, MIDI
 settings, and registration definitions. Actual GrandOrgue organ packages,
 audio samples and recordings, MIDI recordings, cache files, combination
 database files, and ZIP archives are intentionally excluded by `.gitignore`.
+
+## Known Limits
+
+- GrandOrgue can only *play* a MIDI file that is already loaded; loading is done from
+  its own menu, not by MIDI.
+- Load file always reloads the file and returns to step 0, so an accidental sustain
+  pedal press resets the registration.
+- The keyboard's pad colours drift, so the bridge re-sends them regularly.
+- In DAW mode pad 4 and pad 5 send the same CC; the bridge separates them by their
+  press pattern. Very long presses of pad 5 can be read as pad 4.
+- Accented letters in combination file names may not display correctly on the LCD.
+
+## How This Was Made
+
+The bridge, the GrandOrgue MIDI settings generator, the diagnostic and test scripts,
+the control reference and the registration files added for this project were written
+**almost entirely by Claude Sonnet 5**, an AI model made by Anthropic, in a long
+working conversation with the project's author.
+
+The author (MackyBMC) supplied the organ, the keyboard and the ideas, made the design
+decisions, and ran every test on real hardware. Each capture, log and screenshot from
+those tests went back to Claude, which corrected and extended the code from it. Claude
+also read the source of GrandOrgue and of rjuang's script to work out the MIDI message
+formats and object paths.
+
+Because the code is AI-generated and has been tried on one setup, review it before
+relying on it, especially for live performance.
+
+## Acknowledgements
+
+- **Claude Sonnet 5** (Anthropic) - wrote nearly all of the code in this repository, as
+  described above.
+- **rjuang** - [flstudio-arturia-keylab-mk2](https://github.com/rjuang/flstudio-arturia-keylab-mk2)
+  (MIT) documents how the KeyLab display and LEDs are driven; the LCD frame and LED
+  numbers used here come from studying it.
+- **Piotr Grabowski** - the Friesach Parish Church sample set this project is built on.
+- **The GrandOrgue project** - its source was consulted to learn the MIDI object paths
+  and event formats. No GrandOrgue code is included here.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+## Disclaimer
+
+This project is not affiliated with or endorsed by Arturia, GrandOrgue, Piotr Grabowski
+or Anthropic. KeyLab and Arturia are trademarks of Arturia SA; Claude is a trademark of
+Anthropic. Use at your own risk.

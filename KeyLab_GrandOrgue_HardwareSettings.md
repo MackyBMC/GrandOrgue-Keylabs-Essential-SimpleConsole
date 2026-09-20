@@ -1,100 +1,109 @@
-# KeyLab Essential 61 mk2 -> GrandOrgue (Friesach) Hardware Mapping
+# KeyLab Essential 61 mk2 -> GrandOrgue (Friesach): control reference
 
-Reference doc for programming the Arturia MIDI Control Center (User Mode page)
-and GrandOrgue's Audio/Midi Settings -> Initial MIDI tab ("Listen for event"
-on each element). This is documentation only - it is not read by GrandOrgue
-itself; GO's combination YAML has no MIDI-routing schema (see prior chat).
+Reference for `Scripts/keylab_go_bridge.py`, with the keyboard in **DAW mode** (press the DAW pad). This file is documentation only; the behaviour lives in the script and `Scripts/config.yaml`.
 
-Everything below assumes a single consistent User Mode page, MIDI Channel 1,
-all sent from one virtual port. DAW Mode is intentionally not used: it relies
-on Mackie Control Universal / HUI handshake messages that only DAWs (Reaper,
-Ableton, etc.) answer. GrandOrgue does not implement MCU/HUI, so DAW-mode
-transport buttons and motorized faders stay inert against it - User Mode CC/
-Note is the layer that actually works.
+## Which port carries what
 
-## Encoders (9)
+| Port | Carries | Read by |
+|---|---|---|
+| KeyLab **MAIN** in | keys, pitch and mod wheels, sustain pedal (CC 64), pads (CCs), panel-button SysEx | GrandOrgue directly; the bridge also reads the pads |
+| KeyLab **DAW** in | transport and navigation buttons, jog, encoders, faders (Mackie-style) | the bridge only - keep it **disabled** in GrandOrgue, or the button notes will play pipes |
+| KeyLab out | LCD text and LED colours (SysEx) | written by the bridge |
+| Virtual cable (LoopBe) | commands, stop states, volumes, label text | bridge <-> GrandOrgue |
 
-| # | CC  | Function                                   | GO Initial MIDI group |
-|---|-----|---------------------------------------------|------------------------|
-| 1 | 74  | Pedal division volume                        | Manuals |
-| 2 | 71  | Hauptwerk division volume                    | Manuals |
-| 3 | 77  | Schwellwerk division volume                  | Manuals |
-| 4 | 76  | Solowerk division volume                     | Manuals |
-| 5 | 20  | Master (overall) volume                      | Master controls |
-| 6 | 21  | Transpose (semitone)                         | Master controls |
-| 7 | 22  | Fine tuning / concert pitch                  | Master controls |
-| 8 | -   | Spare / reserved                             | - |
-| 9 | -   | Spare / reserved                             | - |
+## Buttons and wheels (DAW port unless noted)
 
-## Faders (9)
+| Control | Message | Action |
+|---|---|---|
+| `<<` Rewind | note 0x5B | previous step in the loaded file (activates) |
+| `>>` Forward | note 0x5C | next step in the loaded file (activates) |
+| Jog turn | CC 0x3C, 0x01 right / 0x41 left | cue next / previous setter file (does not activate) |
+| Jog press | note 0x54 | load the cued file (same as the sustain pedal) |
+| Sustain pedal | CC 64, MAIN port | GrandOrgue **Load file** (direct, not through the bridge) |
+| Part 1 / Next | note 0x31 (0x2F in bank mode) | next fader/pad bank |
+| Part 2 / Prev | note 0x30 (0x2E in bank mode) | previous fader/pad bank |
+| Save | note 0x50 | GrandOrgue **Save file** (opens its own dialog) |
+| Metro | note 0x59 | GrandOrgue metronome on/off |
+| Play/Pause | note 0x5E | GrandOrgue MIDI player play / pause (load the file in GrandOrgue first) |
+| Stop | note 0x5D | **Panic**; if the MIDI player is playing or paused it is stopped first |
+| Loop | note 0x56 | repeat the MIDI file (the bridge restarts Play when it ends) |
+| Undo, Punch, Record, Cat/Char, Preset, arrows | 0x51, 0x57/0x58, 0x5F, 0x65, 0x64, 0x62/0x63 | not assigned |
+| Live / Bank | (nothing) | switches Part 1/2 between channel notes (0x30/0x31) and bank notes (0x2E/0x2F); both work |
 
-| # | CC  | Function                                   | Notes |
-|---|-----|---------------------------------------------|-------|
-| 1 | 85  | Enclosure (Schwellwerk swell shade)          | Your primary real-time expression control |
-| 2 | 23  | General Crescendo                            | GO's built-in 0-32 step crescendo shoe. It's *destructive* - overrides hand registration while active rather than layering on top of it |
-| 3 | 24  | Coupler: Schwellwerk -> Hauptwerk ("I/II")   | Play on Hauptwerk, hear Schwellwerk's drawn stops too |
-| 4 | 25  | Coupler: Solowerk -> Hauptwerk ("I/III")     | Play on Hauptwerk, hear Solowerk's drawn stops too |
-| 5 | 26  | Coupler: Solowerk -> Schwellwerk ("II/III")  | Play on Schwellwerk, hear Solowerk's drawn stops too - this is the same "Coupler 6" already used in the Chorus Crescendo / Tutti / Grand Jeu Generals |
-| 6 | 27  | Coupler: Hauptwerk -> Pedal                  | Reinforces the pedal line with Hauptwerk stops |
-| 7 | 28  | Coupler: Schwellwerk -> Pedal                | Reinforces the pedal line with Schwellwerk stops |
-| 8 | 29  | Coupler: Solowerk -> Pedal                   | Reinforces the pedal line with Solowerk stops |
-| 9 | -   | Spare / reserved                             | No further couplers exist on this organ (6 total, all assigned above) |
+## Faders, encoders and volumes
 
-Faders used as couplers act as a physical rocker rather than a smooth sweep -
-GrandOrgue reads a "Listen for event" CC binding on a coupler/switch as a
-threshold, not a continuous value: bottom half of the fader throw = off, top
-half = on. Bind each one directly on the coupler itself (right-click the
-coupler drawstop in GO's Hauptwerk/Schwellwerk/Pedal panel -> Properties ->
-Listen for event), not through the combination YAML - same approach as the
-Setter/Sequencer buttons.
+| Control | Message | Action |
+|---|---|---|
+| Faders 1-8 | pitch bend, channels 1-8 | a fader you move sets its stop on (at or above half travel) or off; untouched faders change nothing |
+| Fader 9 (master) | pitch bend, channel 9 | master volume |
+| Encoders 1-4 | CC 0x10-0x13, relative | Pedal, Hauptwerk, Solowerk, Schwellwerk volume |
+| Encoders 7, 8 | CC 0x16, 0x17, relative | Tremolo II, Tremolo III: turn right = on, left = off |
+| Encoders 5, 6 | CC 0x14, 0x15 | not assigned |
+| Encoder 9 | (sends nothing in DAW mode) | - |
 
-Note: only these 6 intermanual/pedal couplers exist in the ODF - there's no
-reverse-direction pair (e.g. no "Hauptwerk -> Schwellwerk"), so "I/II",
-"I/III" and "II/III" above are one-directional exactly as built into this
-organ, not a symmetrical pair of couplers per manual combination.
+Encoder values are relative: `0x01` = one click right, `0x41` = one click left, larger values when turned fast.
 
-## Pads (8) - toggle mode
+## Fader and pad banks
 
-| Pad | Note | Function |
-|-----|------|----------|
-| 1   | 36   | General Cancel (all stops off) |
-| 2   | 37   | Panic (MIDI/all-notes-off safety) |
-| 3   | 38   | Set (store current registration into current sequencer slot) |
-| 4   | 39   | **Tremulant 2 Man** (Schwellwerk tremolo) - live toggle |
-| 5   | 40   | **Tremulant 3 Man** (Solowerk tremolo) - live toggle |
-| 6   | 41   | Direct jump: General 001 - "001 - General Verse" |
-| 7   | 42   | Direct jump: General 003 - "003 - Final Tutti Wall" |
-| 8   | 43   | Direct jump: General 019 - "019 - Ave Verum Corpus - Récit doux" |
+Fader *n* and pad *n* control the same item in the current bank; Part 1/2 change the bank for both. Banks are cut from each division's stops in the organ's own order, eight at a time. The CC number (channel 15) is fixed and never depends on the bank.
 
-Swap pads 6-8 for whichever three of the 19 Generals you reach for most -
-these are just a starting recommendation.
+| Bank | Division | Pad colour | Faders / pads 1-8 (CC) |
+|---|---|---|---|
+| P1 | Pedal | blue | 1 Untersatz 32' (1); 2 Contrabass 16' (2); 3 Subbass 16' (3); 4 Octavbass 8' (4); 5 Gedackt 8' (5); 6 Choralbass 4' (6); 7 Posaune 32' (7); 8 Posaune 16' (8) |
+| P2 | Pedal | blue | 1 Trompete 8' (9) |
+| H1 | Hauptwerk | green | 1 Praestant 16' (10); 2 Principal 8' (11); 3 Holzflote 8' (12); 4 Rohrflote 8' (13); 5 Gambe 8' (14); 6 Octave 4' (15); 7 Spitzflote 4' (16); 8 Quinte 2 2/3' (17) |
+| H2 | Hauptwerk | green | 1 Octave 2' (18); 2 Mixtur mj 2 2/3' (19); 3 Mixtur mi 1 1/3' (20); 4 Trompete 16' (21); 5 Trompete 8' (22) |
+| S1 | Schwellwerk | yellow | 1 Bourdon 16' (23); 2 Principal 8' (24); 3 Nacht.Ged. 8' (25); 4 Corno dolce 8' (26); 5 Viola 8' (27); 6 V. celeste 8' (28); 7 Geigenpr. 4' (29); 8 Querflote 4' (30) |
+| S2 | Schwellwerk | yellow | 1 Nazard 2 2/3' (31); 2 Flageolett 2' (32); 3 Tierce 1 3/5' (33); 4 Larigot 1 1/3' (34); 5 Plein jeu 2' (35); 6 Scharff 1' (36); 7 Trp. harm. 8' (37); 8 Hautbois 8' (38) |
+| S3 | Schwellwerk | yellow | 1 Clairon 4' (39); 2 Tremolo II (51) |
+| L1 | Solowerk | red | 1 Jubalflote 8' (40); 2 Trichterfl. 4' (41); 3 Cornet 8' (42); 4 Trp.chamade 8' (43); 5 Engl. Horn 8' (44); 6 Tremolo III (52) |
+| C1 | Couplers | purple | 1 Coupler 1 (ped) (45); 2 Coupler 2 (ped) (46); 3 Coupler 3 (ped) (47); 4 Coupler 4 (HW) (48); 5 Coupler 5 (HW) (49); 6 Coupler 6 (SW) (50) |
 
-## Custom buttons (3) - Prev / Next / Live
+Pad LEDs: full colour = stop on, dim = stop off (`pads: dim` in `config.yaml`). Tremolo II sits in the Schwellwerk bank and Tremolo III in the Solowerk bank (`layout: tremolos`).
 
-| Button | CC | Function |
-|--------|----|----------|
-| Prev   | 17 | Sequencer Previous (step back through all 19 Generals) |
-| Next   | 18 | Sequencer Next (step forward) |
-| Live   | 19 | Direct jump to General 000 ("000 - Playover Intro" / home registration) |
+## Pads on the MAIN port
 
-## To wire this up
+In DAW mode the pads send CCs, not notes, and this keyboard's numbering is irregular (measured on firmware 1.1.10):
 
-1. **Arturia MIDI Control Center**: set the encoders/faders/pads/buttons
-   above on one User Mode page, all Channel 1, matching the CC/Note numbers
-   in this table.
-2. **GrandOrgue**: Audio/Midi Settings -> Initial MIDI tab (or right-click
-   the element -> Properties -> Listen for event) for each target - play the
-   corresponding hardware control and let GO learn it.
-3. Save the organ's settings once done so the bindings persist across
-   sessions.
+| Pad | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| CC | 36 | 38 | 39 | 40 | 40 | 41 | 42 | 43 |
 
-## Open items to verify yourself
+Pad 4 is a toggle (a lone *down* on one press, a lone *up* on the next) and pad 5 is momentary (down then up), both on CC 40. The bridge tells them apart by whether a release follows within `pads: shared_window` seconds. Very long presses of pad 5 are misread as pad 4. Run `--learn-pads` if your unit differs.
 
-- Coupler naming/direction (Coupler 1-6) was inferred from the ODF's
-  `DestinationManual` fields and coupler counts per manual, not from
-  explicit labels - worth a quick listen test.
-- Whether recalling a General truly resets stops *not* listed in it, or only
-  changes what's listed. Both combination files were built listing every
-  manual explicitly (including empty `stops: {}`) to guarantee a clean
-  reset either way, but a real test in GO is worth doing before relying on
-  it live.
+## LCD (16 x 2)
+
+Normal display: the top-left two characters are the bank (for example `H2`), the bottom-left two are the step number in the loaded file, or `->` when a file is cued and waiting for Load. The rest shows the current file name.
+
+Moving a fader, encoder or pad shows a readout (stop name and state, or a volume bar) that returns to the normal display after `display: hold` seconds. The keyboard draws its own text on fader moves; the bridge writes over it every `display: live` seconds. The normal display is also re-sent every `display: refresh` seconds.
+
+## MIDI vocabulary used with GrandOrgue
+
+Defined in `Settings/Friesach-midi-settings-KeyLab.yaml` and in the constants at the top of the bridge; do not change one without the other.
+
+| Channel | Direction | Use |
+|---|---|---|
+| 16 | bridge -> GrandOrgue | commands: CC 1 previous step, 2 next step, 3 previous file, 4 next file, 5 load file, 6 save file, 7 metronome, 8 play, 9 stop, 10 pause, 11 panic (127 then 0) |
+| 15 | both ways | stops, couplers and tremolos: CC 1-52, 127 = on, 0 = off; GrandOrgue reports state changes back |
+| 14 | GrandOrgue -> bridge | button state: CC 1 Load file lit (a file is cued), 2 Play lit, 3 Pause lit, 4 metronome on |
+| 12 | bridge -> GrandOrgue | volumes: CC 1 master, 2 Pedal, 3 Hauptwerk, 4 Schwellwerk, 5 Solowerk, 6 Noises |
+| - | GrandOrgue -> bridge | label text as Hauptwerk SysEx: file name (LCD, key 1) and step number (string, key 2) |
+
+In Friesach the panel knobs are GrandOrgue *Switch* objects, not Stop objects, so the stop assignments target `manuals/<n>/switches/<m>` (stops follow the couplers in each manual's list: Pedal +3, Hauptwerk +2, Schwellwerk +1, Solowerk +0). The two tremolo buttons are the global switches `047` and `053`.
+
+## Importing into GrandOrgue
+
+GrandOrgue's MIDI Objects **Import** clears every object that is *not* in the file. Export your own settings first, then run
+
+```bat
+python make_go_midi_import.py your-export.yaml merged.yaml
+```
+
+and import `merged.yaml`, which keeps your existing assignments and adds the bridge's. Check the GrandOrgue log afterwards: an "Unused MIDI object path" warning names a path that does not exist in your organ.
+
+## Known limits
+
+- GrandOrgue can only *play* a MIDI file that is already loaded; loading is done from its own menu.
+- An accidental pedal press always reloads the file and returns to step 0, because that is what Load file does.
+- The keyboard's pad colours drift, so the bridge re-sends them regularly (`pads: refresh`).
+- Combination file names with accented letters may not display correctly on the LCD; ASCII names are safest.
