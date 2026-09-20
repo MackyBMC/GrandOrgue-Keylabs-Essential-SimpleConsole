@@ -8,6 +8,20 @@ GrandOrgue organ through a virtual MIDI cable.
 The current configuration targets the Friesach organ and includes registration
 combinations, MIDI settings, and hardware mappings for that setup.
 
+## Base Organ: Friesach
+
+This project uses the **Friesach Parish Church** sample set by Piotr Grabowski
+as its base organ. The full sample set is free and supports GrandOrgue. Get it
+from the official source:
+
+- [Friesach Parish Church sample set - Piotr Grabowski](https://piotrgrabowski.pl/friesach/)
+- [GrandOrgue download page](https://grandorgue.com/download/)
+
+On the Friesach page, choose **Full free version** and complete the free
+checkout to receive the download link. The full 24-bit version needs about
+13 GB of free RAM for all release samples; the 16-bit version needs about
+6.6 GB. The sample files are not included in this repository.
+
 ## What It Does
 
 - Navigates and loads GrandOrgue sequencer and setter files.
