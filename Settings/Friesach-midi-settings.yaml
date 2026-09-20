@@ -1,0 +1,183 @@
+﻿---
+info:
+  content-type: MIDI Settings
+  organ-name: Friesach
+  grandorgue-version: v3.17.3-1
+  saved_time: 2026/09/19 19:58:48
+objects:
+  - path: Sequencer/current file name
+    send:
+      - event_type: HWLCD
+        key: 1
+        low_value: 0
+        start: 0
+        length: 32
+  - path: Sequencer/Prev
+    name: Previous
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 17
+        low_value: 0
+        high_value: 1
+        debounce_time: 0
+  - path: Sequencer/Next
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 16
+        low_value: 0
+        high_value: 1
+        debounce_time: 0
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 64
+        low_value: 0
+        high_value: 1
+        debounce_time: 0
+  - path: Sequencer/PrevFile
+    name: Prev file
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 73
+        low_value: 0
+        high_value: 1
+        debounce_time: 0
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 17
+        low_value: 0
+        high_value: 1
+        debounce_time: 0
+  - path: Sequencer/NextFile
+    name: Next file
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 16
+        low_value: 0
+        high_value: 1
+        debounce_time: 0
+  - path: Sequencer/LoadFile
+    name: Load file
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 18
+        low_value: 0
+        high_value: 1
+        debounce_time: 0
+  - path: manuals/000
+    name: 1. Pedal
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: Note
+        channel: 1
+        transpose: 0
+        low_key: 36
+        high_key: 53
+        low_value: 1
+        high_value: 127
+  - path: manuals/001
+    name: 2. Hauptwerk
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: Note
+        channel: 1
+        transpose: 0
+        low_key: 0
+        high_key: 127
+        low_value: 1
+        high_value: 127
+  - path: manuals/002
+    name: 3. Schwellwerk
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: Note
+        channel: 1
+        transpose: 0
+        low_key: 0
+        high_key: 127
+        low_value: 1
+        high_value: 127
+  - path: manuals/003
+    name: 4. Solowerk
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: Note
+        channel: 1
+        transpose: 0
+        low_key: 54
+        high_key: 96
+        low_value: 1
+        high_value: 127
+  - path: enclosures/001
+    name: Enclosure 2 Man
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 93
+        low_value: 0
+        high_value: 127
+  - path: volumes/Master
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 85
+        low_value: 0
+        high_value: 127
+  - path: volumes/Windchest001
+    name: 1. Pedal
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 74
+        low_value: 0
+        high_value: 127
+  - path: volumes/Windchest002
+    name: 2. Hauptwerk
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 71
+        low_value: 0
+        high_value: 127
+  - path: volumes/Windchest003
+    name: 3. Schwellwerk
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 76
+        low_value: 0
+        high_value: 127
+  - path: volumes/Windchest004
+    name: 4. Solowerk
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 77
+        low_value: 0
+        high_value: 127
+  - path: volumes/Windchest005
+    name: Noises
+    receive:
+      - device: "winmm: Arturia KeyLab Ess Midi In"
+        event_type: ControlChange
+        channel: 1
+        key: 83
+        low_value: 0
+        high_value: 127

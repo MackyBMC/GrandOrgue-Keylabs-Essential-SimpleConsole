@@ -1,0 +1,68 @@
+---
+info:
+  content-type: GrandOrgue Combinations
+  organ-name: Friesach
+  grandorgue-version: v3.17.3-1
+  saved_time: 2026/09/04 00:00:00
+
+sequencer:
+  000:
+    name: "French - Grand Jeu"
+    manuals:
+      000:
+        name: 1. Pedal
+        stops:
+          003: P  Subbaß 16'
+          004: P  Octavbaß 8'
+          009: P  Trompete 8'
+          010: Key action Pedal Attack
+          011: Key action Pedal Release
+        couplers:
+          001: Coupler 1
+          002: Coupler 2
+          003: Coupler 3
+        switches:
+          001: Coupler 1
+          002: Coupler 2
+          003: Coupler 3
+          006: P  Subbaß 16'
+          007: P  Octavbaß 8'
+          012: P  Trompete 8'
+      001:
+        name: 2. Hauptwerk
+        stops:
+          001: HW  Praestant 16'
+          002: HW  Principal 8'
+          012: HW  Trompete 16'
+          013: HW  Trompete 8'
+          014: Key action Manual 1 Attack
+          015: Key action Manual 1 Release
+        couplers:
+          001: Coupler 4
+          002: Coupler 5
+        switches:
+          001: Coupler 4
+          002: Coupler 5
+          003: HW  Praestant 16'
+          004: HW  Principal 8'
+          014: HW  Trompete 16'
+          015: HW  Trompete 8'
+      002:
+        name: 3. Schwellwerk
+        stops:
+          018: Key action Manual 2 Attack
+          019: Key action Manual 2 Release
+        switches: {}
+      003:
+        name: 4. Solowerk
+        stops:
+          003: SL  Cornet a pavilon 1-8f. 8'
+          004: SL  Trompete en chamade 8'
+          006: Key action Manual 3 Attack
+          007: Key action Manual 3 Release
+        switches:
+          003: SL  Cornet a pavilon 1-8f. 8'
+          004: SL  Trompete en chamade 8'
+    switches:
+      001: Blower
+      054: Ambient

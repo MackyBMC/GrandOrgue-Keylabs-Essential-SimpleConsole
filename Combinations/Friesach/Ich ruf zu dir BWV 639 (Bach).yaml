@@ -1,0 +1,132 @@
+---
+info:
+  content-type: GrandOrgue Combinations
+  organ-name: Friesach
+  grandorgue-version: v3.17.3-1
+  saved_time: 2026/09/19 00:00:00
+
+sequencer:
+  000:
+    name: "Solo Jubalflote"
+    manuals:
+      000:
+        name: 1. Pedal
+        stops:
+          003: P  Subbaß 16'
+          005: P  Gedackt 8'
+          010: Key action Pedal Attack
+          011: Key action Pedal Release
+        switches:
+          006: P  Subbaß 16'
+          008: P  Gedackt 8'
+      001:
+        name: 2. Hauptwerk
+        stops:
+          014: Key action Manual 1 Attack
+          015: Key action Manual 1 Release
+        switches: {}
+      002:
+        name: 3. Schwellwerk
+        stops:
+          003: SW  Nachthorn Gedackt 8'
+          004: SW  Corno dolce 8'
+          018: Key action Manual 2 Attack
+          019: Key action Manual 2 Release
+        switches:
+          004: SW  Nachthorn Gedackt 8'
+          005: SW  Corno dolce 8'
+      003:
+        name: 4. Solowerk
+        stops:
+          001: SL  Jubalflöte 8'
+          006: Key action Manual 3 Attack
+          007: Key action Manual 3 Release
+        switches:
+          001: SL  Jubalflöte 8'
+    switches:
+      001: Blower
+      054: Ambient
+
+  001:
+    name: "Solo Englischhorn"
+    manuals:
+      000:
+        name: 1. Pedal
+        stops:
+          003: P  Subbaß 16'
+          005: P  Gedackt 8'
+          010: Key action Pedal Attack
+          011: Key action Pedal Release
+        switches:
+          006: P  Subbaß 16'
+          008: P  Gedackt 8'
+      001:
+        name: 2. Hauptwerk
+        stops:
+          014: Key action Manual 1 Attack
+          015: Key action Manual 1 Release
+        switches: {}
+      002:
+        name: 3. Schwellwerk
+        stops:
+          003: SW  Nachthorn Gedackt 8'
+          004: SW  Corno dolce 8'
+          018: Key action Manual 2 Attack
+          019: Key action Manual 2 Release
+        switches:
+          004: SW  Nachthorn Gedackt 8'
+          005: SW  Corno dolce 8'
+      003:
+        name: 4. Solowerk
+        stops:
+          005: SL  Englischhorn 8'
+          006: Key action Manual 3 Attack
+          007: Key action Manual 3 Release
+        switches:
+          005: SL  Englischhorn 8'
+    switches:
+      001: Blower
+      054: Ambient
+
+  002:
+    name: "Solo Jubalflote - veiled strings below"
+    manuals:
+      000:
+        name: 1. Pedal
+        stops:
+          003: P  Subbaß 16'
+          005: P  Gedackt 8'
+          010: Key action Pedal Attack
+          011: Key action Pedal Release
+        switches:
+          006: P  Subbaß 16'
+          008: P  Gedackt 8'
+      001:
+        name: 2. Hauptwerk
+        stops:
+          014: Key action Manual 1 Attack
+          015: Key action Manual 1 Release
+        switches: {}
+      002:
+        name: 3. Schwellwerk
+        stops:
+          003: SW  Nachthorn Gedackt 8'
+          005: SW  Viola 8'
+          006: SW  Vox celeste 8'
+          018: Key action Manual 2 Attack
+          019: Key action Manual 2 Release
+        switches:
+          004: SW  Nachthorn Gedackt 8'
+          006: SW  Viola 8'
+          007: SW  Vox celeste 8'
+      003:
+        name: 4. Solowerk
+        stops:
+          001: SL  Jubalflöte 8'
+          006: Key action Manual 3 Attack
+          007: Key action Manual 3 Release
+        switches:
+          001: SL  Jubalflöte 8'
+    switches:
+      001: Blower
+      054: Ambient

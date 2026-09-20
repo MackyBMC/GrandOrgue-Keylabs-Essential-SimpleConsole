@@ -1,0 +1,47 @@
+---
+info:
+  content-type: GrandOrgue Combinations
+  organ-name: Friesach
+  grandorgue-version: v3.17.3-1
+  saved_time: 2026/09/04 00:00:00
+
+sequencer:
+  000:
+    name: "French - Recit Expressif"
+    manuals:
+      000:
+        name: 1. Pedal
+        stops:
+          010: Key action Pedal Attack
+          011: Key action Pedal Release
+        switches: {}
+      001:
+        name: 2. Hauptwerk
+        stops:
+          014: Key action Manual 1 Attack
+          015: Key action Manual 1 Release
+        switches: {}
+      002:
+        name: 3. Schwellwerk
+        stops:
+          001: SW  Bourdon 16'
+          005: SW  Viola 8'
+          016: SW  Hautbois 8'
+          018: Key action Manual 2 Attack
+          019: Key action Manual 2 Release
+        switches:
+          002: SW  Bourdon 16'
+          006: SW  Viola 8'
+          017: SW  Hautbois 8'
+      003:
+        name: 4. Solowerk
+        stops:
+          006: Key action Manual 3 Attack
+          007: Key action Manual 3 Release
+        switches: {}
+    tremulants:
+      001: Tremulant 2 Man
+    switches:
+      001: Blower
+      047: Tremulant 2 Man
+      054: Ambient

@@ -1,0 +1,108 @@
+---
+info:
+  content-type: GrandOrgue Combinations
+  organ-name: Friesach
+  grandorgue-version: v3.17.3-1
+  saved_time: 2026/09/02 17:28:00
+
+# =======================================================
+# HARDWARE CONTINUOUS CONTROL (CC) ROUTING (Main Port - Index 2)
+# Controls your volume knobs, fader, and transport buttons
+# =======================================================
+HardwareSettings:
+  Enclosure001:
+    DeviceIndex: 2
+    MIDIChannel: 1
+    EventType: CC
+    ControlNumber: 85
+  AudioSliders:
+    PedalDivision: { DeviceIndex: 2, MIDIChannel: 1, EventType: CC, ControlNumber: 74 }
+    HauptwerkDivision: { DeviceIndex: 2, MIDIChannel: 1, EventType: CC, ControlNumber: 71 }
+    SolowerkDivision: { DeviceIndex: 2, MIDIChannel: 1, EventType: CC, ControlNumber: 76 }
+    SchwellwerkDivision: { DeviceIndex: 2, MIDIChannel: 1, EventType: CC, ControlNumber: 77 }
+
+# =======================================================
+# COMBINATION SETTER CONFIGURATION
+# Links your physical buttons directly to specific styles
+# =======================================================
+CombinationSetterRouting:
+  # Sequential Stepping using your checked DAW Port (Index 3)
+  PreviousButton: { DeviceIndex: 3, MIDIChannel: 1, EventType: CC, ControlNumber: 17, TriggerValue: 127 }
+  NextButton: { DeviceIndex: 3, MIDIChannel: 1, EventType: CC, ControlNumber: 18, TriggerValue: 127 }
+  
+  # Absolute Jumps using the Part 1, Part 2, and Live Buttons (Main Port - Index 2, Channel 8)
+  # Part 1 / Next jumps straight to the Playover Intro (000)
+  DigitButton0: { DeviceIndex: 2, MIDIChannel: 8, EventType: CC, ControlNumber: 16, TriggerValue: 127 }
+  
+  # Part 2 / Prev jumps straight to the General Verse (001)
+  DigitButton1: { DeviceIndex: 2, MIDIChannel: 8, EventType: CC, ControlNumber: 17, TriggerValue: 127 }
+  
+  # Live / Bank jumps straight to the Fading Finish (004)
+  DigitButton4: { DeviceIndex: 2, MIDIChannel: 8, EventType: CC, ControlNumber: 18, TriggerValue: 127 }
+
+# =======================================================
+# THE REGISTRATION MATRIX
+# =======================================================
+sequencer:
+  000:
+    name: "000 - Playover Intro"
+    manuals:
+      000:
+        name: 1. Pedal
+        stops: { 004: "P  Octavbaß 8'" }
+      001:
+        name: 2. Hauptwerk
+        stops: { 002: "HW  Principal 8'" }
+      002:
+        name: 3. Schwellwerk
+        stops: { 002: "SW  Principal 8'" }
+  001:
+    name: "001 - General Verse"
+    manuals:
+      000:
+        name: 1. Pedal
+        stops: { 002: "P  Contrabaß 16'", 004: "P  Octavbaß 8'" }
+      001:
+        name: 2. Hauptwerk
+        stops: { 002: "HW  Principal 8'" }
+      002:
+        name: 3. Schwellwerk
+        stops: { 001: "SW  Bourdon 16'", 002: "SW  Principal 8'", 007: "SW  Geigenprincipal 4'" }
+  002:
+    name: "002 - Chorus Crescendo"
+    manuals:
+      000:
+        name: 1. Pedal
+        stops: { 002: "P  Contrabaß 16'", 004: "P  Octavbaß 8'", 006: "P  Choralbaß 4'" }
+      001:
+        name: 2. Hauptwerk
+        stops: { 002: "HW  Principal 8'" }
+      002:
+        name: 3. Schwellwerk
+        stops: { 001: "SW  Bourdon 16'", 002: "SW  Principal 8'", 007: "SW  Geigenprincipal 4'", 010: "SW  Flageolett 2'", 013: "SW  Plein Jeu 4-5f. 2'" }
+        couplers: { 001: "Coupler 6" }
+  003:
+    name: "003 - Final Tutti Wall"
+    manuals:
+      000:
+        name: 1. Pedal
+        stops: { 002: "P  Contrabaß 16'", 004: "P  Octavbaß 8'", 006: "P  Choralbaß 4'" }
+      001:
+        name: 2. Hauptwerk
+        stops: { 002: "HW  Principal 8'" }
+      002:
+        name: 3. Schwellwerk
+        stops: { 001: "SW  Bourdon 16'", 002: "SW  Principal 8'", 007: "SW  Geigenprincipal 4'", 010: "SW  Flageolett 2'", 012: "SW  Larigot 1 1/3'", 013: "SW  Plein Jeu 4-5f. 2'", 015: "SW  Trompete harmonique 8'", 017: "SW  Clairon 4'" }
+        couplers: { 001: "Coupler 6" }
+  004:
+    name: "004 - Fading Finish"
+    manuals:
+      000:
+        name: 1. Pedal
+        stops: { 002: "P  Contrabaß 16'" }
+      001:
+        name: 2. Hauptwerk
+        stops: {}
+      002:
+        name: 3. Schwellwerk
+        stops: { 001: "SW  Bourdon 16'" }

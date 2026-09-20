@@ -1,0 +1,63 @@
+---
+info:
+  content-type: GrandOrgue Combinations
+  organ-name: Friesach
+  grandorgue-version: v3.17.3-1
+  saved_time: 2026/09/04 00:00:00
+
+sequencer:
+  000:
+    name: "Romantic - Foundations Crescendo"
+    manuals:
+      000:
+        name: 1. Pedal
+        stops:
+          002: P  Contrabaß 16'
+          004: P  Octavbaß 8'
+          005: P  Gedackt 8'
+          010: Key action Pedal Attack
+          011: Key action Pedal Release
+        switches:
+          005: P  Contrabaß 16'
+          007: P  Octavbaß 8'
+          008: P  Gedackt 8'
+      001:
+        name: 2. Hauptwerk
+        stops:
+          002: HW  Principal 8'
+          003: HW  Holzflöte 8'
+          005: HW  Gambe 8'
+          014: Key action Manual 1 Attack
+          015: Key action Manual 1 Release
+        couplers:
+          001: Coupler 4
+        switches:
+          001: Coupler 4
+          004: HW  Principal 8'
+          005: HW  Holzflöte 8'
+          007: HW  Gambe 8'
+      002:
+        name: 3. Schwellwerk
+        stops:
+          001: SW  Bourdon 16'
+          002: SW  Principal 8'
+          003: SW  Nachthorn Gedackt 8'
+          005: SW  Viola 8'
+          007: SW  Geigenprincipal 4'
+          018: Key action Manual 2 Attack
+          019: Key action Manual 2 Release
+        switches:
+          002: SW  Bourdon 16'
+          003: SW  Principal 8'
+          004: SW  Nachthorn Gedackt 8'
+          006: SW  Viola 8'
+          008: SW  Geigenprincipal 4'
+      003:
+        name: 4. Solowerk
+        stops:
+          006: Key action Manual 3 Attack
+          007: Key action Manual 3 Release
+        switches: {}
+    switches:
+      001: Blower
+      054: Ambient

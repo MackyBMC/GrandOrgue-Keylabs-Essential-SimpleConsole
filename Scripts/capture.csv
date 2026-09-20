@@ -1,0 +1,38 @@
+time,port,raw,meaning
+24.261,MAIN,B0 28 7F,Pad 4/5 (User 2 / User 3)? down
+25.737,MAIN,B0 28 7F,Pad 4/5 (User 2 / User 3)? down
+25.861,MAIN,B0 28 00,Pad 4/5 (User 2 / User 3)? up
+39.805,DAW,90 54 7F,UNKNOWN
+39.954,DAW,90 54 00,UNKNOWN
+48.130,MAIN,B0 40 7F,SUSTAIN PEDAL down
+48.281,MAIN,B0 40 00,SUSTAIN PEDAL up
+53.468,MAIN,B0 24 7F,Pad 1 (Analog Lab) down
+53.668,MAIN,B0 24 00,Pad 1 (Analog Lab) up
+54.302,MAIN,B0 26 7F,Pad 2 (DAW)? down
+54.472,MAIN,B0 26 00,Pad 2 (DAW)? up
+55.138,MAIN,B0 27 7F,Pad 3 (User 1)? down
+55.316,MAIN,B0 27 00,Pad 3 (User 1)? up
+57.154,MAIN,B0 28 00,Pad 4/5 (User 2 / User 3)? up
+58.856,MAIN,B0 28 7F,Pad 4/5 (User 2 / User 3)? down
+59.040,MAIN,B0 28 00,Pad 4/5 (User 2 / User 3)? up
+59.808,MAIN,B0 29 7F,Pad 6 (User 4) down
+60.006,MAIN,B0 29 00,Pad 6 (User 4) up
+60.546,MAIN,B0 2A 7F,Pad 7 (User 5) down
+60.746,MAIN,B0 2A 00,Pad 7 (User 5) up
+61.347,MAIN,B0 2B 7F,Pad 8 (User 6) down
+61.549,MAIN,B0 2B 00,Pad 8 (User 6) up
+79.378,MAIN,B0 28 7F,Pad 4/5 (User 2 / User 3)? down
+83.082,MAIN,B0 28 7F,Pad 4/5 (User 2 / User 3)? down
+83.817,MAIN,B0 28 00,Pad 4/5 (User 2 / User 3)? up
+89.937,MAIN,B0 28 00,Pad 4/5 (User 2 / User 3)? up
+90.627,MAIN,B0 28 7F,Pad 4/5 (User 2 / User 3)? down
+91.197,MAIN,B0 28 00,Pad 4/5 (User 2 / User 3)? up
+91.774,MAIN,B0 28 7F,Pad 4/5 (User 2 / User 3)? down
+92.634,MAIN,B0 28 7F,Pad 4/5 (User 2 / User 3)? down
+92.868,MAIN,B0 28 00,Pad 4/5 (User 2 / User 3)? up
+93.533,MAIN,B0 28 7F,Pad 4/5 (User 2 / User 3)? down
+93.789,MAIN,B0 28 00,Pad 4/5 (User 2 / User 3)? up
+94.176,MAIN,B0 28 7F,Pad 4/5 (User 2 / User 3)? down
+94.860,MAIN,B0 28 00,Pad 4/5 (User 2 / User 3)? up
+95.423,MAIN,B0 28 7F,Pad 4/5 (User 2 / User 3)? down
+95.956,MAIN,B0 28 00,Pad 4/5 (User 2 / User 3)? up

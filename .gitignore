@@ -1,0 +1,23 @@
+# Keep the repository limited to source, documentation, and text/config files.
+*
+!*/
+!.gitignore
+!LICENSE*
+!*.md
+!*.txt
+!*.py
+!*.yaml
+!*.yml
+!*.bat
+!*.csv
+
+# Explicitly keep generated/binary GrandOrgue and recording data out of Git.
+*.orgue
+*.wav
+*.mp3
+*.mid
+*.midi
+*.cache
+*.idx
+*.cmb
+*.zip

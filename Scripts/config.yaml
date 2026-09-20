@@ -1,0 +1,61 @@
+# KeyLab Essential 61 mk2  <->  GrandOrgue bridge - permanent settings
+# Keep this file in the same folder as keylab_go_bridge.py (the Scripts folder).
+# Anything typed on the command line (e.g. --verbose or --live 0.08) overrides the value here.
+# Names below are matched as "part of the port name", upper/lower case does not matter.
+# Run   python keylab_go_bridge.py --list   to see the exact port names on this PC.
+
+ports:
+  go: "LoopBe"            # virtual cable shared with GrandOrgue (bridge -> GrandOrgue and back)
+  go_out: ""              # only if you send to GrandOrgue on a different cable than the one above
+  keylab_in: "DAW"        # KeyLab DAW input (buttons, jog, faders, encoders)
+  keylab_out: "KeyLab"    # KeyLab output that drives the LCD and button/pad LEDs (try "DAW" if the LCD stays blank)
+  keylab_main_in: "Ess Midi In"   # KeyLab MAIN input, only needed for the pad presses (blank = pads are lights only)
+
+faders:
+  threshold: 64           # fader value (0-127) at/above which a moved fader switches its stop on
+
+display:
+  hold: 1.0               # seconds a fader/encoder/bank readout stays before the normal display returns
+  live: 0.04              # minimum seconds between LCD writes while a control moves (raise to 0.08 if the LCD misbehaves)
+  refresh: 2.0            # re-send the normal display this often (seconds, 0 = never); repairs any overwrite by the keyboard
+
+pads:
+  enabled: true
+  # CC sent by pads 1-8 in DAW mode (top row left to right, then bottom row), as measured on this keyboard.
+  # Pad 4 and pad 5 share CC 40 - the bridge tells them apart (see shared_window). Check with --learn-pads.
+  ccs: [36, 38, 39, 40, 40, 41, 42, 43]
+  shared_window: 0.7      # seconds: a 'down' followed by a release within this time = pad 5 (momentary); no release = pad 4 (toggle)
+  dim: 0.10               # brightness of a pad whose stop is off, as a fraction of full (0 = dark)
+  colors:                 # red, green, blue (0-127) of a pad whose stop is on, per division
+    pedal: [0, 0, 127]
+    hw: [0, 127, 0]
+    sw: [127, 100, 0]
+    sl: [127, 0, 0]
+    other: [100, 0, 127]  # couplers and tremulants
+
+controls:
+  encoder_step: 2         # volume steps (0-127) per encoder click; fast turns move further
+  volume_start: 100       # assumed starting level (0-127) of each volume until an encoder is turned
+  jog_max_steps: 8        # most files the jog moves per message when turned very fast
+  loop_restart: 0.4       # seconds to wait before restarting the MIDI player in Loop mode
+  encoders:               # encoder number: pedal | hw | sw | sl | noises | master
+    1: pedal
+    2: hw
+    3: sl
+    4: sw
+    # 5: noises
+
+# Optional short names (16 characters at most) for the LCD, keyed by GrandOrgue object path.
+# The couplers are unnamed on the LCD until you say which is which, for example:
+lcd_names: {}
+#  "manuals/000/couplers/Coupler 1": "III/P"
+#  "manuals/000/couplers/Coupler 2": "II/P"
+#  "manuals/000/couplers/Coupler 3": "I/P"
+#  "manuals/001/couplers/Coupler 4": "III/I"
+#  "manuals/001/couplers/Coupler 5": "II/I"
+#  "manuals/002/couplers/Coupler 6": "III/II"
+
+verbose: false            # true = print every message (useful when something does not respond)
+
+# The MIDI channels and CC numbers the bridge uses (commands 16, stops 15, feedback 14, volumes 12)
+# are fixed by Friesach-midi-settings-KeyLab.yaml in GrandOrgue. Do not change them here.

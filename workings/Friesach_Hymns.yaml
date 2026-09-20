@@ -1,0 +1,186 @@
+﻿---
+info:
+  content-type: GrandOrgue Combinations
+  organ-name: Friesach
+  grandorgue-version: v3.17.3-1
+  saved_time: 2026/09/02 13:05:59
+sequencer:
+  000:
+    manuals:
+      001:
+        name: 2. Hauptwerk
+        stops:
+          024: Stop attack noise P  Contrabaß 16'
+          025: Stop release noise P  Contrabaß 16'
+          030: Stop attack noise P  Gedackt 8'
+          031: Stop release noise P  Gedackt 8'
+          036: Stop attack noise P  Posaune 16'
+          037: Stop release noise P  Posaune 16'
+          066: Stop attack noise HW  Trompete 16'
+          067: Stop release noise HW  Trompete 16'
+          076: Stop attack noise SW  Nachthorn Gedackt 8'
+          077: Stop release noise SW  Nachthorn Gedackt 8'
+          080: Stop attack noise SW  Viola 8'
+          081: Stop release noise SW  Viola 8'
+        switches:
+          014: HW  Trompete 16'
+      000:
+        name: 1. Pedal
+        switches:
+          005: P  Contrabaß 16'
+          008: P  Gedackt 8'
+          011: P  Posaune 16'
+      002:
+        name: 3. Schwellwerk
+        switches:
+          004: SW  Nachthorn Gedackt 8'
+          006: SW  Viola 8'
+    full: true
+  001:
+    manuals:
+      001:
+        name: 2. Hauptwerk
+        stops:
+          024: Stop attack noise P  Contrabaß 16'
+          025: Stop release noise P  Contrabaß 16'
+          030: Stop attack noise P  Gedackt 8'
+          031: Stop release noise P  Gedackt 8'
+          036: Stop attack noise P  Posaune 16'
+          037: Stop release noise P  Posaune 16'
+          066: Stop attack noise HW  Trompete 16'
+          067: Stop release noise HW  Trompete 16'
+          076: Stop attack noise SW  Nachthorn Gedackt 8'
+          077: Stop release noise SW  Nachthorn Gedackt 8'
+          080: Stop attack noise SW  Viola 8'
+          081: Stop release noise SW  Viola 8'
+        switches:
+          014: HW  Trompete 16'
+      000:
+        name: 1. Pedal
+        switches:
+          005: P  Contrabaß 16'
+          008: P  Gedackt 8'
+          011: P  Posaune 16'
+      002:
+        name: 3. Schwellwerk
+        switches:
+          004: SW  Nachthorn Gedackt 8'
+          006: SW  Viola 8'
+  002:
+    manuals:
+      001:
+        name: 2. Hauptwerk
+        stops:
+          024: Stop attack noise P  Contrabaß 16'
+          025: Stop release noise P  Contrabaß 16'
+          030: Stop attack noise P  Gedackt 8'
+          031: Stop release noise P  Gedackt 8'
+          036: Stop attack noise P  Posaune 16'
+          037: Stop release noise P  Posaune 16'
+          066: Stop attack noise HW  Trompete 16'
+          067: Stop release noise HW  Trompete 16'
+          076: Stop attack noise SW  Nachthorn Gedackt 8'
+          077: Stop release noise SW  Nachthorn Gedackt 8'
+          080: Stop attack noise SW  Viola 8'
+          081: Stop release noise SW  Viola 8'
+        switches:
+          014: HW  Trompete 16'
+      000:
+        name: 1. Pedal
+        switches:
+          005: P  Contrabaß 16'
+          008: P  Gedackt 8'
+          011: P  Posaune 16'
+      002:
+        name: 3. Schwellwerk
+        switches:
+          004: SW  Nachthorn Gedackt 8'
+          006: SW  Viola 8'
+  003:
+    manuals:
+      000:
+        name: 1. Pedal
+        stops:
+          004: P  Octavbaß 8'
+      001:
+        name: 2. Hauptwerk
+        stops:
+          002: HW  Principal 8'
+      002:
+        name: 3. Schwellwerk
+        stops:
+          002: SW  Principal 8'
+  004:
+    manuals:
+      000:
+        name: 1. Pedal
+        stops:
+          002: P  Contrabaß 16'
+          004: P  Octavbaß 8'
+      001:
+        name: 2. Hauptwerk
+        stops:
+          002: HW  Principal 8'
+      002:
+        name: 3. Schwellwerk
+        stops:
+          001: SW  Bourdon 16'
+          002: SW  Principal 8'
+          007: SW  Geigenprincipal 4'
+  005:
+    manuals:
+      000:
+        name: 1. Pedal
+        stops:
+          002: P  Contrabaß 16'
+          004: P  Octavbaß 8'
+          006: P  Choralbaß 4'
+      001:
+        name: 2. Hauptwerk
+        stops:
+          002: HW  Principal 8'
+      002:
+        name: 3. Schwellwerk
+        stops:
+          001: SW  Bourdon 16'
+          002: SW  Principal 8'
+          007: SW  Geigenprincipal 4'
+          010: SW  Flageolett 2'
+          013: SW  Plein Jeu 4-5f. 2'
+        couplers:
+          001: Coupler 6
+  006:
+    manuals:
+      000:
+        name: 1. Pedal
+        stops:
+          002: P  Contrabaß 16'
+          004: P  Octavbaß 8'
+          006: P  Choralbaß 4'
+      001:
+        name: 2. Hauptwerk
+        stops:
+          002: HW  Principal 8'
+      002:
+        name: 3. Schwellwerk
+        stops:
+          001: SW  Bourdon 16'
+          002: SW  Principal 8'
+          007: SW  Geigenprincipal 4'
+          010: SW  Flageolett 2'
+          012: SW  Larigot 1 1/3'
+          013: SW  Plein Jeu 4-5f. 2'
+          015: SW  Trompete harmonique 8'
+          017: SW  Clairon 4'
+        couplers:
+          001: Coupler 6
+  007:
+    manuals:
+      000:
+        name: 1. Pedal
+        stops:
+          002: P  Contrabaß 16'
+      002:
+        name: 3. Schwellwerk
+        stops:
+          001: SW  Bourdon 16'
