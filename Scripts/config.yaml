@@ -25,6 +25,7 @@ pads:
   # Pad 4 and pad 5 share CC 40 - the bridge tells them apart (see shared_window). Check with --learn-pads.
   ccs: [36, 38, 39, 40, 40, 41, 42, 43]
   shared_window: 0.7      # seconds: a 'down' followed by a release within this time = pad 5 (momentary); no release = pad 4 (toggle)
+  refresh: 2.0            # seconds between full re-sends of every pad/button LED (the keyboard forgets colours; 0 = never)
   dim: 0.10               # brightness of a pad whose stop is off, as a fraction of full (0 = dark)
   colors:                 # red, green, blue (0-127) of a pad whose stop is on, per division
     pedal: [0, 0, 127]

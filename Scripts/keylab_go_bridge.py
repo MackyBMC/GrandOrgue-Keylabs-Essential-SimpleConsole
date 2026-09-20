@@ -189,7 +189,7 @@ class Bridge:
 
     def __init__(self, threshold=64, settle_s=0.10, live_s=MIN_INTERVAL_S, hold_s=1.0, loop_restart_s=0.4, refresh_s=2.0,
                  encoder_step=2, volume_start=100, encoder_vols=None, jog_max=8,
-                 pad_ccs=None, pad_dim=0.10, pad_colors=None, pads_enabled=True, pad_shared_window=0.7):
+                 pad_ccs=None, pad_dim=0.10, pad_colors=None, pads_enabled=True, pad_shared_window=0.7, led_refresh_s=2.0):
         self.threshold, self.settle_s, self.live_s, self.hold_s = threshold, settle_s, live_s, hold_s
         self.refresh_s, self.last_idle = refresh_s, 0.0
         self.min_interval = live_s
@@ -207,7 +207,8 @@ class Bridge:
         self.play_lit = self.pause_lit = self.metro_lit = False
         self.dirty = True
         self.last_activity = None
-        self.last_kl = 0.0
+        self.last_kl = 0.0                    # time of the last message of any kind to the keyboard
+        self.last_lcd = 0.0                   # time of the last LCD write (LED bursts must not starve the LCD)
         self.detail_pending, self.detail_until, self.last_detail = None, 0.0, 0.0
         self.scheduled = []                   # (due, outputs)
         self.leds_sent = {}
@@ -218,6 +219,8 @@ class Bridge:
         # down then up within a moment) both send the same CC. Told apart by whether a release follows quickly.
         self.shared_window, self.shared_down = pad_shared_window, None
         self.shared_cc, self.shared_pads = None, None
+        self.led_refresh_s, self.next_led_refresh = led_refresh_s, 0.0   # the keyboard forgets pad colours: re-send them regularly
+        self.refresh_queue, self.led_invalidations = [], []
         for c in dict.fromkeys(self.pad_ccs):
             idx = [i for i, x in enumerate(self.pad_ccs) if x == c]
             if len(idx) == 2:
@@ -365,6 +368,9 @@ class Bridge:
         """Pads toggle the stop under the same-numbered fader of the current bank."""
         if not self.pads_enabled or msg.type != "control_change" or msg.control not in self.pad_ccs:
             return []
+        touched = [i for i, c in enumerate(self.pad_ccs) if c == msg.control]
+        self._invalidate_pads(touched)
+        self.led_invalidations += [(now + 0.25, touched), (now + 1.0, touched)]
         if self.shared_cc is not None and msg.control == self.shared_cc:
             toggle_pad, momentary_pad = self.shared_pads
             if msg.value >= 64:                                   # a down: wait to see whether a release follows
@@ -379,6 +385,11 @@ class Bridge:
         if msg.value < 64:
             return []
         return self._pad_press(self.pad_ccs.index(msg.control), now)
+
+    def _invalidate_pads(self, indices):
+        for i in indices:
+            for j in range(3):
+                self.leds_sent.pop(PAD_LED_BASE[i] + j, None)
 
     def _pad_press(self, n, now):
         items = self._bank_items()
@@ -462,32 +473,45 @@ class Bridge:
         if self.shared_down is not None and now - self.shared_down > self.shared_window:
             self.shared_down = None                               # no release came: it was the toggle pad going on
             out += self._pad_press(self.shared_pads[0], now)
+        for item in list(self.led_invalidations):
+            if now >= item[0]:
+                self.led_invalidations.remove(item)
+                self._invalidate_pads(item[1])
         for item in list(self.scheduled):
             if now >= item[0]:
                 self.scheduled.remove(item)
                 out += item[1]
         act = self.last_activity
         settled = act is None or now - act >= self.settle_s
-        spaced = now - self.last_kl >= self.min_interval
+        spaced = now - self.last_lcd >= self.min_interval and now - self.last_kl >= PAD_LED_GAP_S
         if self.detail_pending and spaced and (settled or now - self.last_detail >= self.live_s):
             l1, l2, hold = self.detail_pending
             self.detail_pending, self.detail_until = None, now + (hold or self.hold_s)
-            self.last_detail = self.last_kl = now
+            self.last_detail = self.last_kl = self.last_lcd = now
             out.append({"to": "lcd", "data": lcd_data(l1, l2)})
         elif spaced and not self.detail_pending and self.detail_until and now >= self.detail_until:
-            self.detail_until, self.dirty, self.last_kl, self.last_idle = 0.0, False, now, now  # back to status
+            self.detail_until, self.dirty, self.last_kl, self.last_lcd, self.last_idle = 0.0, False, now, now, now  # back to status
             out.append({"to": "lcd", "data": lcd_data(*self._idle_lines())})
         elif spaced and not self.detail_pending and not self.detail_until and settled and (
                 self.dirty or (self.refresh_s and now - self.last_idle >= self.refresh_s)):
-            self.dirty, self.last_kl, self.last_idle = False, now, now
+            self.dirty, self.last_kl, self.last_lcd, self.last_idle = False, now, now, now
             out.append({"to": "lcd", "data": lcd_data(*self._idle_lines())})
-        elif now - self.last_kl >= PAD_LED_GAP_S:      # LEDs: one change per tick at most
-            for led_id, val in self._desired_leds().items():
+        elif now - self.last_kl >= PAD_LED_GAP_S:      # LEDs: one message per tick at most
+            want = self._desired_leds()
+            for led_id, val in want.items():           # 1. anything that differs from what was last sent
                 if self.leds_sent.get(led_id) != val:
                     self.leds_sent[led_id] = val
                     self.last_kl = now
                     out.append({"to": "led", "data": led_data(led_id, val)})
                     break
+            else:                                      # 2. otherwise a slow rolling refresh of every LED
+                if self.led_refresh_s and not self.refresh_queue and now >= self.next_led_refresh:
+                    self.refresh_queue = list(want)
+                    self.next_led_refresh = now + self.led_refresh_s
+                if self.refresh_queue:
+                    led_id = self.refresh_queue.pop(0)
+                    self.last_kl = now
+                    out.append({"to": "led", "data": led_data(led_id, want[led_id])})
         return out
 
 
@@ -525,6 +549,8 @@ def bridge_settings(raw):
         out["pads_enabled"] = bool(p["enabled"])
     if p.get("ccs"):
         out["pad_ccs"] = [int(x) for x in p["ccs"]]
+    if p.get("refresh") is not None:
+        out["led_refresh_s"] = float(p["refresh"])
     if p.get("shared_window") is not None:
         out["pad_shared_window"] = float(p["shared_window"])
     if p.get("dim") is not None:
