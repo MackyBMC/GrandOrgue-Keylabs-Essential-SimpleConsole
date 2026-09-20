@@ -38,9 +38,10 @@ def main(src, dst):
         {"event_type": "HWString", "key": kb.POSITION_LABEL_KEY, "start": 0, "length": 16})
     # drawbars: every stop, coupler and tremulant is set by CC (127 on / 0 off) and reports its state back
     for it in kb.ITEMS:
-        o = obj(it.path)
-        o.setdefault("receive", []).append(cc_event(kb.STOP_CH, it.cc, 0, 127))
-        o.setdefault("send", []).append(cc_event(kb.STOP_CH, it.cc, 0, 127))
+        for path in [it.path] + it.extra_paths:
+            o = obj(path)
+            o.setdefault("receive", []).append(cc_event(kb.STOP_CH, it.cc, 0, 127))
+            o.setdefault("send", []).append(cc_event(kb.STOP_CH, it.cc, 0, 127))
 
     # volume levels: bridge -> GrandOrgue (master fader and encoders 1-4); no feedback, to avoid echoes
     for key, (cc, path, _name) in kb.VOLS.items():

@@ -970,7 +970,33 @@ objects:
     key: 51
     low_value: 0
     high_value: 127
+- path: tremulants/001
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 51
+    low_value: 0
+    high_value: 127
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 51
+    low_value: 0
+    high_value: 127
 - path: '053'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 52
+    low_value: 0
+    high_value: 127
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 52
+    low_value: 0
+    high_value: 127
+- path: tremulants/002
   receive:
   - event_type: ControlChange
     channel: 15

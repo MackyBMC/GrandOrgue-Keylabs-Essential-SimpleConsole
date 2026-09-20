@@ -19,6 +19,7 @@ Controls (DAW mode)
                       Bank overview (2.5 s after a bank change): # on/up  . off/down  ^ on but fader
                       down (raise it)  v off but fader up (lower it)  ? fader not seen yet
   Master fader        master volume;  Encoders 1-4: Pedal / Hauptwerk / Solowerk / Schwellwerk volume
+  Encoders 7, 8       Tremolo II / III: turn right = on, left = off (the tremolos are also in their division's bank)
   Play/Pause          GrandOrgue MIDI player;  Loop = repeat the same recording
   Stop                panic (all sound off); if a MIDI file is playing or paused it is stopped as well
   Save                setter "Save file"
@@ -37,6 +38,8 @@ Run:
 """
 import argparse
 import time
+
+__version__ = "2026-09-20 (tremolos in division banks, tremolo encoders 7/8, pad LED refresh)"
 
 # ------------------------------------------------------------------ shared vocabulary
 CMD_CH, STOP_CH, FB_CH = 15, 14, 13          # mido channels are 0-based: 16, 15, 14
@@ -83,7 +86,7 @@ OTHERS = [  # (kind, manual, number, LCD name, GrandOrgue object name) - coupler
     ("coupler", 0, 1, "Coupler 1 (ped)", "Coupler 1"), ("coupler", 0, 2, "Coupler 2 (ped)", "Coupler 2"),
     ("coupler", 0, 3, "Coupler 3 (ped)", "Coupler 3"), ("coupler", 1, 1, "Coupler 4 (HW)", "Coupler 4"),
     ("coupler", 1, 2, "Coupler 5 (HW)", "Coupler 5"), ("coupler", 2, 1, "Coupler 6 (SW)", "Coupler 6"),
-    ("tremulant", None, 1, "Tremulant II", ""), ("tremulant", None, 2, "Tremulant III", ""),
+    ("tremulant", None, 1, "Tremolo II", ""), ("tremulant", None, 2, "Tremolo III", ""),
 ]
 BANK_SIZE = 8
 SWITCH_OFFSET = {0: 3, 1: 2, 2: 1, 3: 0}     # manual -> how many switches come before its first stop
@@ -106,27 +109,54 @@ class Item:
             return f"manuals/{self.manual:03d}/switches/{self.number:03d}"
         return f"{TREMULANT_SWITCH[self.number]:03d}"
 
+    @property
+    def extra_paths(self):
+        """The tremulant object behind a tremolo knob gets the same CC too, in case the knob drives it directly."""
+        return [f"tremulants/{self.number:03d}"] if self.kind == "tremulant" else []
 
-def build_banks():
-    items, banks, cc = [], [], 0
+
+TREMULANT_DIVISION = {1: "S", 2: "L"}    # Tremolo II -> Schwellwerk bank, Tremolo III -> Solowerk bank (see config.yaml)
+
+
+def build_banks(trem_div=None):
+    """CC numbers never depend on the layout: stops 1-44, couplers 45-50, tremulants 51-52."""
+    trem_div = TREMULANT_DIVISION if trem_div is None else trem_div
+    items, stops_by_div, cc = [], {}, 0
     for code, dname, manual, names in DIVISIONS:
-        for b in range(0, len(names), BANK_SIZE):
-            bank_items = []
-            for i, nm in enumerate(names[b:b + BANK_SIZE], start=b):
-                cc += 1
-                bank_items.append(Item("stop", manual, i + 1, nm, cc, f"{code}{b // BANK_SIZE + 1}", dname))
-            banks.append({"code": f"{code}{b // BANK_SIZE + 1}", "division": dname, "items": bank_items})
-            items += bank_items
-    other_items = []
+        lst = []
+        for i, nm in enumerate(names):
+            cc += 1
+            lst.append(Item("stop", manual, i + 1, nm, cc, code, dname))
+        stops_by_div[code] = lst
+        items += lst
+    others = []
     for kind, manual, number, nm, odf in OTHERS:
         cc += 1
-        other_items.append(Item(kind, manual, number, nm, cc, "C1", "Cpl/Trem", odf))
-    banks.append({"code": "C1", "division": "Cpl/Trem", "items": other_items})
-    return items + other_items, banks
+        others.append(Item(kind, manual, number, nm, cc, "C1", "Couplers", odf))
+    items += others
+    trems = [it for it in others if it.kind == "tremulant"]
+    banks = []
+    for code, dname, manual, names in DIVISIONS:
+        lst = stops_by_div[code] + [t for t in trems if trem_div.get(t.number) == code]
+        for b in range(0, len(lst), BANK_SIZE):
+            chunk, bcode = lst[b:b + BANK_SIZE], f"{code}{b // BANK_SIZE + 1}"
+            for it in chunk:
+                it.bank_code, it.division = bcode, dname
+            banks.append({"code": bcode, "division": dname, "items": chunk})
+    rest = [it for it in others if it.kind == "coupler" or trem_div.get(it.number) is None]
+    banks.append({"code": "C1", "division": "Couplers", "items": rest})
+    return items, banks
 
 
 ITEMS, BANKS = build_banks()
 ITEM_BY_CC = {it.cc: it for it in ITEMS}
+
+
+def rebuild_layout(trem_div):
+    """Re-cut the fader banks after config.yaml says which division each tremolo belongs to."""
+    global ITEMS, BANKS, ITEM_BY_CC
+    ITEMS, BANKS = build_banks(trem_div)
+    ITEM_BY_CC = {it.cc: it for it in ITEMS}
 
 # ------------------------------------------------------------------ KeyLab protocol
 KEYLAB_HEADER = [0x00, 0x20, 0x6B, 0x7F, 0x42]
@@ -189,7 +219,7 @@ class Bridge:
 
     def __init__(self, threshold=64, settle_s=0.10, live_s=MIN_INTERVAL_S, hold_s=1.0, loop_restart_s=0.4, refresh_s=2.0,
                  encoder_step=2, volume_start=100, encoder_vols=None, jog_max=8,
-                 pad_ccs=None, pad_dim=0.10, pad_colors=None, pads_enabled=True, pad_shared_window=0.7, led_refresh_s=2.0):
+                 pad_ccs=None, pad_dim=0.10, pad_colors=None, pads_enabled=True, pad_shared_window=0.7, led_refresh_s=2.0, tremulant_encoders=None):
         self.threshold, self.settle_s, self.live_s, self.hold_s = threshold, settle_s, live_s, hold_s
         self.refresh_s, self.last_idle = refresh_s, 0.0
         self.min_interval = live_s
@@ -200,6 +230,7 @@ class Bridge:
         self.state = {}                       # cc -> bool, stop/coupler/tremulant state
         self.last_sent = {}                   # cc -> (state, time) of the last stop command sent
         self.encoder_step, self.jog_max = encoder_step, jog_max
+        self.trem_encoders = dict({6: 1, 7: 2} if tremulant_encoders is None else tremulant_encoders)   # encoder index -> tremulant number
         self.encoder_vols = dict(ENCODER_VOLS if encoder_vols is None else encoder_vols)
         self.vol = {k: volume_start for k in VOLS}   # last volume value sent per level (0-127)
         self.loop = False
@@ -329,6 +360,14 @@ class Bridge:
             if n in self.encoder_vols:
                 key = self.encoder_vols[n]
                 out += self._set_volume(key, self.vol[key] + delta * self.encoder_step)   # more when turned fast
+            elif n in self.trem_encoders:                              # turn right = tremolo on, left = off
+                it = next((x for x in ITEMS if x.kind == "tremulant" and x.number == self.trem_encoders[n]), None)
+                if it and delta:
+                    new = delta > 0
+                    self.state[it.cc] = new
+                    self.last_sent[it.cc] = (new, now)
+                    out += [self._cc(STOP_CH, it.cc, 127 if new else 0)]
+                    self._detail(it.name, "ON" if new else "off")
             else:
                 self._detail(f"Encoder {n + 1}", "not assigned")
         elif t == "pitchwheel" and msg.channel < BANK_SIZE:
@@ -558,9 +597,28 @@ def bridge_settings(raw):
     if p.get("colors"):
         names = {"pedal": "P", "hw": "H", "sw": "S", "sl": "L", "other": "C"}
         out["pad_colors"] = {names[k]: tuple(int(x) for x in v) for k, v in p["colors"].items() if k in names}
+    if c.get("tremulant_encoders") is not None:
+        out["tremulant_encoders"] = {int(k) - 1: int(v) for k, v in (c["tremulant_encoders"] or {}).items()}
     if c.get("encoders"):
         out["encoder_vols"] = {int(k) - 1: v for k, v in c["encoders"].items() if v in VOLS}
     return out
+
+
+def describe_encoders(mapping):
+    return ", ".join(f"enc {n + 1} = {VOLS[k][2]}" for n, k in sorted(mapping.items())) or "none"
+
+
+def describe_tremolos(mapping):
+    names = {it.number: it.name for it in ITEMS if it.kind == "tremulant"}
+    return ", ".join(f"enc {n + 1} = {names.get(t, t)}" for n, t in sorted(mapping.items())) or "none"
+
+
+def apply_layout(raw):
+    """Which division's fader/pad bank each tremolo sits in:  layout: {tremolos: {1: sw, 2: sl}}"""
+    t = (raw.get("layout") or {}).get("tremolos")
+    if t is not None:
+        codes = {"pedal": "P", "hw": "H", "sw": "S", "sl": "L"}
+        rebuild_layout({int(k): codes[v] for k, v in t.items() if v in codes})
 
 
 def apply_lcd_names(raw):
@@ -627,7 +685,9 @@ def main():
     cfg_defaults, raw = load_config(cfg_path)
     ap.set_defaults(**cfg_defaults)                    # config.yaml values; anything typed on the command line wins
     a = ap.parse_args()
+    apply_layout(raw)
     apply_lcd_names(raw)
+    br_settings = bridge_settings(raw)
     print(f"Settings: {cfg_path}" if raw else "Settings: built-in defaults (no config.yaml found)")
 
     import mido
@@ -658,9 +718,12 @@ def main():
             main_in = mido.open_input(find_port(mido.get_input_names(), a.kl_main))
         except Exception as e:                       # the port may be held exclusively by GrandOrgue
             print(f"Pads: cannot read the KeyLab main port ({e}). Pad lights still work, pad presses do not.")
+    print(f"Bridge version {__version__}")
+    print(f"Encoder volumes: {describe_encoders(br_settings.get('encoder_vols', ENCODER_VOLS))}; "
+          f"tremolo encoders: {describe_tremolos(br_settings.get('tremulant_encoders', {6: 1, 7: 2}))}")
     print("Bridge running. Ctrl+C to stop.")
 
-    br = Bridge(threshold=a.threshold, hold_s=a.hold, refresh_s=a.refresh, live_s=a.live, **bridge_settings(raw))
+    br = Bridge(threshold=a.threshold, hold_s=a.hold, refresh_s=a.refresh, live_s=a.live, **br_settings)
 
     def emit(outputs):
         for o in outputs:
