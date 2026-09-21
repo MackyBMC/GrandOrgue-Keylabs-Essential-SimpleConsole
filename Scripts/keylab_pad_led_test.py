@@ -34,10 +34,11 @@ def main():
     a = ap.parse_args()
     import mido
     mido.set_backend("mido.backends.rtmidi")
-    name = next((n for n in mido.get_output_names() if a.out.lower() in n.lower()), None)
+    output_names = mido.get_output_names()  # type: ignore[attr-defined]
+    name = next((n for n in output_names if a.out.lower() in n.lower()), None)
     if not name:
-        raise SystemExit("No output port matches; names: " + ", ".join(mido.get_output_names()))
-    with mido.open_output(name) as port:
+        raise SystemExit("No output port matches; names: " + ", ".join(output_names))
+    with mido.open_output(name) as port:  # type: ignore[attr-defined]
         print(f"Using '{name}', mode {a.mode}")
         for label, rgb in COLOURS:
             print(f"all pads: {label}")

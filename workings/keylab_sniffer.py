@@ -82,10 +82,11 @@ def main():
     a = ap.parse_args()
 
     import mido
-    mido.set_backend("mido.backends.rtmidi")
-    names = [n for n in mido.get_input_names() if a.filter.lower() in n.lower()]
+    backend = mido.Backend("mido.backends.rtmidi")
+    input_names = backend.get_input_names()
+    names = [n for n in input_names if a.filter.lower() in n.lower()]
     if a.list or not names:
-        print("INPUT ports:", *mido.get_input_names(), sep="\n  ")
+        print("INPUT ports:", *input_names, sep="\n  ")
         return
 
     logf = open(a.log, "w", encoding="utf-8") if a.log else None
@@ -113,7 +114,7 @@ def main():
     for n in names:
         tag = "DAW" if "DAW" in n.upper() else "MAIN"
         try:
-            ports.append(mido.open_input(n, callback=make_cb(tag)))
+            ports.append(backend.open_input(n, callback=make_cb(tag)))
             print(f"Opened [{tag}] {n}")
         except Exception as e:
             print(f"Could not open {n}: {e}  (another program has it?)")

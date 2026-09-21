@@ -41,10 +41,10 @@ SUSTAIN_CC = 64
 
 
 def ascii_clean(text):
-    fold = {"ä": "a", "ö": "o", "ü": "u", "ß": "ss", "é": "e", "è": "e", "ê": "e",
+    fold: dict[str, str] = {"ä": "a", "ö": "o", "ü": "u", "ß": "ss", "é": "e", "è": "e", "ê": "e",
             "à": "a", "â": "a", "ç": "c", "î": "i", "ô": "o", "û": "u",
             "Ä": "A", "Ö": "O", "Ü": "U", "É": "E"}
-    out = "".join(fold.get(c, c) for c in text)
+    out = "".join(fold[c] if c in fold else c for c in text)
     return "".join(c if 32 <= ord(c) < 127 else " " for c in out)
 
 
@@ -172,32 +172,32 @@ def main():
     a = ap.parse_args()
 
     import mido
-    mido.set_backend("mido.backends.rtmidi")
+    backend = mido.Backend("mido.backends.rtmidi")
 
     if a.list:
-        print("INPUT ports :", *mido.get_input_names(), sep="\n  ")
-        print("OUTPUT ports:", *mido.get_output_names(), sep="\n  ")
+        print("INPUT ports :", *backend.get_input_names(), sep="\n  ")
+        print("OUTPUT ports:", *backend.get_output_names(), sep="\n  ")
         return
 
-    out_name = find_port(mido.get_output_names(), a.out)
+    out_name = find_port(backend.get_output_names(), a.out)
     if out_name is None:
         raise SystemExit("Give --out with part of the KeyLab output port name (see --list).")
 
-    with mido.open_output(out_name) as out:
+    with backend.open_output(out_name) as out:
         if a.test is not None:
             l1, l2 = layout(a.test, a.cued)
             out.send(mido.Message("sysex", data=keylab_data(l1, l2)))
             print(f"KeyLab <- [{l1}] [{l2}]")
             return
 
-        in_name = find_port(mido.get_input_names(), a.inp)
+        in_name = find_port(backend.get_input_names(), a.inp)
         if in_name is None:
             raise SystemExit("Give --in with part of the LoopBe port name (see --list).")
 
         watch_port = None
         if a.watch:
             try:
-                watch_port = mido.open_input(find_port(mido.get_input_names(), a.watch))
+                watch_port = backend.open_input(find_port(backend.get_input_names(), a.watch))
             except Exception as e:  # port busy (GrandOrgue has it) or not found
                 print(f"Could not watch the keyboard ({e}); using periodic refresh every {a.refresh}s instead.")
 
@@ -209,7 +209,7 @@ def main():
         if a.cue_cc is None and a.cue_note is None:
             print("Note: no --cue-cc given, so the '>' cue marker is off.")
 
-        with mido.open_input(in_name) as inp:
+        with backend.open_input(in_name) as inp:
             try:
                 while True:
                     now = time.time()

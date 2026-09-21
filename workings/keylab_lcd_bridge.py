@@ -28,10 +28,10 @@ MIN_INTERVAL_S = 0.05  # the KeyLab display can lock up if it is flooded
 
 def ascii_clean(text):
     """Keep printable 7-bit ASCII only; fold common accented letters."""
-    fold = {"ä": "a", "ö": "o", "ü": "u", "ß": "ss", "é": "e", "è": "e", "ê": "e",
+    fold: dict[str, str] = {"ä": "a", "ö": "o", "ü": "u", "ß": "ss", "é": "e", "è": "e", "ê": "e",
             "à": "a", "â": "a", "ç": "c", "î": "i", "ô": "o", "û": "u",
             "Ä": "A", "Ö": "O", "Ü": "U", "É": "E"}
-    out = "".join(fold.get(c, c) for c in text)
+    out = "".join(fold[c] if c in fold else c for c in text)
     return "".join(c if 32 <= ord(c) < 127 else " " for c in out)
 
 
@@ -86,18 +86,18 @@ def main():
     a = ap.parse_args()
 
     import mido
-    mido.set_backend("mido.backends.rtmidi")
+    backend = mido.Backend("mido.backends.rtmidi")
 
     if a.list:
-        print("INPUT ports :", *mido.get_input_names(), sep="\n  ")
-        print("OUTPUT ports:", *mido.get_output_names(), sep="\n  ")
+        print("INPUT ports :", *backend.get_input_names(), sep="\n  ")
+        print("OUTPUT ports:", *backend.get_output_names(), sep="\n  ")
         return
 
-    out_name = find_port(mido.get_output_names(), a.out)
+    out_name = find_port(backend.get_output_names(), a.out)
     if out_name is None:
         raise SystemExit("Give --out with part of the KeyLab output port name (see --list).")
 
-    with mido.open_output(out_name) as out:
+    with backend.open_output(out_name) as out:
         def show(text):
             l1, l2 = split_lines(text)
             out.send(mido.Message("sysex", data=keylab_data(l1, l2, center=not a.left)))
@@ -107,12 +107,12 @@ def main():
             show(a.test)
             return
 
-        in_name = find_port(mido.get_input_names(), a.inp)
+        in_name = find_port(backend.get_input_names(), a.inp)
         if in_name is None:
             raise SystemExit("Give --in with part of the loopMIDI port name (see --list).")
         print(f"Listening on '{in_name}', writing to '{out_name}'. Ctrl+C to stop.")
         last, last_t = None, 0.0
-        with mido.open_input(in_name) as inp:
+        with backend.open_input(in_name) as inp:
             for msg in inp:
                 if msg.type != "sysex":
                     continue

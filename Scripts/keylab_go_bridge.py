@@ -171,9 +171,9 @@ CC_JOG = 0x3C
 
 
 def ascii_clean(text):
-    fold = {"ä": "a", "ö": "o", "ü": "u", "ß": "ss", "é": "e", "è": "e", "ê": "e", "à": "a",
+    fold: dict[str, str] = {"ä": "a", "ö": "o", "ü": "u", "ß": "ss", "é": "e", "è": "e", "ê": "e", "à": "a",
             "â": "a", "ç": "c", "î": "i", "ô": "o", "û": "u", "Ä": "A", "Ö": "O", "Ü": "U", "É": "E"}
-    out = "".join(fold.get(c, c) for c in text)
+    out = "".join(fold[c] if c in fold else c for c in text)
     return "".join(c if 32 <= ord(c) < 127 else " " for c in out)
 
 
@@ -405,8 +405,9 @@ class Bridge:
         touched = [i for i, c in enumerate(self.pad_ccs) if c == msg.control]
         self._invalidate_pads(touched)
         self.led_invalidations += [(now + 0.25, touched), (now + 1.0, touched)]
-        if self.shared_cc is not None and msg.control == self.shared_cc:
-            toggle_pad, momentary_pad = self.shared_pads
+        shared_pads = self.shared_pads
+        if self.shared_cc is not None and msg.control == self.shared_cc and shared_pads is not None:
+            toggle_pad, momentary_pad = shared_pads
             if msg.value >= 64:                                   # a down: wait to see whether a release follows
                 out = self._pad_press(toggle_pad, now) if self.shared_down is not None else []
                 self.shared_down = now
@@ -504,7 +505,7 @@ class Bridge:
 
     def tick(self, now):
         out = []
-        if self.shared_down is not None and now - self.shared_down > self.shared_window:
+        if self.shared_down is not None and now - self.shared_down > self.shared_window and self.shared_pads is not None:
             self.shared_down = None                               # no release came: it was the toggle pad going on
             out += self._pad_press(self.shared_pads[0], now)
         for item in list(self.led_invalidations):
@@ -625,9 +626,9 @@ def apply_lcd_names(raw):
 
 
 # ------------------------------------------------------------------ MIDI plumbing
-def learn_pads(mido, wanted):
+def learn_pads(backend, wanted):
     """Ask for pads 1-8 (top row left to right, then bottom row) and print the CC numbers."""
-    port = mido.open_input(find_port(mido.get_input_names(), wanted))
+    port = backend.open_input(find_port(backend.get_input_names(), wanted))
     found, raws = [], []
     print("Press each pad once, top row left to right, then bottom row left to right.")
     for n in range(1, 9):
@@ -686,31 +687,31 @@ def main():
     print(f"Settings: {cfg_path}" if raw else "Settings: built-in defaults (no config.yaml found)")
 
     import mido
-    mido.set_backend("mido.backends.rtmidi")
+    backend = mido.Backend("mido.backends.rtmidi")
     if a.list:
-        print("INPUT ports :", *mido.get_input_names(), sep="\n  ")
-        print("OUTPUT ports:", *mido.get_output_names(), sep="\n  ")
+        print("INPUT ports :", *backend.get_input_names(), sep="\n  ")
+        print("OUTPUT ports:", *backend.get_output_names(), sep="\n  ")
         return
 
     if a.learn_pads:
-        learn_pads(mido, a.kl_main or "Ess Midi In")
+        learn_pads(backend, a.kl_main or "Ess Midi In")
         return
 
     if a.test_stop:
         it = ITEM_BY_CC[a.test_stop]
-        with mido.open_output(find_port(mido.get_output_names(), a.go_out or a.go)) as p:
+        with backend.open_output(find_port(backend.get_output_names(), a.go_out or a.go)) as p:
             p.send(mido.Message("control_change", channel=STOP_CH, control=it.cc, value=0 if a.test_off else 127))
         print(f"sent {'off' if a.test_off else 'on'} to {it.division} '{it.name}' ({it.path}), CC {it.cc} on channel {STOP_CH + 1}")
         return
 
-    go_in = mido.open_input(find_port(mido.get_input_names(), a.go))
-    go_out = mido.open_output(find_port(mido.get_output_names(), a.go_out or a.go))
-    kl_in = mido.open_input(find_port(mido.get_input_names(), a.kl_in))
-    kl_out = mido.open_output(find_port(mido.get_output_names(), a.kl_out))
+    go_in = backend.open_input(find_port(backend.get_input_names(), a.go))
+    go_out = backend.open_output(find_port(backend.get_output_names(), a.go_out or a.go))
+    kl_in = backend.open_input(find_port(backend.get_input_names(), a.kl_in))
+    kl_out = backend.open_output(find_port(backend.get_output_names(), a.kl_out))
     main_in = None
     if a.kl_main:
         try:
-            main_in = mido.open_input(find_port(mido.get_input_names(), a.kl_main))
+            main_in = backend.open_input(find_port(backend.get_input_names(), a.kl_main))
         except Exception as e:                       # the port may be held exclusively by GrandOrgue
             print(f"Pads: cannot read the KeyLab main port ({e}). Pad lights still work, pad presses do not.")
     print(f"Bridge version {__version__}")
