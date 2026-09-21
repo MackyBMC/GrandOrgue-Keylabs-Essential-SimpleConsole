@@ -1,6 +1,14 @@
 # Keep the repository limited to source, documentation, and text/config files.
 *
 !*/
+# Ignore local AI/editor metadata that should stay on this machine and never be pushed upstream.
+.kilo/
+.vscode/
+.idea/
+.aider/
+.claude/
+.copilot/
+.cursor/
 !.gitignore
 !LICENSE*
 !*.md

@@ -32,9 +32,9 @@ checkout to receive the download link. The full 24-bit version needs about
 - Shows the active file, step, stop state, and volume feedback on the KeyLab LCD.
 - Shows playback state and bank/stop state with KeyLab LEDs and pad colors.
 - Reads pad controls from the KeyLab MAIN port, including the shared pad 4/5
-	behavior found on this keyboard.
+  behavior found on this keyboard.
 - Keeps normal keyboard, pedal, and wheel input connected directly to GrandOrgue;
-	playing does not pass through Python.
+  playing does not pass through Python.
 
 ## How It Works
 
@@ -79,6 +79,7 @@ Install the Python packages with `Scripts/install_requirements.bat`, or run:
 ```bat
 python -m pip install --upgrade mido python-rtmidi pyyaml
 ```
+
 ## Tested With
 
 - GrandOrgue v3.17.3-1
@@ -161,14 +162,13 @@ organ needs its own stop names and switch numbers in `Scripts/keylab_go_bridge.p
 - Pad presses do nothing: check `--learn-pads`, then the pad CC list in `config.yaml`.
 - `keylab_sniffer.py` shows the raw messages of every KeyLab port, labelled MAIN or DAW.
 
-
 ## Repository Layout
 
 - `Scripts/`: main MIDI bridge, diagnostics, LED test, and import helper.
 - `Settings/`: GrandOrgue MIDI settings exports.
 - `Combinations/`: Friesach registration combinations.
 - `workings/`: experimental and supporting combinations, bridge variants, and
-	working notes.
+  working notes.
 - `KeyLab_GrandOrgue_HardwareSettings.md`: physical control mapping reference.
 
 `Scripts/make_go_midi_import.py` merges the bridge assignments into a

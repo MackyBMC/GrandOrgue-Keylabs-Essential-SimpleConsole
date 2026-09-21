@@ -5,7 +5,7 @@ Reference for `Scripts/keylab_go_bridge.py`, with the keyboard in **DAW mode** (
 ## Which port carries what
 
 | Port | Carries | Read by |
-|---|---|---|
+| --- | --- | --- |
 | KeyLab **MAIN** in | keys, pitch and mod wheels, sustain pedal (CC 64), pads (CCs), panel-button SysEx | GrandOrgue directly; the bridge also reads the pads |
 | KeyLab **DAW** in | transport and navigation buttons, jog, encoders, faders (Mackie-style) | the bridge only - keep it **disabled** in GrandOrgue, or the button notes will play pipes |
 | KeyLab out | LCD text and LED colours (SysEx) | written by the bridge |
@@ -14,7 +14,7 @@ Reference for `Scripts/keylab_go_bridge.py`, with the keyboard in **DAW mode** (
 ## Buttons and wheels (DAW port unless noted)
 
 | Control | Message | Action |
-|---|---|---|
+| --- | --- | --- |
 | `<<` Rewind | note 0x5B | previous step in the loaded file (activates) |
 | `>>` Forward | note 0x5C | next step in the loaded file (activates) |
 | Jog turn | CC 0x3C, 0x01 right / 0x41 left | cue next / previous setter file (does not activate) |
@@ -33,7 +33,7 @@ Reference for `Scripts/keylab_go_bridge.py`, with the keyboard in **DAW mode** (
 ## Faders, encoders and volumes
 
 | Control | Message | Action |
-|---|---|---|
+| --- | --- | --- |
 | Faders 1-8 | pitch bend, channels 1-8 | a fader you move sets its stop on (at or above half travel) or off; untouched faders change nothing |
 | Fader 9 (master) | pitch bend, channel 9 | master volume |
 | Encoders 1-4 | CC 0x10-0x13, relative | Pedal, Hauptwerk, Solowerk, Schwellwerk volume |
@@ -48,7 +48,7 @@ Encoder values are relative: `0x01` = one click right, `0x41` = one click left, 
 Fader *n* and pad *n* control the same item in the current bank; Part 1/2 change the bank for both. Banks are cut from each division's stops in the organ's own order, eight at a time. The CC number (channel 15) is fixed and never depends on the bank.
 
 | Bank | Division | Pad colour | Faders / pads 1-8 (CC) |
-|---|---|---|---|
+| ---- | -------- | ---------- | ---------------------- |
 | P1 | Pedal | blue | 1 Untersatz 32' (1); 2 Contrabass 16' (2); 3 Subbass 16' (3); 4 Octavbass 8' (4); 5 Gedackt 8' (5); 6 Choralbass 4' (6); 7 Posaune 32' (7); 8 Posaune 16' (8) |
 | P2 | Pedal | blue | 1 Trompete 8' (9) |
 | H1 | Hauptwerk | green | 1 Praestant 16' (10); 2 Principal 8' (11); 3 Holzflote 8' (12); 4 Rohrflote 8' (13); 5 Gambe 8' (14); 6 Octave 4' (15); 7 Spitzflote 4' (16); 8 Quinte 2 2/3' (17) |
@@ -66,7 +66,7 @@ Pad LEDs: full colour = stop on, dim = stop off (`pads: dim` in `config.yaml`). 
 In DAW mode the pads send CCs, not notes, and this keyboard's numbering is irregular (measured on firmware 1.1.10):
 
 | Pad | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
-|---|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | CC | 36 | 38 | 39 | 40 | 40 | 41 | 42 | 43 |
 
 Pad 4 is a toggle (a lone *down* on one press, a lone *up* on the next) and pad 5 is momentary (down then up), both on CC 40. The bridge tells them apart by whether a release follows within `pads: shared_window` seconds. Very long presses of pad 5 are misread as pad 4. Run `--learn-pads` if your unit differs.
@@ -82,7 +82,7 @@ Moving a fader, encoder or pad shows a readout (stop name and state, or a volume
 Defined in `Settings/Friesach-midi-settings-KeyLab.yaml` and in the constants at the top of the bridge; do not change one without the other.
 
 | Channel | Direction | Use |
-|---|---|---|
+| --- | --- | --- |
 | 16 | bridge -> GrandOrgue | commands: CC 1 previous step, 2 next step, 3 previous file, 4 next file, 5 load file, 6 save file, 7 metronome, 8 play, 9 stop, 10 pause, 11 panic (127 then 0) |
 | 15 | both ways | stops, couplers and tremolos: CC 1-52, 127 = on, 0 = off; GrandOrgue reports state changes back |
 | 14 | GrandOrgue -> bridge | button state: CC 1 Load file lit (a file is cued), 2 Play lit, 3 Pause lit, 4 metronome on |
