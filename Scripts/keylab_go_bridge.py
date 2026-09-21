@@ -109,11 +109,6 @@ class Item:
             return f"manuals/{self.manual:03d}/switches/{self.number:03d}"
         return f"{TREMULANT_SWITCH[self.number]:03d}"
 
-    @property
-    def extra_paths(self):
-        """The tremulant object behind a tremolo knob gets the same CC too, in case the knob drives it directly."""
-        return [f"tremulants/{self.number:03d}"] if self.kind == "tremulant" else []
-
 
 TREMULANT_DIVISION = {1: "S", 2: "L"}    # Tremolo II -> Schwellwerk bank, Tremolo III -> Solowerk bank (see config.yaml)
 

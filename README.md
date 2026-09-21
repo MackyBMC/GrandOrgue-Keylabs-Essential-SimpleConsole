@@ -56,6 +56,24 @@ channel 12. The generated GrandOrgue MIDI settings file describes these routes.
 - Python 3.
 - Python packages: `mido`, `python-rtmidi`, and `pyyaml`.
 
+## GrandOrgue Knowledge and Installation
+
+This project assumes that the user already knows how to install GrandOrgue,
+load an organ and its sample set, select audio and MIDI devices, and change
+GrandOrgue settings. The bridge is an integration layer for an existing
+GrandOrgue installation; it is not a replacement for GrandOrgue's setup or
+organ-loading workflow.
+
+Install GrandOrgue from the official resources:
+
+- [Official GrandOrgue download page](https://grandorgue.com/download/)
+- [GrandOrgue project on GitHub](https://github.com/GrandOrgue/grandorgue)
+- [GrandOrgue community discussions](https://github.com/GrandOrgue/grandorgue/discussions)
+
+After installing GrandOrgue, obtain and load the Friesach organ and its sample
+set before applying this project's MIDI settings. See [Base Organ: Friesach](#base-organ-friesach)
+for the official free sample-set source.
+
 Install the Python packages with `Scripts/install_requirements.bat`, or run:
 
 ```bat
@@ -171,6 +189,14 @@ settings, and registration definitions. Actual GrandOrgue organ packages,
 audio samples and recordings, MIDI recordings, cache files, combination
 database files, and ZIP archives are intentionally excluded by `.gitignore`.
 
+## Future Organ Support
+
+Friesach is the base organ for the current implementation. Additional organs
+will be added over time as the control mappings are generalized and the current
+integration's kinks and organ-specific issues are worked out. Each organ may
+require its own stop names, switch paths, MIDI settings, and tested control
+mapping before it can be supported reliably.
+
 ## Known Limits
 
 - GrandOrgue can only *play* a MIDI file that is already loaded; loading is done from
@@ -181,6 +207,9 @@ database files, and ZIP archives are intentionally excluded by `.gitignore`.
 - In DAW mode pad 4 and pad 5 send the same CC; the bridge separates them by their
   press pattern. Very long presses of pad 5 can be read as pad 4.
 - Accented letters in combination file names may not display correctly on the LCD.
+- The Friesach organ definition wires its tremulants unusually: Tremolo II is not
+  connected to its own tremulant, and Tremolo III only works while the Blower switch
+  is on. See the control reference for details.
 
 ## How This Was Made
 

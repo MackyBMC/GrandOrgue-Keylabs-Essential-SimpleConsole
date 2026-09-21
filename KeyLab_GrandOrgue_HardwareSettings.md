@@ -89,7 +89,7 @@ Defined in `Settings/Friesach-midi-settings-KeyLab.yaml` and in the constants at
 | 12 | bridge -> GrandOrgue | volumes: CC 1 master, 2 Pedal, 3 Hauptwerk, 4 Schwellwerk, 5 Solowerk, 6 Noises |
 | - | GrandOrgue -> bridge | label text as Hauptwerk SysEx: file name (LCD, key 1) and step number (string, key 2) |
 
-In Friesach the panel knobs are GrandOrgue *Switch* objects, not Stop objects, so the stop assignments target `manuals/<n>/switches/<m>` (stops follow the couplers in each manual's list: Pedal +3, Hauptwerk +2, Schwellwerk +1, Solowerk +0). The two tremolo buttons are the global switches `047` and `053`; the tremulant objects `tremulants/001` and `tremulants/002` get the same CC as well, in case a knob drives the tremulant directly.
+In Friesach the panel knobs are GrandOrgue *Switch* objects, not Stop objects, so the stop assignments target `manuals/<n>/switches/<m>` (stops follow the couplers in each manual's list: Pedal +3, Hauptwerk +2, Schwellwerk +1, Solowerk +0). The two tremolo buttons are the global switches `047` and `053`. The tremulant objects behind them are read-only in GrandOrgue (their state is computed from switches by the organ definition), so MIDI cannot set them directly.
 
 ## Importing into GrandOrgue
 
