@@ -8,6 +8,18 @@ GrandOrgue organ through a virtual MIDI cable.
 The current configuration targets the Friesach organ and includes registration
 combinations, MIDI settings, and hardware mappings for that setup.
 
+# Practical Purpose and use case for this Tool
+
+This tool lets you use an Arturia KeyLab Essential 61/Mk2 as a simple,
+practical MIDI organ console for GrandOrgue, with live performance in mind
+and useful controls right under your hands. It’s aimed at players who want an accessible, 
+affordable setup for enjoying and exploring virtual organs, 
+while recognizing that dedicated organists may naturally want the depth and feel of a full traditional console.
+
+The tool provides a custom GrandOrgue instrument configuration for the KeyLab, 
+with the controls already mapped and a set of carefully selected, practical defaults. 
+In other words, you can load it and start playing without having to build the MIDI mappings yourself.
+
 ## Base Organ: Friesach
 
 This project uses the **Friesach Parish Church** sample set by Piotr Grabowski
