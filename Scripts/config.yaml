@@ -9,7 +9,7 @@ ports:
   go_out: ""              # only if you send to GrandOrgue on a different cable than the one above
   keylab_in: "DAW"        # KeyLab DAW input (buttons, jog, faders, encoders)
   keylab_out: "KeyLab"    # KeyLab output that drives the LCD and button/pad LEDs (try "DAW" if the LCD stays blank)
-  keylab_main_in: "Ess Midi In"   # KeyLab MAIN input, only needed for the pad presses (blank = pads are lights only)
+  keylab_main_in: ""              # Leave MAIN with GrandOrgue; set only if a MIDI splitter permits shared pad input
 
 faders:
   threshold: 64           # fader value (0-127) at/above which a moved fader switches its stop on

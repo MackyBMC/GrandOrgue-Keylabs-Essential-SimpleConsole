@@ -114,10 +114,11 @@ ordinary notes and would sound pipes. Only the bridge reads that port.
 
 Put the keyboard in DAW mode by pressing the **DAW** pad.
 
-The bridge also reads the KeyLab MAIN port (for the pads) while GrandOrgue is using
-it. That worked on the test machine, which has Windows MIDI Services installed. If
-the bridge prints "cannot read the KeyLab main port", the pad lights still work but
-pad presses will not.
+The bridge does not open the KeyLab MAIN port by default because Windows MIDI/WinMM
+may not allow GrandOrgue and the bridge to open that input at the same time. The
+default configuration therefore leaves MAIN with GrandOrgue, so keys, wheels and
+sustain continue to work. Pad presses require a MIDI splitter or MIDI service that
+supports shared input; the pad lights can still be driven by the bridge.
 
 ## Quick Start
 
