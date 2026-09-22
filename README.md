@@ -43,8 +43,8 @@ checkout to receive the download link. The full 24-bit version needs about
 - Controls MIDI playback, looping, stopping, panic, saving, and the metronome.
 - Shows the active file, step, stop state, and volume feedback on the KeyLab LCD.
 - Shows playback state and bank/stop state with KeyLab LEDs and pad colors.
-- Reads pad controls from the KeyLab MAIN port, including the shared pad 4/5
-  behavior found on this keyboard.
+- Supports KeyLab pad controls when a MIDI splitter or shared-input MIDI service
+  is available; by default, the MAIN port remains owned by GrandOrgue.
 - Keeps normal keyboard, pedal, and wheel input connected directly to GrandOrgue;
   playing does not pass through Python.
 
@@ -92,6 +92,9 @@ Install the Python packages with `Scripts/install_requirements.bat`, or run:
 python -m pip install --upgrade mido python-rtmidi pyyaml
 ```
 
+The setup tools require the same Python packages as the bridge. Run
+`Scripts/install_requirements.bat` once before using the setup console.
+
 ## Tested With
 
 - GrandOrgue v3.17.3-1
@@ -120,13 +123,39 @@ default configuration therefore leaves MAIN with GrandOrgue, so keys, wheels and
 sustain continue to work. Pad presses require a MIDI splitter or MIDI service that
 supports shared input; the pad lights can still be driven by the bridge.
 
+## MIDI Port Setup Console
+
+Use the interactive setup console when port names differ between computers or
+Windows MIDI devices are reconnected:
+
+```powershell
+cd "Scripts"
+.\setup_keylab_bridge.ps1
+```
+
+You can also double-click `Scripts/setup_keylab_bridge.bat`. The console lists
+the available MIDI input and output ports, asks you to select each one, shows the
+result, and updates only the `ports` section of `Scripts/config.yaml` after
+confirmation.
+
+For the working LoopBe arrangement, select:
+
+- the LoopBe input as `go`;
+- the LoopBe output as `go_out`;
+- the KeyLab DAW input as `keylab_in`;
+- the KeyLab output as `keylab_out`; and
+- `0` for `keylab_main_in`, leaving the MAIN input with GrandOrgue.
+
+In GrandOrgue, enable the KeyLab MAIN input and the LoopBe input/output. Leave
+the KeyLab DAW input disabled in GrandOrgue because the bridge owns that port.
+
 ## Quick Start
 
 1. Connect the KeyLab and start GrandOrgue.
 2. Create or select the virtual MIDI cable used by both applications.
 3. Import `Settings/Friesach-midi-settings-KeyLab.yaml` into GrandOrgue.
-4. Update `Scripts/config.yaml` with the MIDI port names on the local machine.
-5. Run `Scripts/start_keylab_bridge.bat`.
+4. Run `Scripts/setup_keylab_bridge.bat` and select the available MIDI ports.
+5. Run `Scripts/start_keylab_bridge.bat` or `Scripts/start_keylab_bridge.ps1`.
 
 To inspect available MIDI ports without starting the bridge:
 
@@ -134,7 +163,7 @@ To inspect available MIDI ports without starting the bridge:
 python Scripts/keylab_go_bridge.py --list
 ```
 
-The batch file uses `Scripts/config.yaml` by default. Command-line options can
+The bridge uses `Scripts/config.yaml` by default. Command-line options can
 override its values, for example:
 
 ```bat
@@ -172,7 +201,8 @@ organ needs its own stop names and switch numbers in `Scripts/keylab_go_bridge.p
 - `--test-stop 11 --test-off` switches one stop off without touching a fader
   (11 is the Hauptwerk Principal 8'). Run it again without `--test-off` to switch it back on.
 - LCD stays blank: try the other KeyLab output port with `--kl-out`.
-- Pad presses do nothing: check `--learn-pads`, then the pad CC list in `config.yaml`.
+- Pad presses do nothing: the MAIN input is normally reserved for GrandOrgue;
+  use a MIDI splitter/shared-input service before selecting it in the setup console.
 - `keylab_sniffer.py` shows the raw messages of every KeyLab port, labelled MAIN or DAW.
 
 ## Repository Layout

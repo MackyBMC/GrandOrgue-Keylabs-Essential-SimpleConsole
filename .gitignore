@@ -15,6 +15,7 @@
 !*.md
 !*.txt
 !*.py
+!*.ps1
 !*.yaml
 !*.yml
 !*.bat
