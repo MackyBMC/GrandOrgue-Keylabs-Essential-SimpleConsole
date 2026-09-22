@@ -687,31 +687,31 @@ def main():
     print(f"Settings: {cfg_path}" if raw else "Settings: built-in defaults (no config.yaml found)")
 
     import mido
-    backend = mido.Backend("mido.backends.rtmidi")
+    mido.set_backend("mido.backends.rtmidi")
     if a.list:
-        print("INPUT ports :", *backend.get_input_names(), sep="\n  ")
-        print("OUTPUT ports:", *backend.get_output_names(), sep="\n  ")
+        print("INPUT ports :", *mido.get_input_names(), sep="\n  ")  # type: ignore[attr-defined]
+        print("OUTPUT ports:", *mido.get_output_names(), sep="\n  ")  # type: ignore[attr-defined]
         return
 
     if a.learn_pads:
-        learn_pads(backend, a.kl_main or "Ess Midi In")
+        learn_pads(mido, a.kl_main or "Ess Midi In")
         return
 
     if a.test_stop:
         it = ITEM_BY_CC[a.test_stop]
-        with backend.open_output(find_port(backend.get_output_names(), a.go_out or a.go)) as p:
+        with mido.open_output(find_port(mido.get_output_names(), a.go_out or a.go)) as p:  # type: ignore[attr-defined]
             p.send(mido.Message("control_change", channel=STOP_CH, control=it.cc, value=0 if a.test_off else 127))
         print(f"sent {'off' if a.test_off else 'on'} to {it.division} '{it.name}' ({it.path}), CC {it.cc} on channel {STOP_CH + 1}")
         return
 
-    go_in = backend.open_input(find_port(backend.get_input_names(), a.go))
-    go_out = backend.open_output(find_port(backend.get_output_names(), a.go_out or a.go))
-    kl_in = backend.open_input(find_port(backend.get_input_names(), a.kl_in))
-    kl_out = backend.open_output(find_port(backend.get_output_names(), a.kl_out))
+    go_in = mido.open_input(find_port(mido.get_input_names(), a.go))  # type: ignore[attr-defined]
+    go_out = mido.open_output(find_port(mido.get_output_names(), a.go_out or a.go))  # type: ignore[attr-defined]
+    kl_in = mido.open_input(find_port(mido.get_input_names(), a.kl_in))  # type: ignore[attr-defined]
+    kl_out = mido.open_output(find_port(mido.get_output_names(), a.kl_out))  # type: ignore[attr-defined]
     main_in = None
     if a.kl_main:
         try:
-            main_in = backend.open_input(find_port(backend.get_input_names(), a.kl_main))
+            main_in = mido.open_input(find_port(mido.get_input_names(), a.kl_main))  # type: ignore[attr-defined]
         except Exception as e:                       # the port may be held exclusively by GrandOrgue
             print(f"Pads: cannot read the KeyLab main port ({e}). Pad lights still work, pad presses do not.")
     print(f"Bridge version {__version__}")
