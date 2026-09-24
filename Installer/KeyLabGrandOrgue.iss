@@ -26,14 +26,14 @@ Name: "desktopicon"; Description: "Create a desktop shortcut for GrandOrgue + Ke
 
 [Files]
 Source: "{#SourcePath}\..\Scripts\build\{#MyAppExeName}"; DestDir: "{app}\Scripts\build"; Flags: ignoreversion uninsneveruninstall
-Source: "{#SourcePath}\..\Scripts\config.yaml"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
+Source: "{#SourcePath}\..\Scripts\config.yaml"; DestDir: "{app}\Scripts"; Flags: ignoreversion onlyifdoesntexist uninsneveruninstall
 Source: "{#SourcePath}\..\Scripts\start_keylab_bridge.bat"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
 Source: "{#SourcePath}\..\Scripts\start_keylab_bridge.ps1"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
 Source: "{#SourcePath}\..\Scripts\start_keylab_grandorgue.bat"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
 Source: "{#SourcePath}\..\Scripts\start_keylab_grandorgue.ps1"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
 Source: "{#SourcePath}\..\Scripts\setup_keylab_bridge.bat"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
 Source: "{#SourcePath}\..\Scripts\setup_keylab_bridge.ps1"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
-Source: "{#SourcePath}\..\Settings\Friesach-midi-settings-KeyLab.yaml"; DestDir: "{app}\Settings"; Flags: ignoreversion uninsneveruninstall
+Source: "{#SourcePath}\..\Settings\Friesach-midi-settings-KeyLab.yaml"; DestDir: "{app}\Settings"; Flags: ignoreversion onlyifdoesntexist uninsneveruninstall
 Source: "{#SourcePath}\..\README.md"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
 Source: "{#SourcePath}\..\KeyLab_GrandOrgue_HardwareSettings.md"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
 
