@@ -251,19 +251,20 @@ Scripts\compile_bridge.bat
 powershell -ExecutionPolicy Bypass -File Scripts\build_installer.ps1
 ```
 
-The installer is written to `release/`. Its default destination is the existing
-user workspace `%USERPROFILE%\Documents\GrandOrgue`, so it places the bridge in
-`GrandOrgue\Scripts`, leaves organ files in `GrandOrgue\Organs`, and keeps MIDI
-settings in `GrandOrgue\Settings`. It creates the expected workspace folders when
-they do not exist. The installer is intentionally non-uninstallable so it cannot
-remove existing workspace files.
+The installer is written to `release/`. Before showing the install page it checks
+for a GrandOrgue executable in the standard Windows installation locations. If
+GrandOrgue is not installed, setup stops and asks you to install it first. The
+installer then targets the existing user workspace `%USERPROFILE%\Documents\GrandOrgue`;
+GrandOrgue itself continues to use its configured folders there, such as
+`Organs`, `Organ packages`, `Cache`, `Data`, `Combinations`, and `Settings`.
 
-The wizard offers a desktop shortcut named **GrandOrgue + KeyLab Console** by
-default; this shortcut starts both the KeyLab bridge and GrandOrgue. It also
-creates Start Menu shortcuts, including a bridge-only launcher. The combined
-shortcut uses the bridge executable's application icon. The target computer still
-needs GrandOrgue, the KeyLab MIDI driver, and loopMIDI (or another compatible
-virtual MIDI cable).
+It installs the compiled bridge, configuration, launchers, setup console, MIDI
+settings, and documentation into that workspace. The wizard offers a desktop
+shortcut named **GrandOrgue + KeyLab Console** by default; this shortcut starts
+both the KeyLab bridge and GrandOrgue. It also creates Start Menu shortcuts,
+including a bridge-only launcher. The combined shortcut uses the bridge
+executable's application icon. loopMIDI and the Arturia KeyLab MIDI driver still
+need to be installed separately.
 
 ## Repository Layout
 

@@ -52,3 +52,38 @@ Name: "{autodesktop}\GrandOrgue + KeyLab Console"; Filename: "{app}\Scripts\star
 
 [Run]
 Filename: "{app}\Scripts\start_keylab_grandorgue.bat"; Description: "Start GrandOrgue KeyLab Console now"; Flags: postinstall skipifsilent
+
+[Code]
+function GrandOrgueExecutableExists(): Boolean;
+var
+	Candidates: array[0..4] of String;
+	I: Integer;
+begin
+	Candidates[0] := ExpandConstant('{autopf}\GrandOrgue\bin\GrandOrgue.exe');
+	Candidates[1] := ExpandConstant('{autopf}\GrandOrgue\GrandOrgue.exe');
+	Candidates[2] := ExpandConstant('{autopf32}\GrandOrgue\bin\GrandOrgue.exe');
+	Candidates[3] := ExpandConstant('{autopf32}\GrandOrgue\GrandOrgue.exe');
+	Candidates[4] := ExpandConstant('{userdocs}\GrandOrgue\GrandOrgue.exe');
+	Result := False;
+	for I := 0 to 4 do
+	begin
+		if FileExists(Candidates[I]) then
+		begin
+			Result := True;
+			Exit;
+		end;
+	end;
+end;
+
+function InitializeSetup(): Boolean;
+begin
+	Result := GrandOrgueExecutableExists();
+	if not Result then
+	begin
+		MsgBox(
+			'GrandOrgue was not found.' + #13#10#13#10 +
+			'Install GrandOrgue first, then run this setup again.' + #13#10 +
+			'The console uses GrandOrgue''s existing user folders in Documents.',
+			mbError, MB_OK);
+	end;
+end;
