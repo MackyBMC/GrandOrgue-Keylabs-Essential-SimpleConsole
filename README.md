@@ -5,8 +5,9 @@ using the Arturia KeyLab Essential 61 mk2 in DAW mode. The project connects the
 KeyLab's buttons, jog wheel, faders, encoders, pads, LCD, and LEDs to a
 GrandOrgue organ through a virtual MIDI cable.
 
-The current configuration targets the Friesach organ and includes registration
-combinations, MIDI settings, and hardware mappings for that setup.
+Friesach is the initial fully mapped organ profile and reference implementation.
+The console architecture is intended to grow to additional organs, each with its
+own tested stop map, MIDI settings, organ file, and registration resources.
 
 # Practical Purpose and use case for this Tool
 
@@ -82,9 +83,9 @@ Install GrandOrgue from the official resources:
 - [GrandOrgue project on GitHub](https://github.com/GrandOrgue/grandorgue)
 - [GrandOrgue community discussions](https://github.com/GrandOrgue/grandorgue/discussions)
 
-After installing GrandOrgue, obtain and load the Friesach organ and its sample
-set before applying this project's MIDI settings. See [Base Organ: Friesach](#base-organ-friesach)
-for the official free sample-set source.
+After installing GrandOrgue, obtain and load the organ profile you want to use
+before applying its MIDI settings. For the initial supported profile, obtain the
+Friesach organ and sample set described in [Base Organ: Friesach](#base-organ-friesach).
 
 Install the Python packages with `Scripts/install_requirements.bat`, or run:
 
@@ -286,13 +287,16 @@ settings, and registration definitions. Actual GrandOrgue organ packages,
 audio samples and recordings, MIDI recordings, cache files, combination
 database files, and ZIP archives are intentionally excluded by `.gitignore`.
 
-## Future Organ Support
+## Organ Profiles and Future Support
 
-Friesach is the base organ for the current implementation. Additional organs
-will be added over time as the control mappings are generalized and the current
-integration's kinks and organ-specific issues are worked out. Each organ may
-require its own stop names, switch paths, MIDI settings, and tested control
-mapping before it can be supported reliably.
+Friesach is the initial well-mapped organ profile and the current release's
+reference implementation. The shared KeyLab bridge, TUI diagnostics, launchers,
+and installer are intended to support additional organ profiles over time.
+
+Each new organ will need its own tested stop and switch paths, MIDI settings,
+organ file selection, combinations, and any organ-specific control behavior.
+Until a profile is documented and tested, the existing Friesach mappings should
+not be assumed to work for it.
 
 ## Known Limits
 

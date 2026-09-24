@@ -4,7 +4,8 @@
 # Names below are matched as "part of the port name", upper/lower case does not matter.
 # Run   python keylab_go_bridge.py --list   to see the exact port names on this PC.
 
-# Friesach-specific GrandOrgue organ file used by start_keylab_grandorgue.bat.
+# Initial mapped organ profile: Friesach. Additional organ profiles can provide
+# their own organ_path and MIDI settings as they are added.
 # Change this to the alternate file if required:
 # C:\Audio\Sound Samples\GrandOrgue\Friesach_GrandOrgue\Friesach.organ
 organ_path: 'C:\Audio\Sound Samples\GrandOrgue\Friesach_GrandOrgue\Friesach FullImageResolution.organ'
