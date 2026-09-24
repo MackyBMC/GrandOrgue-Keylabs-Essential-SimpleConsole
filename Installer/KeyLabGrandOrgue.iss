@@ -8,7 +8,7 @@ AppId={{B9B6636D-1D9D-4B80-9DF5-9D8BCB8E4A26}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\GrandOrgue KeyLab Console
+DefaultDirName={userdocs}\GrandOrgue
 DefaultGroupName={#MyAppName}
 OutputDir=..\release
 OutputBaseFilename=GrandOrgue-KeyLab-Setup-{#MyAppVersion}
@@ -16,7 +16,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
-Uninstallable=yes
+Uninstallable=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -25,17 +25,25 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut for GrandOrgue + KeyLab Console"; GroupDescription: "Shortcuts:"; Flags: checkedonce
 
 [Files]
-Source: "{#SourcePath}\..\Scripts\build\{#MyAppExeName}"; DestDir: "{app}\Scripts\build"; Flags: ignoreversion
-Source: "{#SourcePath}\..\Scripts\config.yaml"; DestDir: "{app}\Scripts"; Flags: ignoreversion
-Source: "{#SourcePath}\..\Scripts\start_keylab_bridge.bat"; DestDir: "{app}\Scripts"; Flags: ignoreversion
-Source: "{#SourcePath}\..\Scripts\start_keylab_bridge.ps1"; DestDir: "{app}\Scripts"; Flags: ignoreversion
-Source: "{#SourcePath}\..\Scripts\start_keylab_grandorgue.bat"; DestDir: "{app}\Scripts"; Flags: ignoreversion
-Source: "{#SourcePath}\..\Scripts\start_keylab_grandorgue.ps1"; DestDir: "{app}\Scripts"; Flags: ignoreversion
-Source: "{#SourcePath}\..\Scripts\setup_keylab_bridge.bat"; DestDir: "{app}\Scripts"; Flags: ignoreversion
-Source: "{#SourcePath}\..\Scripts\setup_keylab_bridge.ps1"; DestDir: "{app}\Scripts"; Flags: ignoreversion
-Source: "{#SourcePath}\..\Settings\Friesach-midi-settings-KeyLab.yaml"; DestDir: "{app}\Settings"; Flags: ignoreversion
-Source: "{#SourcePath}\..\README.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SourcePath}\..\KeyLab_GrandOrgue_HardwareSettings.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourcePath}\..\Scripts\build\{#MyAppExeName}"; DestDir: "{app}\Scripts\build"; Flags: ignoreversion uninsneveruninstall
+Source: "{#SourcePath}\..\Scripts\config.yaml"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
+Source: "{#SourcePath}\..\Scripts\start_keylab_bridge.bat"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
+Source: "{#SourcePath}\..\Scripts\start_keylab_bridge.ps1"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
+Source: "{#SourcePath}\..\Scripts\start_keylab_grandorgue.bat"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
+Source: "{#SourcePath}\..\Scripts\start_keylab_grandorgue.ps1"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
+Source: "{#SourcePath}\..\Scripts\setup_keylab_bridge.bat"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
+Source: "{#SourcePath}\..\Scripts\setup_keylab_bridge.ps1"; DestDir: "{app}\Scripts"; Flags: ignoreversion uninsneveruninstall
+Source: "{#SourcePath}\..\Settings\Friesach-midi-settings-KeyLab.yaml"; DestDir: "{app}\Settings"; Flags: ignoreversion uninsneveruninstall
+Source: "{#SourcePath}\..\README.md"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
+Source: "{#SourcePath}\..\KeyLab_GrandOrgue_HardwareSettings.md"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
+
+[Dirs]
+Name: "{app}\Scripts\build"
+Name: "{app}\Settings"
+Name: "{app}\Organs"
+Name: "{app}\Combinations"
+Name: "{app}\Audio recordings"
+Name: "{app}\MIDI recordings"
 
 [Icons]
 Name: "{group}\GrandOrgue KeyLab Console"; Filename: "{app}\Scripts\start_keylab_grandorgue.bat"; WorkingDir: "{app}\Scripts"; IconFilename: "{app}\Scripts\build\{#MyAppExeName}"

@@ -251,10 +251,15 @@ Scripts\compile_bridge.bat
 powershell -ExecutionPolicy Bypass -File Scripts\build_installer.ps1
 ```
 
-The installer is written to `release/`. It installs the compiled bridge,
-configuration, launchers, setup console, MIDI settings, and documentation. The
-wizard offers an optional desktop shortcut named **GrandOrgue KeyLab Console**
-by default; this shortcut starts both the KeyLab bridge and GrandOrgue. It also
+The installer is written to `release/`. Its default destination is the existing
+user workspace `%USERPROFILE%\Documents\GrandOrgue`, so it places the bridge in
+`GrandOrgue\Scripts`, leaves organ files in `GrandOrgue\Organs`, and keeps MIDI
+settings in `GrandOrgue\Settings`. It creates the expected workspace folders when
+they do not exist. The installer is intentionally non-uninstallable so it cannot
+remove existing workspace files.
+
+The wizard offers a desktop shortcut named **GrandOrgue + KeyLab Console** by
+default; this shortcut starts both the KeyLab bridge and GrandOrgue. It also
 creates Start Menu shortcuts, including a bridge-only launcher. The combined
 shortcut uses the bridge executable's application icon. The target computer still
 needs GrandOrgue, the KeyLab MIDI driver, and loopMIDI (or another compatible
