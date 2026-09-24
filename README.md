@@ -254,8 +254,8 @@ powershell -ExecutionPolicy Bypass -File Scripts\build_installer.ps1
 The installer is written to `release/`. Before showing the install page it checks
 for a GrandOrgue executable in the standard Windows installation locations. If
 GrandOrgue is not installed, setup stops and asks you to install it first. The
-installer then targets the existing user workspace `%USERPROFILE%\Documents\GrandOrgue`;
-GrandOrgue itself continues to use its configured folders there, such as
+installer then targets the existing user workspace `%USERPROFILE%\Documents\GrandOrgue`
+directly; GrandOrgue itself continues to use its configured folders there, such as
 `Organs`, `Organ packages`, `Cache`, `Data`, `Combinations`, and `Settings`.
 
 It installs the compiled bridge, configuration, launchers, setup console, MIDI

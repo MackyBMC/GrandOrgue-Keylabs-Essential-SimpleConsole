@@ -8,7 +8,8 @@ AppId={{B9B6636D-1D9D-4B80-9DF5-9D8BCB8E4A26}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={userdocs}\GrandOrgue
+DefaultDirName={code:GetGrandOrgueWorkspace}
+DisableDirPage=yes
 DefaultGroupName={#MyAppName}
 OutputDir=..\release
 OutputBaseFilename=GrandOrgue-KeyLab-Setup-{#MyAppVersion}
@@ -54,6 +55,11 @@ Name: "{autodesktop}\GrandOrgue + KeyLab Console"; Filename: "{app}\Scripts\star
 Filename: "{app}\Scripts\start_keylab_grandorgue.bat"; Description: "Start GrandOrgue KeyLab Console now"; Flags: postinstall skipifsilent
 
 [Code]
+function GetGrandOrgueWorkspace(Param: String): String;
+begin
+	Result := ExpandConstant('{userdocs}\GrandOrgue');
+end;
+
 function GrandOrgueExecutableExists(): Boolean;
 var
 	Candidates: array[0..4] of String;
