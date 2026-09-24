@@ -100,7 +100,7 @@ The setup tools require the same Python packages as the bridge. Run
 - GrandOrgue v3.17.3-1
 - Arturia KeyLab Essential 61 mk2, firmware 1.1.10, in DAW mode
 - Windows 11, Python 3.13
-- LoopBe1 as the virtual MIDI cable
+- loopMIDI with `GO2Bridge` and `Bridge2GO` ports
 
 This has been tried on one setup only. Pad numbering and some DAW-mode behaviour
 can differ between keyboards and firmware versions (see the control reference).
@@ -138,15 +138,16 @@ the available MIDI input and output ports, asks you to select each one, shows th
 result, and updates only the `ports` section of `Scripts/config.yaml` after
 confirmation.
 
-For the working LoopBe arrangement, select:
+For the current loopMIDI arrangement shown in the project setup, select:
 
-- the LoopBe input as `go`;
-- the LoopBe output as `go_out`;
+- `GO2Bridge` as `go`;
+- `Bridge2GO` as `go_out`;
 - the KeyLab DAW input as `keylab_in`;
 - the KeyLab output as `keylab_out`; and
 - `0` for `keylab_main_in`, leaving the MAIN input with GrandOrgue.
 
-In GrandOrgue, enable the KeyLab MAIN input and the LoopBe input/output. Leave
+In GrandOrgue, enable the KeyLab MAIN input and the `GO2Bridge`/`Bridge2GO`
+input/output pair. Leave
 the KeyLab DAW input disabled in GrandOrgue because the bridge owns that port.
 
 ## Quick Start
@@ -155,7 +156,14 @@ the KeyLab DAW input disabled in GrandOrgue because the bridge owns that port.
 2. Create or select the virtual MIDI cable used by both applications.
 3. Import `Settings/Friesach-midi-settings-KeyLab.yaml` into GrandOrgue.
 4. Run `Scripts/setup_keylab_bridge.bat` and select the available MIDI ports.
-5. Run `Scripts/start_keylab_bridge.bat` or `Scripts/start_keylab_bridge.ps1`.
+5. Run `Scripts/start_keylab_grandorgue.bat` for one-click startup, or run
+  `Scripts/start_keylab_bridge.bat` when GrandOrgue is already open.
+
+The combined launcher starts the bridge first, waits briefly for its MIDI ports,
+then starts GrandOrgue. It loads the Friesach organ selected by `organ_path` in
+`Scripts/config.yaml` and does not launch a second GrandOrgue instance if one is
+already running. Set `GRANDORGUE_EXE` or `GRANDORGUE_ORGUE` in the environment to
+override the configured executable or organ file for a particular session.
 
 To inspect available MIDI ports without starting the bridge:
 
@@ -170,8 +178,33 @@ override its values, for example:
 python Scripts/keylab_go_bridge.py --go "LoopBe" --kl-in "DAW" --kl-out "KeyLab" --kl-main "Ess Midi In"
 ```
 
-Use `--verbose` for MIDI diagnostics. Use `--learn-pads` to identify the pad
-CC numbers and update `config.yaml`.
+Use `--verbose` for MIDI diagnostics. The normal configuration enables verbose
+messages and the bridge displays them in a fixed, non-scrolling terminal dashboard
+with connection names, traffic counters, queue depth, loop latency, errors, and
+a bounded recent-message panel. Windows MIDI does not expose packet-loss counters,
+so loss is shown as `n/a`. Use `--learn-pads` to identify the pad CC numbers and
+update `config.yaml`.
+
+## Configuration Options
+
+`Scripts/config.yaml` is the permanent Friesach setup. The main exposed options are:
+
+- `organ_path`: GrandOrgue organ file loaded by the combined launcher. The default
+  is the Full Image Resolution Friesach organ.
+- `ports.go` and `ports.go_out`: the two virtual MIDI ports. With loopMIDI these
+  are `GO2Bridge` and `Bridge2GO`.
+- `ports.keylab_in`, `ports.keylab_out`, and `ports.keylab_main_in`: KeyLab DAW,
+  output, and MAIN port name fragments.
+- `ports.relay_main_out` and `ports.relay_main_in`: optional fallback relay when
+  GrandOrgue and the bridge cannot share the physical MAIN input. GrandOrgue must
+  be configured to read the relay output in that mode.
+- `faders.threshold`: the fader value at which a stop switches on.
+- `display.hold`, `display.live`, and `display.refresh`: LCD timing controls.
+- `pads.enabled`, `pads.ccs`, `pads.shared_window`, `pads.refresh`, `pads.dim`,
+  and `pads.colors`: pad behavior and LED colors.
+- `controls.encoder_step`, `controls.volume_start`, `controls.jog_max_steps`,
+  `controls.loop_restart`, and `controls.encoders`: encoder and transport behavior.
+- `verbose`: enables recent MIDI messages in the fixed TUI dashboard.
 
 ## Importing the MIDI Settings
 
@@ -204,6 +237,27 @@ organ needs its own stop names and switch numbers in `Scripts/keylab_go_bridge.p
 - Pad presses do nothing: the MAIN input is normally reserved for GrandOrgue;
   use a MIDI splitter/shared-input service before selecting it in the setup console.
 - `keylab_sniffer.py` shows the raw messages of every KeyLab port, labelled MAIN or DAW.
+
+## Windows Release Installer
+
+The repository includes an Inno Setup definition in
+`Installer/KeyLabGrandOrgue.iss`. Inno Setup is free software and is used here
+only to package the already-built bridge and launchers; it does not install
+Python or GrandOrgue. Install Inno Setup 6, build the bridge, then run:
+
+```powershell
+Scripts\compile_bridge.bat
+powershell -ExecutionPolicy Bypass -File Scripts\build_installer.ps1
+```
+
+The installer is written to `release/`. It installs the compiled bridge,
+configuration, launchers, setup console, MIDI settings, and documentation. The
+wizard offers an optional desktop shortcut named **GrandOrgue KeyLab Console**
+by default; this shortcut starts both the KeyLab bridge and GrandOrgue. It also
+creates Start Menu shortcuts, including a bridge-only launcher. The combined
+shortcut uses the bridge executable's application icon. The target computer still
+needs GrandOrgue, the KeyLab MIDI driver, and loopMIDI (or another compatible
+virtual MIDI cable).
 
 ## Repository Layout
 

@@ -9,7 +9,7 @@ Reference for `Scripts/keylab_go_bridge.py`, with the keyboard in **DAW mode** (
 | KeyLab **MAIN** in | keys, pitch and mod wheels, sustain pedal (CC 64), pads (CCs), panel-button SysEx | GrandOrgue directly; the bridge also reads the pads |
 | KeyLab **DAW** in | transport and navigation buttons, jog, encoders, faders (Mackie-style) | the bridge only - keep it **disabled** in GrandOrgue, or the button notes will play pipes |
 | KeyLab out | LCD text and LED colours (SysEx) | written by the bridge |
-| Virtual cable (LoopBe) | commands, stop states, volumes, label text | bridge <-> GrandOrgue |
+| Virtual cable (GO2Bridge / Bridge2GO) | commands, stop states, volumes, label text | bridge <-> GrandOrgue |
 
 ## Buttons and wheels (DAW port unless noted)
 
