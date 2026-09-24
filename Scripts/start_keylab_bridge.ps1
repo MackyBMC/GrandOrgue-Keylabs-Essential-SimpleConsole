@@ -1,6 +1,13 @@
 $Host.UI.RawUI.WindowTitle = "KeyLab - GrandOrgue bridge"
 Set-Location -LiteralPath $PSScriptRoot
 
+$compiled = Join-Path $PSScriptRoot "build\keylab_go_bridge.exe"
+if ((Test-Path -LiteralPath $compiled) -and $env:FORCE_PY -ne "1") {
+    Write-Host "Starting the compiled KeyLab - GrandOrgue bridge. Close this window or press Ctrl+C to stop."
+    Write-Host ""
+    & $compiled @args
+    $exitCode = $LASTEXITCODE
+} else {
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
     $python = Get-Command py -ErrorAction SilentlyContinue
@@ -17,6 +24,7 @@ Write-Host ""
 
 & $python.Source (Join-Path $PSScriptRoot "keylab_go_bridge.py") @args
 $exitCode = $LASTEXITCODE
+}
 
 if ($exitCode -ne 0) {
     Write-Host ""

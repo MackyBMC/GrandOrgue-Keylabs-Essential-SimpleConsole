@@ -19,6 +19,7 @@ Controls (DAW mode)
                       Bank overview (2.5 s after a bank change): # on/up  . off/down  ^ on but fader
                       down (raise it)  v off but fader up (lower it)  ? fader not seen yet
   Master fader        master volume;  Encoders 1-4: Pedal / Hauptwerk / Solowerk / Schwellwerk volume
+  Encoder 5           Swell (Schwellwerk enclosure): turn right = more open, left = more closed
   Encoders 7, 8       Tremolo II / III: turn right = on, left = off (the tremolos are also in their division's bank)
   Play/Pause          GrandOrgue MIDI player;  Loop = repeat the same recording
   Stop                panic (all sound off); if a MIDI file is playing or paused it is stopped as well
@@ -29,15 +30,29 @@ LCD: first two characters of each line are status (top: bank e.g. H2, bottom: st
 file is cued), the rest is the current file name.  Moving a fader or encoder shows its readout (stop
 name and state, or volume bar) on every update while it moves (at most every --live seconds),
 then the normal display returns after --hold seconds.  Encoders 1-4 = Pedal, Hauptwerk, Solowerk,
-Schwellwerk volume; fader 9 = master volume.
+Schwellwerk volume; encoder 5 = Swell (Schwellwerk enclosure); fader 9 = master volume.
 
 Requires:  pip install mido python-rtmidi
 Run:
   python keylab_go_bridge.py --list
   python keylab_go_bridge.py --go "LoopBe" --kl-in "DAW" --kl-out "KeyLab" --verbose
+
+Fallback for machines where GrandOrgue and this script cannot both open the KeyLab MAIN port
+(some MIDI drivers refuse to share a device between two programs). --relay-main makes the
+script the ONLY thing that opens the physical KeyLab MAIN port: every message (keys, pedal,
+wheels, pads) is forwarded unchanged, the instant it arrives, to a virtual port that GrandOrgue
+reads instead. This trades the "playing never touches Python" guarantee for a working pad
+solution on awkward driver setups - use --kl-main (no relay) whenever direct sharing works.
+
+  python keylab_go_bridge.py --go "LoopBe" --kl-in "DAW" --kl-out "KeyLab" ^
+      --relay-main "KL2GO" --relay-main-in "Ess Midi In"
+  (then point GrandOrgue's MIDI input at "KL2GO" instead of the KeyLab MAIN device)
 """
 import argparse
+import queue
+import threading
 import time
+from collections import deque
 
 __version__ = "2026-09-20 (tremolos in division banks, tremolo encoders 7/8, pad LED refresh)"
 
@@ -64,8 +79,9 @@ VOLS = {   # key: (CC on ch 12, GrandOrgue object path, LCD name)
     "sw": (4, "volumes/Windchest003", "Schwellwerk vol."),
     "sl": (5, "volumes/Windchest004", "Solowerk vol."),
     "noises": (6, "volumes/Windchest005", "Noises volume"),
+    "swell": (7, "enclosures/001", "Swell (Schwellw.)"),
 }
-ENCODER_VOLS = {0: "pedal", 1: "hw", 2: "sl", 3: "sw"}    # encoders 1-4
+ENCODER_VOLS = {0: "pedal", 1: "hw", 2: "sl", 3: "sw", 4: "swell"}    # encoders 1-5
 POSITION_LABEL_PATH = "Sequencer/sequencer position"   # sends the step number as a HWString, key 2
 FILENAME_LABEL_KEY, POSITION_LABEL_KEY = 1, 2
 
@@ -553,7 +569,28 @@ class Bridge:
 # ------------------------------------------------------------------ configuration
 def default_config_path():
     import os
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
+    import sys
+    # A Nuitka --onefile .exe extracts itself into a temp folder at runtime, so __file__
+    # points there, not at the real .exe - config.yaml would silently fail to be found.
+    # sys.executable correctly reflects the actual .exe location in that case; only fall
+    # back to __file__ when genuinely running as a plain .py script (sys.executable is
+    # then Python itself, not this script).
+    base = sys.executable if getattr(sys, "frozen", False) or "__compiled__" in globals() \
+        else os.path.abspath(__file__)
+    locations = [
+        os.path.dirname(base),
+        os.path.dirname(os.path.abspath(sys.argv[0])),
+        os.getcwd(),
+        os.path.dirname(os.path.abspath(__file__)),
+    ]
+    locations = list(dict.fromkeys(locations))
+    locations += [os.path.dirname(location) for location in locations if os.path.dirname(location)]
+    locations = list(dict.fromkeys(locations))
+    for location in locations:
+        candidate = os.path.join(location, "config.yaml")
+        if os.path.exists(candidate):
+            return candidate
+    return os.path.join(locations[0], "config.yaml")
 
 
 def load_config(path):
@@ -567,6 +604,7 @@ def load_config(path):
     ports, faders, disp = raw.get("ports") or {}, raw.get("faders") or {}, raw.get("display") or {}
     flat = {"go": ports.get("go"), "go_out": ports.get("go_out") or None,
             "kl_in": ports.get("keylab_in"), "kl_out": ports.get("keylab_out"), "kl_main": ports.get("keylab_main_in") or None,
+            "relay_main": ports.get("relay_main_out") or None, "relay_main_in": ports.get("relay_main_in") or None,
             "threshold": faders.get("threshold"), "hold": disp.get("hold"), "live": disp.get("live"),
             "refresh": disp.get("refresh"), "verbose": raw.get("verbose")}
     return {k: v for k, v in flat.items() if v is not None}, raw
@@ -667,7 +705,12 @@ def main():
     ap.add_argument("--go-out", help="if you use a second cable for bridge -> GrandOrgue")
     ap.add_argument("--kl-in", default="DAW", help="KeyLab DAW INPUT port (part of its name)")
     ap.add_argument("--kl-out", default="KeyLab", help="KeyLab OUTPUT port for LCD and LEDs")
-    ap.add_argument("--kl-main", help="KeyLab MAIN input port (part of its name); needed for the pads")
+    ap.add_argument("--kl-main", help="KeyLab MAIN input port (part of its name); needed for the pads, direct-share mode")
+    ap.add_argument("--relay-main", help="fallback mode: name of a virtual output port. When set, this script becomes "
+                     "the only reader of the KeyLab MAIN port and forwards every message to this port unchanged; "
+                     "point GrandOrgue's MIDI input at this port instead of the KeyLab. Needs --relay-main-in too.")
+    ap.add_argument("--relay-main-in", help="the physical KeyLab MAIN input port to relay from (with --relay-main); "
+                     "defaults to the --kl-main value")
     ap.add_argument("--learn-pads", action="store_true", help="press pads 1-8 in turn and print the CC numbers for config.yaml")
     ap.add_argument("--threshold", type=int, default=64, help="fader value that switches a stop on")
     ap.add_argument("--hold", type=float, default=1.0, help="seconds a fader/knob readout stays before the normal display returns")
@@ -708,16 +751,53 @@ def main():
     go_out = mido.open_output(find_port(mido.get_output_names(), a.go_out or a.go))  # type: ignore[attr-defined]
     kl_in = mido.open_input(find_port(mido.get_input_names(), a.kl_in))  # type: ignore[attr-defined]
     kl_out = mido.open_output(find_port(mido.get_output_names(), a.kl_out))  # type: ignore[attr-defined]
+    stats = {
+        "daw_in": 0, "main_in": 0, "go_in": 0, "go_out": 0, "kl_out": 0,
+        "errors": 0, "loops": 0, "loop_total": 0.0, "loop_max": 0.0,
+    }
+    recent_events = deque(maxlen=10)
     main_in = None
-    if a.kl_main:
+    relay_out = relay_queue = None
+
+    if a.relay_main:
+        # Relay mode: this script becomes the ONLY reader of the physical KeyLab MAIN port.
+        # The forward-to-GrandOrgue side happens synchronously, on the MIDI driver's own callback
+        # thread, with no queueing and no Bridge state touched - that keeps it as fast as a direct
+        # connection allows. Pad presses (which DO touch Bridge state) are handed to a thread-safe
+        # queue instead and processed on the normal loop below, so nothing is mutated from two
+        # threads at once.
+        relay_in_name = a.relay_main_in or a.kl_main
+        if not relay_in_name:
+            raise SystemExit("--relay-main also needs --relay-main-in (or --kl-main) naming the physical KeyLab MAIN port.")
+        relay_out = mido.open_output(find_port(mido.get_output_names(), a.relay_main))  # type: ignore[attr-defined]
+        relay_queue = queue.Queue()
+        pad_ccs_snapshot = set(bridge_settings(raw).get("pad_ccs", DEFAULT_PAD_CCS))
+
+        def on_main_message(msg):  # runs on the MIDI driver's own thread - keep this fast and simple
+            stats["main_in"] += 1
+            relay_out.send(msg)
+            if msg.type == "control_change" and msg.control in pad_ccs_snapshot:
+                relay_queue.put(msg)
+
+        main_in = mido.open_input(find_port(mido.get_input_names(), relay_in_name), callback=on_main_message)  # type: ignore[attr-defined]
+        print(f"Relay mode: forwarding '{relay_in_name}' -> '{a.relay_main}'. "
+              f"Point GrandOrgue's MIDI input at '{a.relay_main}', not at the KeyLab directly.")
+    elif a.kl_main:
         try:
             main_in = mido.open_input(find_port(mido.get_input_names(), a.kl_main))  # type: ignore[attr-defined]
         except Exception as e:                       # the port may be held exclusively by GrandOrgue
-            print(f"Pads: cannot read the KeyLab main port ({e}). Pad lights still work, pad presses do not.")
+            print(f"Pads: cannot read the KeyLab main port ({e}). Pad lights still work, pad presses do not. "
+                  f"Try --relay-main instead if this keeps happening.")
     print(f"Bridge version {__version__}")
+    print(f"Connections: {a.kl_in} [IN] -> bridge -> {a.go_out or a.go} [OUT]")
+    print(f"Feedback:    {a.go} [IN] -> bridge -> {a.kl_out} [OUT]")
+    if a.relay_main:
+        print(f"Main relay:  {a.relay_main_in or a.kl_main} [IN] -> {a.relay_main} [OUT]")
+    elif a.kl_main:
+        print(f"Main input:  {a.kl_main} [IN] (GrandOrgue also uses this port)")
     print(f"Encoder volumes: {describe_encoders(br_settings.get('encoder_vols', ENCODER_VOLS))}; "
           f"tremolo encoders: {describe_tremolos(br_settings.get('tremulant_encoders', {6: 1, 7: 2}))}")
-    print("Bridge running. Ctrl+C to stop.")
+    print("Bridge running. Ctrl+C to stop. MIDI loss is not reported by the Windows MIDI driver.")
 
     br = Bridge(threshold=a.threshold, hold_s=a.hold, refresh_s=a.refresh, live_s=a.live, **br_settings)
 
@@ -725,30 +805,84 @@ def main():
         for o in outputs:
             if o["to"] == "go":
                 go_out.send(mido.Message("control_change", channel=o["ch"], control=o["cc"], value=o["val"]))
+                stats["go_out"] += 1
+                if a.verbose:
+                    recent_events.append(f"TX GO  CC ch {o['ch'] + 1:02d} key {o['cc']:03d} val {o['val']:03d}")
             else:
                 kl_out.send(mido.Message("sysex", data=o["data"]))
-            if a.verbose:
-                print("->", o["to"], {k: v for k, v in o.items() if k != "to"} if o["to"] == "go" else "")
+                stats["kl_out"] += 1
+                if a.verbose:
+                    recent_events.append(f"TX KL  SysEx {len(o['data'])} bytes")
+
+    def show_status():
+        average = stats["loop_total"] / stats["loops"] if stats["loops"] else 0.0
+        width = 100
+        lines = [
+            "KeyLab <-> GrandOrgue bridge".ljust(width),
+            f"Connections  DAW: {a.kl_in} -> bridge -> {a.go_out or a.go}    "
+            f"Feedback: {a.go} -> bridge -> {a.kl_out}".ljust(width),
+            (f"MAIN: {a.relay_main_in or a.kl_main or 'not connected'}"
+             f"    Queue: {relay_queue.qsize() if relay_queue is not None else 0}"
+             f"    Errors: {stats['errors']}    Lost: n/a").ljust(width),
+            "-" * width,
+            "TRAFFIC".ljust(width),
+            (f"Received   DAW {stats['daw_in']:>7}   MAIN {stats['main_in']:>7}   GO {stats['go_in']:>7}").ljust(width),
+            (f"Sent       GO  {stats['go_out']:>7}   KeyLab {stats['kl_out']:>5}").ljust(width),
+            (f"Loop time  average {average * 1000:>7.2f} ms   maximum {stats['loop_max'] * 1000:>7.2f} ms").ljust(width),
+            "-" * width,
+            "RECENT MESSAGES".ljust(width),
+        ]
+        lines.extend(f"{event[:width]}".ljust(width) for event in recent_events)
+        lines.extend(["".ljust(width)] * (10 - len(recent_events)))
+        lines.extend(["-" * width, "Ctrl+C stops the bridge    Message loss is not exposed by the Windows MIDI driver."])
+        print("\x1b[2J\x1b[H" + "\n".join(lines), end="", flush=True)
 
     try:
+        last_status = time.perf_counter()
+        previous_loop = last_status
         while True:
+            loop_started = time.perf_counter()
+            stats["loops"] += 1
+            stats["loop_total"] += loop_started - previous_loop
+            stats["loop_max"] = max(stats["loop_max"], loop_started - previous_loop)
+            previous_loop = loop_started
             now = time.time()
             for m in kl_in.iter_pending():
+                stats["daw_in"] += 1
                 if a.verbose and m.type != "pitchwheel":
-                    print("DAW:", m)
+                    recent_events.append(f"RX DAW {str(m)}")
                 emit(br.from_daw(m, now))
-            if main_in:
+            if relay_queue is not None:
+                while True:
+                    try:
+                        emit(br.from_main(relay_queue.get_nowait(), now))
+                    except queue.Empty:
+                        break
+            elif main_in:
                 for m in main_in.iter_pending():
+                    stats["main_in"] += 1
+                    if a.verbose and m.type != "pitchwheel":
+                        recent_events.append(f"RX MAIN {str(m)}")
                     emit(br.from_main(m, now))
             for m in go_in.iter_pending():
+                stats["go_in"] += 1
                 if a.verbose and m.type != "sysex":
-                    print("GO :", m)
+                    recent_events.append(f"RX GO  {str(m)}")
                 emit(br.from_go(m, now))
             emit(br.tick(now))
+            if time.perf_counter() - last_status >= 0.5:
+                show_status()
+                last_status = time.perf_counter()
             time.sleep(0.005)
+    except Exception:
+        stats["errors"] += 1
+        show_status()
+        print()
+        raise
     except KeyboardInterrupt:
+        print()
         pass
-    for p in (go_in, go_out, kl_in, kl_out, main_in):
+    for p in (go_in, go_out, kl_in, kl_out, main_in, relay_out):
         if p:
             p.close()
 

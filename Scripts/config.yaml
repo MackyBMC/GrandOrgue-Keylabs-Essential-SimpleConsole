@@ -4,12 +4,27 @@
 # Names below are matched as "part of the port name", upper/lower case does not matter.
 # Run   python keylab_go_bridge.py --list   to see the exact port names on this PC.
 
+# Friesach-specific GrandOrgue organ file used by start_keylab_grandorgue.bat.
+# Change this to the alternate file if required:
+# C:\Audio\Sound Samples\GrandOrgue\Friesach_GrandOrgue\Friesach.organ
+organ_path: 'C:\Audio\Sound Samples\GrandOrgue\Friesach_GrandOrgue\Friesach FullImageResolution.organ'
+
 ports:
-  go: "LoopBe"            # virtual cable shared with GrandOrgue (bridge -> GrandOrgue and back)
-  go_out: ""              # only if you send to GrandOrgue on a different cable than the one above
+  go: "GO2Bridge"         # loopMIDI input carrying GrandOrgue -> bridge messages
+  go_out: "Bridge2GO"     # loopMIDI output carrying bridge -> GrandOrgue messages
   keylab_in: "DAW"        # KeyLab DAW input (buttons, jog, faders, encoders)
   keylab_out: "KeyLab"    # KeyLab output that drives the LCD and button/pad LEDs (try "DAW" if the LCD stays blank)
-  keylab_main_in: ""              # Leave MAIN with GrandOrgue; set only if a MIDI splitter permits shared pad input
+  keylab_main_in: "Ess Midi In"    # KeyLab MAIN input, needed for the pads (blank = pad presses stop working, lights still do)
+
+  # --- Fallback for machines where GrandOrgue and this script cannot BOTH open the KeyLab MAIN
+  # port (some MIDI drivers refuse to share one device between two programs). When relay_main_out
+  # is set, this script becomes the ONLY thing that opens the physical KeyLab, and forwards every
+  # message (keys, pedal, wheels, pads) to a virtual port unchanged, the instant it arrives -
+  # GrandOrgue then reads that virtual port instead of the KeyLab directly. You must also point
+  # GrandOrgue's own MIDI input at relay_main_out (not at the KeyLab) for this to do anything.
+  # Leave relay_main_out blank (the normal case) unless keylab_main_in keeps failing to open.
+  relay_main_out: ""              # e.g. "KL2GO" - a virtual port name; create it in loopMIDI first
+  relay_main_in: ""               # physical KeyLab MAIN port to relay from; defaults to keylab_main_in above
 
 faders:
   threshold: 64           # fader value (0-127) at/above which a moved fader switches its stop on
@@ -39,12 +54,13 @@ controls:
   volume_start: 100       # assumed starting level (0-127) of each volume until an encoder is turned
   jog_max_steps: 8        # most files the jog moves per message when turned very fast
   loop_restart: 0.4       # seconds to wait before restarting the MIDI player in Loop mode
-  encoders:               # encoder number: pedal | hw | sw | sl | noises | master
+  encoders:               # encoder number: pedal | hw | sw | sl | swell | noises | master
     1: pedal
     2: hw
     3: sl
     4: sw
-    # 5: noises
+    5: swell
+    # 6: noises
 
 # Optional short names (16 characters at most) for the LCD, keyed by GrandOrgue object path.
 # The couplers are unnamed on the LCD until you say which is which, for example:
@@ -56,7 +72,7 @@ lcd_names: {}
 #  "manuals/001/couplers/Coupler 5": "II/I"
 #  "manuals/002/couplers/Coupler 6": "III/II"
 
-verbose: false            # true = print every message (useful when something does not respond)
+verbose: true             # show incoming and outgoing MIDI messages in the bridge console
 
 # The MIDI channels and CC numbers the bridge uses (commands 16, stops 15, feedback 14, volumes 12)
 # are fixed by Friesach-midi-settings-KeyLab.yaml in GrandOrgue. Do not change them here.
