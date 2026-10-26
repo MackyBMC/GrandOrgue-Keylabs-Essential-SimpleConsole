@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1
+- Fix installed builds loading and saving setter combinations from the configured GrandOrgue data folder.
+- Start GrandOrgue with the configured organ when the GUI launches.
+- Include matplotlib in the Nuitka standalone build and derive installer version from the built executable.
+
 ## 2.0.0
 - Stave editor: piano-roll window, voices, rest tidying, fingerings, division labels, tonic sol-fa, lyrics, track selection.
 - Global theming (Breeze / Adwaita / Fusion / Nord / ...), icon packs, remembered window positions.

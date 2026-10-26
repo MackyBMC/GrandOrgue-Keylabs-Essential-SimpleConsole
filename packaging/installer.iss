@@ -1,7 +1,9 @@
-; Inno Setup 6 script: wraps dist\keylab_go_bridge.dist (Nuitka standalone). Build:  iscc packaging\installer.iss
+; Inno Setup 6 script: wraps dist\keylab_go_bridge.dist (Nuitka standalone). Build through packaging\build_windows.ps1.
 ; Installs read-only program files only; config, takes and window layout live in %APPDATA%\KeyLabGrandOrgue and survive uninstall / upgrade.
 #define AppName "KeyLab GrandOrgue Bridge"
-#define AppVersion "2.0.0"
+#ifndef AppVersion
+  #error "Pass AppVersion from version.py via packaging\build_windows.ps1."
+#endif
 #define Exe "KeyLabGrandOrgueBridge.exe"
 
 [Setup]

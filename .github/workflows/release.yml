@@ -31,7 +31,10 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging\installer.iss
+          $appVersion = python -c "from version import APP_VERSION; print(APP_VERSION)"
+          if ($LASTEXITCODE -ne 0 -or -not $appVersion) { throw "Could not read APP_VERSION from version.py." }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$appVersion" packaging\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed." }
           Compress-Archive -Path dist\keylab_go_bridge.dist\* -DestinationPath dist\installer\KeyLabGrandOrgueBridge-portable-windows.zip
       - name: Linux / macOS archive
         if: matrix.name != 'windows'

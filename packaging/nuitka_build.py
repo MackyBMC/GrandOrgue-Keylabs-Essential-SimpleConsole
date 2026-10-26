@@ -33,7 +33,7 @@ args = [
     "--include-package=verovio", "--include-package-data=verovio",
     "--include-package=qtawesome", "--include-package-data=qtawesome",
     "--include-package=mido", "--include-package=rtmidi",
-    "--nofollow-import-to=pytest,tkinter,matplotlib,scipy,IPython",
+    "--nofollow-import-to=pytest,tkinter,scipy,IPython",
     "--python-flag=no_site",
 ]
 if sys.platform == "win32":

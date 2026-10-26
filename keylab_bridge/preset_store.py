@@ -99,8 +99,7 @@ def load_combinations(config_path, raw):
     import yaml
 
     set_name = str(raw.get("combination_set", "Friesach"))
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(config_path)))
-    folder = os.path.join(project_root, "Combinations", set_name)
+    folder = os.path.join(combination_root(config_path, set_name), "Combinations", set_name)
     combinations = []
     if not os.path.isdir(folder):
         return combinations
@@ -237,6 +236,29 @@ def describe_tremolos(mapping):
 
 def project_root(config_path):
     return os.path.dirname(os.path.dirname(os.path.abspath(config_path)))
+
+
+def combination_root(config_path, set_name=None):
+    """Find the shared GrandOrgue data root, with source-tree fallbacks."""
+    from .paths import data_dir, go_folder
+
+    config_dir = os.path.dirname(os.path.abspath(config_path))
+    roots = (go_folder(), project_root(config_path), config_dir)
+    unique_roots = list(dict.fromkeys(os.path.normcase(os.path.abspath(root)) for root in roots))
+
+    if set_name:
+        for root in unique_roots:
+            if os.path.isdir(os.path.join(root, "Combinations", str(set_name))):
+                return root
+    for root in unique_roots:
+        if os.path.isdir(os.path.join(root, "Combinations")):
+            return root
+
+    if os.path.normcase(config_dir) == os.path.normcase(os.path.abspath(data_dir())):
+        return os.path.abspath(go_folder())
+    if os.path.basename(config_dir).casefold() == "scripts":
+        return project_root(config_path)
+    return config_dir
 
 
 def set_config_key(config_path, key, value):
@@ -377,4 +399,3 @@ def find_matching_port(names, wanted):
         if wanted and wanted.lower() in name.lower():
             return name
     raise ValueError(f"no MIDI port containing {wanted!r}")
-

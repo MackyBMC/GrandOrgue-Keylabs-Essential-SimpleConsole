@@ -85,7 +85,7 @@ from .combination_transfer import (
 from .odf_scan import compare_with_builtin, scan_odf, spec_from_profile, summarize
 from .organ_layout import ACTIVE_LAYOUT, STOP_CHANNELS
 from .preset_store import (
-    _normalized_mapping_key, _write_managed_switches, load_combinations, project_root, set_config_key,
+    _normalized_mapping_key, _write_managed_switches, combination_root, load_combinations, project_root, set_config_key,
     load_language, load_preset_activation, load_theme, bridge_settings,
 )
 from translations import LANGUAGE_NAMES, translate
@@ -465,7 +465,7 @@ class BridgeApp:
             layout_path = self._write_layout_file()
             if not same_organ:
                 folder = self._safe_name(self.organ_profile["name"])
-                root = project_root(self.cfg_path)
+                root = combination_root(self.cfg_path, source_set)
                 source_folder = os.path.join(root, "Combinations", source_set)
                 target_folder = os.path.join(root, "Combinations", folder)
                 os.makedirs(target_folder, exist_ok=True)
@@ -544,7 +544,8 @@ class BridgeApp:
             write_transfer_alias_template(aliases_path, self.combination_set)
             aliases = load_transfer_aliases(aliases_path)
             target_set = self._safe_name(candidate_profile["name"])
-            target_folder = os.path.join(root, "Combinations", target_set)
+            combinations_root = combination_root(self.cfg_path, self.combination_set)
+            target_folder = os.path.join(combinations_root, "Combinations", target_set)
             source_set = str(aliases.get("source-combination-set") or self.combination_set)
             target_has_combinations = _contains_combinations(target_folder) if os.path.isdir(target_folder) else False
             transfer_report = {"status": "target-not-empty", "files": 0, "steps": 0,
@@ -552,7 +553,7 @@ class BridgeApp:
             combination_stage = os.path.join(stage_root, "Combinations")
             if not target_has_combinations and source_set != target_set:
                 transfer_report = transfer_combinations(
-                    os.path.join(root, "Combinations", source_set), combination_stage,
+                    os.path.join(combinations_root, "Combinations", source_set), combination_stage,
                     candidate_profile, aliases,
                 )
 
@@ -878,8 +879,10 @@ class BridgeApp:
         if loaded_index is None:
             return
         selected = self.combinations[loaded_index]
-        folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(self.cfg_path))),
-                              "Combinations", str(self.raw.get("combination_set", "Friesach")))
+        folder = os.path.join(
+            combination_root(self.cfg_path, str(self.raw.get("combination_set", "Friesach"))),
+            "Combinations", str(self.raw.get("combination_set", "Friesach")),
+        )
         path = os.path.join(folder, selected["filename"])
         try:
             with open(path, encoding="utf-8") as combination_file:
@@ -948,8 +951,10 @@ class BridgeApp:
             filename += ".yaml"
         if not filename or filename in (".yaml", ".yml"):
             return
-        folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(self.cfg_path))),
-                              "Combinations", str(self.raw.get("combination_set", "Friesach")))
+        folder = os.path.join(
+            combination_root(self.cfg_path, str(self.raw.get("combination_set", "Friesach"))),
+            "Combinations", str(self.raw.get("combination_set", "Friesach")),
+        )
         os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, filename)
         try:
@@ -2174,4 +2179,3 @@ class BridgeApp:
         self.send_panic(quiet=True, reset_all_channels=False)
         self.ports.close()
         self.log("Console stopped cleanly", notify=False)
-

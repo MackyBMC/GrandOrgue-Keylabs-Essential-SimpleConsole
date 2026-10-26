@@ -1,3 +1,5 @@
 """KeyLab to GrandOrgue bridge components."""
 
-__version__ = "2.0.1"
+from version import APP_VERSION
+
+__version__ = APP_VERSION

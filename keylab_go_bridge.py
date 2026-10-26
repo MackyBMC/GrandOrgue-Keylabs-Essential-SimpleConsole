@@ -165,6 +165,13 @@ def main():
                 print(f"PySide6 GUI is unavailable: {exc}", file=sys.stderr)
                 print("Install it with: python -m pip install PySide6", file=sys.stderr)
                 return 1
+            try:
+                from keylab_bridge.go_launcher import start_grandorgue
+                warning = start_grandorgue(app.active_organ_path)
+                if warning:
+                    print(f"GrandOrgue startup warning: {warning}", file=sys.stderr)
+            except OSError as exc:
+                print(f"GrandOrgue could not be started automatically: {exc}", file=sys.stderr)
             return run_qt_ui(app, ui)
         return app.run()
     finally:
