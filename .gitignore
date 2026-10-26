@@ -8,3 +8,4 @@ build/
 *.onefile-build/
 window_layout.json
 takes/
+*.patch

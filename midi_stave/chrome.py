@@ -460,6 +460,9 @@ class Properties(QGroupBox):
 TOOLS = (("select", "Select / move (V)", "V"), ("add", "Add note: click the roll (A)", "A"),
          ("erase", "Erase: click a note (E)", "E"), ("toe", "Toe mark: click a note (T)", "T"),
          ("heel", "Heel mark: click a note (H)", "H"))
+SHORT = {"open": "Open", "save": "Save", "pdf": "PDF", "lyrics": "Lyrics", "solfa": "Sol-fa", "undo": "Undo", "redo": "Redo",
+         "select": "Select", "add": "Add", "erase": "Erase", "toe": "Toe", "heel": "Heel",
+         "step_back": "Back", "step_fwd": "Next", "play": "Play", "stop": "Stop"}       # label under each icon; the full wording is the hover tip
 
 
 def build_chrome(stave):
@@ -484,7 +487,7 @@ def build_chrome(stave):
     stave.tools_bar = bar
 
     def action(kind, tip, handler, checkable=False):
-        a = QAction(icon(kind, ink), tip, stave)
+        a = QAction(icon(kind, ink), SHORT.get(kind, tip), stave)
         a.setToolTip(tip)
         a.setCheckable(checkable)
         a.triggered.connect(lambda _=False: handler())
@@ -505,7 +508,7 @@ def build_chrome(stave):
     group.setExclusive(True)
     tool_actions = {}
     for kind, tip, key in TOOLS:
-        a = QAction(icon(kind, ink), tip, stave)
+        a = QAction(icon(kind, ink), SHORT.get(kind, tip), stave)
         a.setCheckable(True)
         a.setToolTip(tip)
         a.setChecked(kind == "select")

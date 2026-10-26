@@ -1006,7 +1006,7 @@ class StopGridDialog(QDialog):
         height = max(380, min(720, available.height() - 64))
         center = available.center()
         self._target_geometry = QRect(center.x() - width // 2, center.y() - height // 2, width, height)
-        remembered = WINDOW_MEMORY.saved_rect("StopGridDialog") if WINDOW_MEMORY is not None else None
+        remembered = WINDOW_MEMORY.saved_rect("StopGridDialog:Stop Selection Grid") if WINDOW_MEMORY is not None else None
         if remembered is not None:
             self._target_geometry = remembered              # reopen where the user last left the grid
         self._animation = None

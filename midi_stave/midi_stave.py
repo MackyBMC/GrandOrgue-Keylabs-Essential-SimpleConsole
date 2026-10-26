@@ -1693,7 +1693,10 @@ class Stave(QMainWindow):
         """Hear one pitch on the organ (piano keys, velocity edits)."""
         ref = self.notes[-1] if self.notes else core.Note(0, 0, pitch, vel)
         probe = core.Note(0, 0, pitch, vel, ref.ch, ref.track)
-        self.preview_pitch(pitch + self.hit_params.get("transpose", 0), probe)
+        if self.chord_hook is None:
+            self.statusBar().showMessage("No organ connected - start the bridge (or the Stave Station launcher) to hear notes.")
+            return
+        self.preview_pitch(pitch + self.hit_params.get("transpose", 0), probe, fallback=True)
 
     def add_bars(self, count=4):
         """Append empty bars (same length as the last one) after the final bar."""
@@ -2365,13 +2368,15 @@ class Stave(QMainWindow):
                 pass
         return {(tonic + i + self.transpose.value()) % 12 for i in intervals}
 
-    def preview_pitch(self, pitch, note=None):
+    def preview_pitch(self, pitch, note=None, fallback=False):
         """Sound one pitch on the organ right now (live feedback while a note head is dragged)."""
         if self.chord_hook is None or note is None:
             return
         staves = self.staves_for_export()
         src = pitch - self.hit_params.get("transpose", 0)
         chans = core.stave_go_channels(src, note.ch, staves, note.track)
+        if not chans and fallback:                       # piano key outside every stave's range: still sound it on the note's own channel
+            chans = [note.ch]
         self.chord_hook([(ch, src, max(50, note.vel)) for ch in chans], 0.35)
 
     def commit_drag(self, page, hit, note, plan):
