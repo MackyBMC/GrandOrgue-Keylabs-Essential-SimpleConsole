@@ -1,5 +1,5 @@
 name: release
-# Tag v2.0.0 (git tag v2.0.0 && git push --tags) -> builds Windows (supported), Linux and macOS (experimental) and publishes a GitHub Release.
+# A v*-linux.* tag builds only the experimental Linux package; other v* tags build all platforms.
 on:
   push:
     tags: ["v*"]
@@ -7,14 +7,24 @@ on:
 permissions:
   contents: write
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.platforms.outputs.matrix }}
+    steps:
+      - id: platforms
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-linux.* ]]; then
+            echo 'matrix={"include":[{"os":"ubuntu-22.04","name":"linux","experimental":true}]}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'matrix={"include":[{"os":"windows-latest","name":"windows","experimental":false},{"os":"ubuntu-22.04","name":"linux","experimental":true},{"os":"macos-14","name":"macos","experimental":true}]}' >> "$GITHUB_OUTPUT"
+          fi
   build:
+    needs: prepare
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - {os: windows-latest, name: windows, experimental: false}
-          - {os: ubuntu-22.04,   name: linux,   experimental: true}
-          - {os: macos-14,       name: macos,   experimental: true}
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.experimental }}
     steps:
@@ -58,5 +68,5 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
-            **Windows:** run the `-setup.exe` (or unzip the portable zip). **Linux / macOS builds are experimental.**
+            **Platform status:** Windows is supported; Linux and macOS packages are experimental. See the assets for the platforms included in this release. macOS will be published after further testing.
             Settings live in your user folder and survive upgrades. Verify downloads with `SHA256SUMS.txt`.

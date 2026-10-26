@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.2-linux.1 (experimental prerelease)
+- First Linux-only prerelease build for evaluation; macOS packaging is deferred to a later release.
+- This release does not replace or alter the supported Windows v2.0.1 release.
+
 ## 2.0.1
 - Fix installed builds loading and saving setter combinations from the configured GrandOrgue data folder.
 - Start GrandOrgue with the configured organ when the GUI launches.

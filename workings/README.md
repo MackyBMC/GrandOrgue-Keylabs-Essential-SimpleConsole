@@ -25,12 +25,13 @@ In other words, you can load it and start playing without having to build the MI
 
 Version 2.0 turns the bridge into a small application. See [CHANGELOG.md](CHANGELOG.md) for the full list.
 
+- **Current platform releases:** Windows v2.0.1 is the supported stable release. Linux is being offered separately as an experimental prerelease; macOS is deferred until a later release after testing. Download only the package for your platform from the [GitHub Releases page](../../releases).
 - **Windows application and installer.** A compiled `KeyLabGrandOrgueBridge.exe` with a proper installer: *Standard* (program files separate, settings in `%APPDATA%\KeyLabGrandOrgue`) or *Portable* (everything in one folder you choose). No Python needed for end users.
 - **Your own GrandOrgue folder.** The installer asks where your GrandOrgue user folder is (Organs, Settings, Combinations) and checks for GrandOrgue and loopMIDI, with download links.
 - **Qt GUI** with global themes, icon packs, and remembered window positions and sizes.
 - **Stave Station:** a MIDI-to-score editor with engraved staves (Verovio), a piano-roll window, voices, rest tidying, fingerings, division and coupler labels, tonic sol-fa, lyrics, title/composer/arranger credits, pedal staff and track selection. Your original MIDI takes stay untouched; the stave shows a quantised version.
 - **Take recorder and player** with a realtime-priority playback thread.
-- **Releases built by GitHub Actions** on a `v*` tag, with `SHA256SUMS`. Linux and macOS packaging is included as an *experimental* framework.
+- **Releases built by GitHub Actions** on a `v*` tag, with `SHA256SUMS`. Linux prerelease tags build Linux only; macOS packaging remains deferred until tested.
 - **Separate development folder.** Source lives in its own repository folder, no longer inside the GrandOrgue user folder.
 
 The v1.0 releases remain available on the [Releases page](../../releases) and their tags are unchanged.
@@ -259,7 +260,7 @@ not be assumed to work for it.
 - The Friesach organ definition wires its tremulants unusually: Tremolo II is not
   connected to its own tremulant, and Tremolo III only works while the Blower switch
   is on. See the control reference for details.
-- Linux and macOS packages are an untested framework; Windows is the supported platform.
+- Linux is experimental and has not been validated on real hardware. macOS is deferred until a later release; Windows remains the supported platform.
 - Executables are unsigned, so Windows SmartScreen may warn on first run.
 
 ## Support the Project

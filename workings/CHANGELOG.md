@@ -2,6 +2,15 @@
 
 Newest first. v1.0.0 and the 2026.09.24 release stay available under their own tags.
 
+## 2.0.2-linux.1 - experimental prerelease
+- Linux-only package for evaluation; it has not yet been validated on real hardware.
+- Windows remains the supported stable platform; macOS is deferred until a later release.
+
+## 2.0.1 - 2026-10-26
+- Fix installed builds loading and saving setter combinations from the configured GrandOrgue data folder.
+- Start GrandOrgue with the configured organ when the GUI launches.
+- Include matplotlib in the Nuitka standalone build and derive installer version from the built executable.
+
 ## 2.0.0 - 2026-10-26
 
 ### New
