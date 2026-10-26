@@ -46,9 +46,47 @@ Filename: "{app}\{#Exe}"; Description: "Start {#AppName}"; Flags: nowait postins
 ; user data is deliberately NOT in [UninstallDelete]
 
 [Code]
+var
+  ModePage: TInputOptionWizardPage;
+  DirSet: Boolean;
+
+function IsPortable: Boolean;
+begin
+  Result := ModePage.SelectedValueIndex = 1;
+end;
+
+var
+  GOPage: TInputDirWizardPage;
+
 function GOFolder(Param: String): String;
 begin
-  Result := ExpandConstant('{userdocs}\GrandOrgue');
+  if GOPage <> nil then Result := GOPage.Values[0]
+  else Result := ExpandConstant('{userdocs}\GrandOrgue');
+end;
+
+function DataDir: String;
+begin
+  if IsPortable then Result := ExpandConstant('{app}')
+  else Result := ExpandConstant('{userappdata}\KeyLabGrandOrgue');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    ForceDirectories(DataDir);
+    SaveStringToFile(DataDir + '\go_folder.txt', GOFolder('') + #13#10, False);
+  end;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (GOPage <> nil) and (CurPageID = GOPage.ID) then
+    if not DirExists(GOPage.Values[0]) then
+      Result := MsgBox('That folder does not exist yet. Use it anyway?', mbConfirmation, MB_YESNO) = IDYES
+    else if not (DirExists(GOPage.Values[0] + '\Organs') or DirExists(GOPage.Values[0] + '\Settings')) then
+      Result := MsgBox('This folder has no Organs or Settings sub-folder, so it does not look like your GrandOrgue folder. Use it anyway?', mbConfirmation, MB_YESNO) = IDYES;
 end;
 
 function GrandOrgueFound: Boolean;
@@ -79,15 +117,6 @@ begin
 end;
 
 { Wizard page "Installation type": Standard (program files, settings in %APPDATA%) or Portable (everything in one folder you choose). }
-var
-  ModePage: TInputOptionWizardPage;
-  DirSet: Boolean;
-
-function IsPortable: Boolean;
-begin
-  Result := ModePage.SelectedValueIndex = 1;
-end;
-
 procedure InitializeWizard;
 begin
   ModePage := CreateInputOptionPage(wpWelcome, 'Installation type', 'How do you want to install?',
@@ -96,6 +125,10 @@ begin
   ModePage.Add('Standard - program files separate, settings in %APPDATA%\KeyLabGrandOrgue');
   ModePage.Add('Portable - program and settings together in the folder you choose next');
   ModePage.SelectedValueIndex := 0;
+  GOPage := CreateInputDirPage(ModePage.ID, 'GrandOrgue folder', 'Where is your GrandOrgue user folder?',
+    'This is the folder that holds your Organs, Settings and Combinations (the default is Documents\GrandOrgue; choose another if you moved it).', False, '');
+  GOPage.Add('');
+  GOPage.Values[0] := ExpandConstant('{userdocs}\GrandOrgue');
 end;
 
 procedure CurPageChanged(CurPageID: Integer);

@@ -63,3 +63,18 @@ def first_run_config(default_name="config.yaml"):
         import shutil
         shutil.copyfile(shipped, target)
     return target
+
+
+def go_folder():
+    """The user's GrandOrgue folder (Organs / Settings / Combinations): KEYLAB_GO_FOLDER env > go_folder.txt written by the installer > Documents\\GrandOrgue."""
+    env = os.environ.get("KEYLAB_GO_FOLDER")
+    if env:
+        return env
+    try:
+        with open(os.path.join(data_dir(), "go_folder.txt"), encoding="utf-8") as f:
+            value = f.read().strip()
+        if value:
+            return value
+    except OSError:
+        pass
+    return os.path.join(os.path.expanduser("~"), "Documents", "GrandOrgue")
