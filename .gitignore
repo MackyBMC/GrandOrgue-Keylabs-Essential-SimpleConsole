@@ -1,35 +1,10 @@
-# Keep the repository limited to source, documentation, and text/config files.
-*
-!*/
-# Ignore local AI/editor metadata that should stay on this machine and never be pushed upstream.
-.kilo/
-.vscode/
-.idea/
-.aider/
-.claude/
-.copilot/
-.cursor/
-
-!.gitignore
-!LICENSE*
-!*.md
-!*.txt
-!*.py
-!*.ps1
-!*.yaml
-!*.yml
-!*.bat
-!*.csv
-!*.iss
-!Installer/
-
-# Explicitly keep generated/binary GrandOrgue and recording data out of Git.
-*.orgue
-*.wav
-*.mp3
-*.mid
-*.midi
-*.cache
-*.idx
-*.cmb
-*.zip
+__pycache__/
+*.pyc
+dist/
+build/
+.venv-build/
+*.dist/
+*.build/
+*.onefile-build/
+window_layout.json
+takes/

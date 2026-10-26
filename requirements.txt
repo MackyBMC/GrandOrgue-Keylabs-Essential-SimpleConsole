@@ -1,0 +1,8 @@
+PySide6>=6.6
+mido>=1.3
+python-rtmidi>=1.5
+PyYAML>=6.0
+music21>=9.1
+verovio>=4.0
+qtawesome>=1.3
+textual>=0.50

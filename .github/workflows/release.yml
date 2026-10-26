@@ -1,0 +1,59 @@
+name: release
+# Tag v2.0.0 (git tag v2.0.0 && git push --tags) -> builds Windows (supported), Linux and macOS (experimental) and publishes a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: windows-latest, name: windows, experimental: false}
+          - {os: ubuntu-22.04,   name: linux,   experimental: true}
+          - {os: macos-14,       name: macos,   experimental: true}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - name: Linux system libraries
+        if: matrix.name == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libjack-dev libxcb-cursor0 libgl1 patchelf ccache
+      - run: pip install -r requirements.txt -r requirements-build.txt
+      - run: python packaging/nuitka_build.py
+      - name: Windows installer
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging\installer.iss
+          Compress-Archive -Path dist\keylab_go_bridge.dist\* -DestinationPath dist\installer\KeyLabGrandOrgueBridge-portable-windows.zip
+      - name: Linux / macOS archive
+        if: matrix.name != 'windows'
+        run: |
+          mkdir -p dist/installer
+          if [ "${{ matrix.name }}" = "macos" ]; then ditto -c -k --keepParent dist/keylab_go_bridge.app dist/installer/KeyLabGrandOrgueBridge-macos.zip;
+          else tar -C dist -czf dist/installer/KeyLabGrandOrgueBridge-linux.tar.gz keylab_go_bridge.dist; fi
+      - uses: actions/upload-artifact@v4
+        with: {name: "${{ matrix.name }}", path: dist/installer/*}
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {path: out, merge-multiple: true}
+      - run: cd out && sha256sum * > SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            **Windows:** run the `-setup.exe` (or unzip the portable zip). **Linux / macOS builds are experimental.**
+            Settings live in your user folder and survive upgrades. Verify downloads with `SHA256SUMS.txt`.

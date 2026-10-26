@@ -1,0 +1,5 @@
+"""Single source of truth for the version. Bump here, tag `v<version>`, push: the release workflow does the rest."""
+APP_NAME = "KeyLab GrandOrgue Bridge"
+APP_VERSION = "2.0.0"
+APP_ID = "KeyLabGrandOrgue"
+REPO_URL = "https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole"

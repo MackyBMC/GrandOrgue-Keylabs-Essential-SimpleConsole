@@ -8,7 +8,12 @@
 # their own organ_path and MIDI settings as they are added.
 # Change this to the alternate file if required:
 # C:\Audio\Sound Samples\GrandOrgue\Friesach_GrandOrgue\Friesach.organ
-organ_path: 'C:\Audio\Sound Samples\GrandOrgue\Friesach_GrandOrgue\Friesach FullImageResolution.organ'
+organ_path: 'C:/Audio/Sound Samples/GrandOrgue/Friesach_GrandOrgue/Friesach FullImageResolution.organ'
+language: en                # en, de, fr, or es; installer choice is stored in language.txt
+ui: gui                # textual, simple, gui, both, or none; --ui overrides this at launch
+theme: light             # light, dark, or contrast; GUI/TUI changes are persisted in theme.txt
+combination_set: 'Friesach' # folder under Combinations containing setter presets for this organ
+preset_activation: staged # staged cues until sustain/Jog loads; direct activates on list selection
 
 ports:
   go: "GO2Bridge"         # loopMIDI input carrying GrandOrgue -> bridge messages
@@ -42,13 +47,38 @@ pads:
   ccs: [36, 38, 39, 40, 40, 41, 42, 43]
   shared_window: 0.7      # seconds: a 'down' followed by a release within this time = pad 5 (momentary); no release = pad 4 (toggle)
   refresh: 2.0            # seconds between full re-sends of every pad/button LED (the keyboard forgets colours; 0 = never)
-  dim: 0.10               # brightness of a pad whose stop is off, as a fraction of full (0 = dark)
-  colors:                 # red, green, blue (0-127) of a pad whose stop is on, per division
-    pedal: [0, 0, 127]
+  dim: 0.0                # brightness of an off pad: 0 = LED fully off (best contrast); try 0.03-0.06 for a faint 'night mode' glow.
+                          # The KeyLab LEDs are strongly non-linear, so 0.32 already looks almost fully lit on the hardware.
+  off_grey: 5             # faint neutral grey (0-127) shown by a pad that is assigned but off; 0 = LED fully off
+  verbosity: 2            # pad text detail: 1 = stop name only ([d] = part of the loaded setter combination),
+                          # 2 = adds pad number and ON/OFF, 3 = adds the CC number and division
+  colors:                 # red, green, blue (0-127); bank colors override division defaults
+    pedal: [127, 0, 0]
     hw: [0, 127, 0]
-    sw: [127, 100, 0]
+    sw: [0, 0, 127]
     sl: [127, 0, 0]
     other: [100, 0, 127]  # couplers and tremulants
+    p1: [48, 0, 0]
+    p2: [127, 0, 0]
+    h1: [0, 48, 0]
+    h2: [0, 127, 0]
+    s1: [0, 0, 48]
+    s2: [0, 0, 88]
+    s3: [0, 0, 127]
+
+# Pad testing. The KeyLab can come back from a mode switch (DAW <-> User, HUI <-> Mackie) with its pads in a different
+# form. The default DAW-mode baseline is CCs on channel 1 (pads: ccs above). These options let the bridge accept the
+# other forms and record what the keyboard actually sends, so a mode switch can be tested without editing code.
+testing:
+  daw_trace: false                  # log EVERY message from the DAW port (buttons, encoders, jog) to Logs/pad_trace.txt
+  pad_trace: false                  # log every pad-related MAIN message with its channel and the last Map Select number
+                                    # (also written to Logs/pad_trace.txt); turn on, switch modes, press pads, read the log
+  accept_note_pads: true            # also treat NOTES as pads when they arrive on note_pad_channel (the post-reset form)
+  note_pad_channel: 10              # MIDI channel (1-16) of note-form pads; keep the organ itself on channel 1
+  note_pad_first: 36                # note number of pad 1; pads 1-8 are note_pad_first .. note_pad_first + 7
+  accept_ch1_aftertouch_pads: false # EXPERIMENTAL: on channel 1 the pad notes look like low keys (C2-G2); a pad is then
+                                    # recognised by its poly aftertouch. The note itself still reaches GrandOrgue, so
+                                    # only use this to test, and check first that a real low key sends no aftertouch
 
 controls:
   encoder_step: 2         # volume steps (0-127) per encoder click; fast turns move further
@@ -73,7 +103,8 @@ lcd_names: {}
 #  "manuals/001/couplers/Coupler 5": "II/I"
 #  "manuals/002/couplers/Coupler 6": "III/II"
 
-verbose: true             # show incoming and outgoing MIDI messages in the bridge console
+verbose: false            # F2 or 'debug on' enables raw incoming/outgoing MIDI diagnostics
 
 # The MIDI channels and CC numbers the bridge uses (commands 16, stops 15, feedback 14, volumes 12)
 # are fixed by Friesach-midi-settings-KeyLab.yaml in GrandOrgue. Do not change them here.
+organ_layout_file: 'Organs/Friesach FullImageResolution.layout.yaml'

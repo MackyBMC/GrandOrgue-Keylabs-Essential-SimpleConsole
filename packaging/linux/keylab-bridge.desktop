@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=KeyLab GrandOrgue Bridge
+Comment=Arturia KeyLab to GrandOrgue bridge, take recorder and stave editor
+Exec=KeyLabGrandOrgueBridge
+Icon=keylab-bridge
+Categories=AudioVideo;Audio;Midi;Music;
