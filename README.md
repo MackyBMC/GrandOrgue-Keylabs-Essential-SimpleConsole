@@ -1,165 +1,326 @@
-# FL Studio Arturia KeyLab Essential — Navigation & Auto-Mapping Fork
+# GrandOrgue KeyLab Essential Simple Console
 
-> A fork of [rjuang/flstudio-arturia-keylab-mk2](https://github.com/rjuang/flstudio-arturia-keylab-mk2),
-> extended with contextual window navigation, FLEX pack-browser handling, a dedicated
-> mixer-master / VST-channel-volume control scheme, and a heuristic auto-mapping system for
-> unmapped VST parameters.
+A practical MIDI control surface for [GrandOrgue](https://github.com/GrandOrgue/grandorgue),
+using an Arturia KeyLab Essential 61 mk2 in DAW mode. The bridge connects the KeyLab's
+buttons, jog wheel, faders, encoders, pads, LCD, and LEDs to a GrandOrgue organ through
+MIDI.
 
-This is **not** the original project. If you just want the well-established, widely-used base
-script for Arturia KeyLab (mkII or Essential) in FL Studio, start with
-[rjuang's repository](https://github.com/rjuang/flstudio-arturia-keylab-mk2) — it has a larger
-user base, an active discussion thread, and a track record this fork doesn't have yet. Come here
-if you specifically want the features described below and are comfortable with a newer,
-less-tested codebase.
+The aim is to make a capable virtual organ setup more accessible: give players useful
+controls close at hand, provide a ready-to-use Friesach organ profile, and let people
+play and explore without first having to build every MIDI mapping themselves. This is
+an integration aid, not a replacement for GrandOrgue or a full traditional organ
+console. The project is designed to grow to other organs as their mappings and
+registration resources are tested.
 
----
+## Releases and platform status
 
-## Credit where it's due
+| Platform | Release | Status |
+|---|---|---|
+| Windows | [v2.0.1 stable release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.1) | Supported; tested on the maintainer's Windows 11 setup |
+| Linux | [v2.0.2-linux.1 experimental prerelease](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.2-linux.1) | Build is available for evaluation; MIDI routing and hardware have not been validated on a real Linux system |
+| macOS | None yet | Deferred until a later release and testing |
 
-All of the original architecture — the MIDI event dispatcher, the paged LCD display system, the
-mixer/channel-rack/playlist integration, the drum pad recorder, the scheduler that works around FL
-Studio's lack of real threading, and the core control mapping for the KeyLab hardware — is
-[**Ray Juang's**](https://github.com/rjuang) work. This fork would not exist without it. If
-you find this useful, the original project (and its
-[Discord](https://discord.gg/aqA8rnnTFp) / [discussion thread](https://forum.image-line.com/viewtopic.php?f=1994&t=243170))
-deserves your first stop, your stars, and your thanks.
+The Linux archive is a separate prerelease and does not replace the stable Windows
+release. Linux users will need to configure MIDI ports for their own system; the
+Windows `loopMIDI` port names and sample configuration are not Linux defaults. See
+[Known limits](#known-limits) before trying the experimental build.
 
-## Built with AI assistance
+## What the bridge does
 
-Substantial parts of this fork — the new navigation logic, the FLEX-specific handling, the
-auto-mapping system, and various bug fixes to the original codebase — were built through
-extended, iterative collaboration with an AI coding assistant (Claude, Anthropic), directed and
-tested by a human throughout. This is disclosed plainly because it's relevant to how much you
-should trust any given piece of this code: the AI did not have access to a running FL Studio
-instance to verify its own output. Everything here has been tested only as thoroughly as the
-maintainer's own real-world use has exercised it — see [Known Issues & Limitations](docs/KNOWN_ISSUES.md)
-for an honest accounting of what that does and doesn't cover.
+- Navigates GrandOrgue sequencer and setter files, moves through registration steps,
+  and cues the previous or next file.
+- Uses eight faders as banked stop, coupler, and tremulant controls.
+- Controls master and division volume with the master fader and encoders.
+- Controls MIDI playback, looping, stopping, panic, saving, and the metronome.
+- Shows the active file, step, stop state, and volume feedback on the KeyLab LCD.
+- Displays playback state and bank/stop state with KeyLab LEDs and pad colors.
+- Supports pad controls when the MIDI input can be shared or split. By default,
+  GrandOrgue retains the KeyLab MAIN input.
+- Keeps normal keyboard, pedal, and wheel input connected directly to GrandOrgue;
+  playing does not pass through the Python bridge.
+- Includes **Stave Station**, a MIDI-to-score editor with piano roll, voices, rest
+  tidying, fingerings, division and coupler labels, tonic sol-fa, lyrics, track
+  selection, and score engraving.
+- Includes take recording and playback, a Qt GUI, themes, icon packs, and remembered
+  window positions.
 
-## No warranty, no liability
+## How it works
 
-This software is provided **as-is**, with no guarantee it will work correctly, safely, or at all
-on your system. By using it, you accept that:
+```text
+KeyLab DAW port  ->  KeyLab GrandOrgue Bridge  ->  virtual MIDI connection  ->  GrandOrgue
+KeyLab LCD/LEDs  <-  KeyLab GrandOrgue Bridge  <-  GrandOrgue feedback
+KeyLab MAIN port ----------------------------------------------------------->  GrandOrgue
+```
 
-- The maintainer(s) are **not responsible** for any data loss, project corruption, crashes, or
-  other issues arising from using this script.
-- This script writes a small amount of persistent state into your FL Studio project file itself
-  (encoded into the name of your last mixer track — see [Persistence & Side Effects](docs/KNOWN_ISSUES.md#persistence)).
-  Back up your projects as you normally would.
-- This is a community project maintained on a best-effort basis, not a commercial product with
-  support guarantees.
+The bridge sends command messages on MIDI channel 16, stop and switch messages on
+channel 15, reads feedback on channel 14, and sends volume messages on channel 12.
+The generated GrandOrgue MIDI settings file describes these routes.
 
-See the [LICENSE](LICENSE) (MIT) for the full legal terms.
+## Requirements
 
----
+### Windows stable release
 
-## What's different from upstream
+- Windows 10 or 11.
+- [GrandOrgue](https://grandorgue.com/download/) and the organ/sample set you want
+  to use.
+- An Arturia KeyLab Essential 61 mk2.
+- A virtual MIDI cable such as
+  [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html), with ports
+  `GO2Bridge` and `Bridge2GO`.
 
-This fork adds, on top of everything in rjuang's original:
+The installed release does not require a separate Python installation.
 
-- **Contextual window navigation** — a long-press of the navigation encoder opens a window
-  selector (Browser, Plugin, Mixer, Channel Rack, Playlist, Piano Roll); once selected, the
-  encoder and nav arrows behave differently depending on which window is targeted, instead of one
-  fixed behavior for all of them.
-- **FLEX-aware browsing** — encoder scroll and Enter drive FLEX's own preset list correctly
-  (works best with FLEX's "flatten all packs" display mode).
-- **A dedicated master/VST-volume control scheme** — encoder 9 always controls the current
-  channel's own volume (distinct from any plugin's internal parameters); fader 9 always controls
-  the mixer master, in every mode, never forwarded to a plugin as a generic CC.
-- **A heuristic auto-mapper** for plugins with no hand-curated entry in `arturia_native_plugins.py`
-  — scans a newly-selected plugin's exposed parameters, filters out inactive/structural ones,
-  ranks the rest by a synthesis-performance priority hierarchy, and maps the results onto the
-  physical knobs/sliders. A middle layer, `vst_maps/vst_default_maps.json`, lets you (or your own
-  external tooling) define per-VST default maps by parameter name in plain JSON, checked before
-  the heuristic fallback — every scan is also auto-exported to `vst_param_scans/` as raw material
-  for building these (if FL's Python can't create that folder, create it by hand once, or the
-  export falls back to `scan_<plugin>.json` in the script folder). Map names match
-  case-/punctuation-insensitively, tolerate names FL truncates (`Resonance` finds `Resonanc`), and
-  can address plugins that reuse a name: `"Wave#2"` is the 2nd parameter called Wave, a bare
-  repeated name takes the next unused one, and `39` / `"@39"` is a raw parameter index. Runs on a debounced settle timer so it doesn't remap mid-scroll while
-  browsing presets, and scans in small chunks across multiple idle ticks so a large plugin can't
-  block controller responsiveness. Two fallback modes (fixed hardware-label slots, or fully
-  dynamic ranking), toggleable live with a long CATEGORY press, persisted per-project. See
-  [docs/AUTO_MAPPER.md](docs/AUTO_MAPPER.md).
-- **A GUI-coherence watchdog** — FL Studio's scripting engine has no true threading and no direct
-  way to detect a GUI stall; this fork infers one from irregular idle-tick spacing and resynchronizes
-  script state (cancelling stale timers, dropping stuck navigation modes) when it happens, rather
-  than silently trusting state that may have gone stale during a freeze.
-- Assorted correctness fixes to the original codebase (an escape/enter path that wasn't reaching
-  its full fallback chain, a scheduler that could crash the whole idle loop on one bad task, a
-  timing bug where the auto-mapper's own scan time could be misattributed as an external freeze).
+### Linux experimental prerelease
 
-Full technical changelog: [CHANGELOG.md](CHANGELOG.md).
+The project builds on Linux, and GrandOrgue supports Linux, but this bridge's MIDI
+routing and KeyLab hardware path have not yet been tested end-to-end on a Linux
+desktop. The RtMidi backend supports ALSA and JACK on Linux; a virtual MIDI
+connection must be available through the backend and configured for the machine.
+PipeWire setups vary, so compatibility and routing need to be verified on the
+target desktop. Do not assume the Windows sample configuration will work unchanged.
 
----
+The Linux archive is intended for evaluation, not as a claim of supported or
+validated Linux operation. macOS is not currently released.
 
-## Supported devices & software
+### From source
 
-| | This fork |
-|---|---|
-| **Hardware tested on** | Arturia KeyLab Essential 61 mk2 |
-| **Hardware likely compatible, untested** | Arturia KeyLab mkII (same underlying script family) |
-| **FL Studio tested on** | 2026 (build 26.1.6) |
-| **OS tested on** | Windows |
-| **OS partially supported** | macOS — the FLEX/plugin keystroke-emulation path (`ctypes` `SendInput`) is Windows-only by construction; on Mac it silently falls back to FL's native API calls, which is weaker but shouldn't error |
-| **Python** | Whatever FL Studio 2026 embeds (3.12.1 at time of writing) |
+- Python 3.11 or later.
+- Install Python dependencies with `python -m pip install -r requirements.txt`.
+- A working GrandOrgue installation and MIDI setup.
 
-If you're running something outside this table, it may well work — the base project supports a
-wide range of configurations — but nothing here has been verified against it. Please report back
-(see [Contributing](CONTRIBUTING.md)) so this table can grow.
+## GrandOrgue, organ, and sample set
 
----
+The bridge integrates with an existing GrandOrgue installation; it does not replace
+GrandOrgue's installation, audio configuration, or organ-loading workflow. Install
+GrandOrgue from its [official download page](https://grandorgue.com/download/) or
+consult the [GrandOrgue project](https://github.com/GrandOrgue/grandorgue) and its
+[community discussions](https://github.com/GrandOrgue/grandorgue/discussions).
 
-## Installation
+The initial fully mapped profile is the **Friesach Parish Church** sample set by
+[Piotr Grabowski](https://piotrgrabowski.pl/friesach/). On the Friesach page, choose
+the full free version and complete the free checkout to receive the download link.
+The sample set is not included in this repository. The full 24-bit version needs
+about 13 GB of free RAM for all release samples; the 16-bit version needs about
+6.6 GB.
 
-1. Clone or download this repository into:
+Other organs require their own tested stop/switch paths, MIDI settings, organ file,
+and combinations. Do not assume the Friesach mappings apply to another organ.
+
+## Tested setup
+
+The stable Windows release has been tested on this setup:
+
+- GrandOrgue v3.17.3-1.
+- Arturia KeyLab Essential 61 mk2, firmware 1.1.10, in DAW mode.
+- Windows 11; Python 3.13 when running from source.
+- loopMIDI ports `GO2Bridge` and `Bridge2GO`.
+
+This is one hardware setup. Pad numbering and some DAW-mode behavior may vary
+between keyboard models or firmware versions; see
+[KeyLab GrandOrgue hardware settings](KeyLab_GrandOrgue_HardwareSettings.md).
+
+## Windows installation and setup
+
+Download the Windows installer from the [v2.0.1 stable release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.1)
+and verify it with that release's `SHA256SUMS.txt`. The installer offers:
+
+1. **Standard:** program files are installed separately; settings and takes live in
+   `%APPDATA%\KeyLabGrandOrgue`.
+2. **Portable:** program and settings live together in the selected folder, marked
+   by a `portable.flag` file.
+3. **GrandOrgue folder:** choose where your `Organs`, `Settings`, and
+   `Combinations` live. The selected path is stored in `go_folder.txt`.
+4. **Optional starter files:** copy the provided combinations and MIDI settings
+   without overwriting existing files.
+
+Uninstalling removes the program but keeps user settings, takes, and the GrandOrgue
+data folder. The v2 installer is separate from v1.0. Unsigned executables may prompt
+Windows SmartScreen or antivirus warnings; the release provides checksums.
+
+### GrandOrgue MIDI setup
+
+In GrandOrgue, open **Audio/MIDI > Settings > MIDI Devices** and enable the KeyLab
+**MAIN** input and the virtual cable as both an input and an output. Leave the
+KeyLab **DAW** input disabled in GrandOrgue: its button messages are ordinary notes
+and could sound pipes. The bridge reads that port. Put the keyboard in DAW mode by
+pressing the **DAW** pad.
+
+The bridge does not open the KeyLab MAIN port by default, allowing GrandOrgue to
+continue receiving keyboard, pedal, and wheel input. Pad presses require a MIDI
+splitter or shared-input service if GrandOrgue already owns that port; the bridge
+can still drive the pad lights.
+
+### Quick start
+
+1. Connect the KeyLab and start GrandOrgue.
+2. Create the loopMIDI ports `GO2Bridge` and `Bridge2GO`.
+3. Import the MIDI settings into GrandOrgue (see [Importing MIDI settings](#importing-midi-settings)).
+4. Start **KeyLab GrandOrgue Bridge**, select the MIDI ports in settings, and press
+   the keyboard's **DAW** pad.
+
+## Linux evaluation notes
+
+The [Linux prerelease](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.2-linux.1)
+contains a Linux standalone build, but it is not a tested Linux installation guide.
+GrandOrgue should be installed and working first. The bridge's `--list` option can
+show the MIDI port names visible to it; configure the port-name fragments in
+`config.yaml` to match the system. ALSA/RtMidi names can include client and port
+numbers that change between sessions, so prefer a stable name fragment over a
+numeric identifier.
+
+The app stores its settings under `$XDG_CONFIG_HOME/KeyLabGrandOrgue`, or
+`~/.config/KeyLabGrandOrgue` when `XDG_CONFIG_HOME` is unset. GrandOrgue's data
+directory and virtual MIDI routing may be configured differently by each distro
+and desktop. The bridge currently expects MIDI endpoints to be available; the
+Linux build does not create them automatically. Confirm input, output, feedback,
+organ startup, and audio independently before relying on it.
+
+GrandOrgue's Linux installation notes recommend X11 because some window
+positioning/sizing may not work correctly under Wayland. See the official
+[GrandOrgue Linux installation instructions](https://github.com/GrandOrgue/grandorgue/blob/master/INSTALL.md).
+
+## Configuration and MIDI settings
+
+`config.yaml` contains the Friesach profile and the port-name fragments. Important
+settings include:
+
+- `organ_path`: the GrandOrgue organ file.
+- `ports.go` and `ports.go_out`: virtual MIDI connections between the bridge and
+  GrandOrgue.
+- `ports.keylab_in`, `ports.keylab_out`, and `ports.keylab_main_in`: KeyLab DAW,
+  output, and MAIN port-name fragments.
+- `ports.relay_main_out` and `ports.relay_main_in`: optional relay when the bridge
+  must read MAIN and GrandOrgue cannot share that input.
+- `faders.threshold`, `display.*`, `pads.*`, and `controls.*`: control, LED, and
+  display behavior.
+
+The checked-in Windows sample uses loopMIDI names; change them to the actual port
+names on other systems. Command-line options override `config.yaml`.
+
+GrandOrgue's MIDI Objects **Import** may clear objects not present in the imported
+file. Do not import the checked-in `Settings/Friesach-midi-settings-KeyLab.yaml`
+without first protecting your current setup. Instead:
+
+1. Export your current GrandOrgue MIDI settings.
+2. Merge the bridge assignments into that export:
+
+   ```text
+   python make_go_midi_import.py your-export.yaml merged.yaml
    ```
-   Documents/Image-Line/FL Studio/Settings/Hardware/
-   ```
-   Make sure the scripts end up in their own subfolder inside `Hardware/` — FL Studio ignores
-   files placed directly in `Hardware/` itself.
-2. In FL Studio, go to `Options -> MIDI Settings` and select your Arturia device (the **DAW** port)
-   under **Input**. Choose this project's script (`Arturia Keylab mkII DAW (MIDIIN2/MIDIOUT2) NAV`)
-   from the **Controller type** dropdown, not "(generic controller)".
-3. Set your keyboard to **DAW mode** (not User or Analog Lab mode) on the hardware itself.
-4. Optional: the second port (`Arturia Keylab mkII (MIDI) NAV`) enables Analog Lab / drum pad
-   support — set it up the same way if you use those features.
 
-For the full walkthrough with port-configuration screenshots (Arturia's own port-setup guide is
-still accurate for this fork — the port names differ slightly but the process is identical):
-[docs/INSTALL.md](docs/INSTALL.md).
+3. Import `merged.yaml` in GrandOrgue.
+4. Check the GrandOrgue log for unused MIDI object paths.
 
-**Visual aids & tutorials:** rjuang's original videos (linked in his repository) still cover the
-base navigation, mixer, and Analog Lab features accurately, since this fork builds on top of that
-without changing them. Fork-specific features (auto-mapper, FLEX pack browsing, window
-navigation) don't have their own tutorial video/PDF yet — see
-[docs/INSTALL.md](docs/INSTALL.md) for text-based setup steps in the meantime, and
-[Contributing](CONTRIBUTING.md) if you'd like to help produce one.
+The assignments target the Friesach sample set. Another organ needs its own
+verified object paths and mappings.
 
----
+## Running from source and troubleshooting
 
-## Configuration
+Run `python keylab_go_bridge.py` from the repository. Useful options:
 
-Most day-to-day settings live in `config.py` — auto-mapper mode and settle time, the plugin
-exclusion list, debug logging. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for what each
-setting does and which are safe to change without understanding the code.
+- `--list` lists the available MIDI ports.
+- `--verbose` prints MIDI diagnostics.
+- `--learn-pads` helps identify pad CC numbers.
+- `--test-stop 11 --test-off` switches a stop off without moving a fader; run again
+  without `--test-off` to switch it back on.
 
----
+If the LCD stays blank, try the other KeyLab output port with `--kl-out`. If pad
+presses do nothing, check that MAIN input sharing or splitting is configured.
 
-## Known Issues & Limitations
+## What's new in Version 2
 
-Read before reporting a bug — it might already be a known, open issue:
-[docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
+Version 2 turns the bridge into a standalone desktop application:
 
----
+- **Application and installer:** Nuitka standalone build, Windows Standard and
+  Portable installation modes, per-user settings, and optional copy of starter
+  combinations and MIDI settings.
+- **Paths:** settings, takes, and window layout use the per-user data folder for an
+  installed build, the program folder in portable mode, or the source folder when
+  running from source.
+- **Qt GUI:** global themes, icon packs, and remembered window positions and sizes.
+- **Stave Station:** MIDI-to-score editing and engraving, including piano roll,
+  voices, lyrics, tonic sol-fa, fingerings, staff labels, and track selection.
+- **Take recorder and player:** playback uses a dedicated realtime-priority thread.
+- **Release workflow:** GitHub Actions builds versioned assets and publishes checksums.
+  Linux-only prerelease tags build Linux without launching Windows or macOS jobs.
+- **Repository changes:** application source moved from the old `Scripts/` layout to
+  the repository root. The legacy launchers, sniffer, and LED-test scripts are no
+  longer in the current tree; the v1.0 tags remain available for those files.
 
-## Feedback & Contributing
+### v2.0.1 maintenance changes
 
-Bug reports, feature requests, and pull requests are welcome. Please read
-[CONTRIBUTING.md](CONTRIBUTING.md) first — in particular the bug report template, since precise
-diagnostic detail (FL Studio version, OS, the exact plugin involved, and steps to reproduce) is
-what actually gets issues fixed here, as opposed to vague reports that can't be reproduced.
+- Fixed installed builds so setter combinations load and save from the configured
+  GrandOrgue data folder.
+- Start GrandOrgue with the configured organ when the GUI launches.
+- Include Matplotlib in the Nuitka standalone build and derive installer version
+  from the application's version metadata.
 
-## License
+The current `v2.0.2-linux.1` tag is a packaging-only experimental Linux prerelease;
+it does not change the stable Windows v2.0.1 application. See
+[CHANGELOG.md](CHANGELOG.md) for release history.
 
-[MIT](LICENSE) — inherited from the original project, with the same permissions and the same "as
-is, no warranty" terms.
+## Known limits
+
+- The project has been tested on one KeyLab/Windows setup.
+- GrandOrgue can only play a MIDI file that is already loaded through its own menu.
+- Loading a file returns the registration to step 0.
+- KeyLab pad colors may drift; the bridge re-sends them regularly.
+- In DAW mode, pads 4 and 5 share a CC; very long presses of pad 5 may be read as
+  pad 4.
+- Accented letters in combination file names may not display correctly on the LCD.
+- The Friesach organ definition wires its tremulants unusually: Tremolo II is not
+  connected to its own tremulant, and Tremolo III only works while the Blower switch
+  is on. See the hardware control reference.
+- Linux is experimental and unvalidated with real hardware; macOS is deferred.
+- Executables are unsigned; Windows SmartScreen or antivirus may warn.
+
+## Building and contributing
+
+```powershell
+git clone https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole
+cd GrandOrgue-Keylabs-Essential-SimpleConsole
+python -m pip install -r requirements.txt -r requirements-build.txt
+python keylab_go_bridge.py
+powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
+```
+
+The Windows build uses Nuitka and Inno Setup 6. Release steps are documented in
+[docs/RELEASING.md](docs/RELEASING.md). Linux and macOS packaging status is described
+above; macOS is not currently released.
+
+Bug reports, feature requests, and contributions are welcome. Include the operating
+system, GrandOrgue version, KeyLab model/firmware, MIDI port names, and steps to
+reproduce an issue. Review live-performance changes carefully and keep backups of
+GrandOrgue settings and registration data.
+
+## Acknowledgements and project history
+
+This project grew from work exploring the Arturia KeyLab's DAW controls and MIDI
+interface. **Ray Juang's**
+[flstudio-arturia-keylab-mk2 project](https://github.com/rjuang/flstudio-arturia-keylab-mk2)
+was an important reference for understanding the KeyLab display and LEDs; the LCD
+frame and LED numbers used here were informed by studying that project. The original
+project's [discussion thread](https://forum.image-line.com/viewtopic.php?f=1994&t=243170)
+and [community Discord](https://discord.gg/aqA8rnnTFp) remain useful resources for
+the underlying KeyLab work.
+
+The author, **MackyBMC**, supplied the organ, keyboard, design direction, and
+real-hardware testing. **Claude Sonnet 5** (Anthropic) contributed substantially to
+the bridge, MIDI settings generator, diagnostics, documentation, and related tools
+through iterative collaboration with the author. The code has only been exercised
+on the setup described above; review it before relying on it for live performance.
+
+Thanks also to:
+
+- **Piotr Grabowski** for the Friesach Parish Church sample set.
+- **The GrandOrgue project** for its simulator and the source consulted to understand
+  MIDI object paths and event formats; no GrandOrgue code is included here.
+- **Third-party library authors**; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## License and disclaimer
+
+This project is MIT licensed; see [LICENSE](LICENSE). It is provided as-is, without
+warranty or support guarantees. Back up your GrandOrgue settings and organ data.
+This project is not affiliated with or endorsed by Arturia, GrandOrgue, Piotr
+Grabowski, or Anthropic. KeyLab and Arturia are trademarks of Arturia SA; Claude is
+a trademark of Anthropic.
