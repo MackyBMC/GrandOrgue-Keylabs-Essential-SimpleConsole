@@ -28,7 +28,7 @@ args = [
     # the program imports its stave-editor modules by bare name: tell Nuitka about them
     "--include-package=keylab_bridge",
     *[f"--include-module={m}" for m in ("translations", "polish", "themes", "themes_ui", "lastdir", "go_midi_setup", "solfa",
-                                        "core", "render", "engrave_job", "chrome", "roll_window", "midi_stave", "sessionmeta", "stave_station")],
+                                        "core", "render", "engrave_job", "chrome", "roll_window", "track_panel", "quant_tools", "midi_stave", "sessionmeta", "stave_station")],
     "--include-package=music21", "--include-package-data=music21",
     "--include-package=verovio", "--include-package-data=verovio",
     "--include-package=qtawesome", "--include-package-data=qtawesome",

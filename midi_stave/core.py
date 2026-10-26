@@ -612,3 +612,100 @@ def export_fixed_midi(notes, barmap, path, bpm=None, quantised=None, staves=None
     mid = mido.MidiFile(type=0, ticks_per_beat=tpb)
     mid.tracks.append(track)
     mid.save(path)
+
+
+# ------------------------------------------------------------------------------------------------ shape the MIDI timing
+def shape_notes(notes, barmap, mode="grid", grid_beats=0.25, ms=50.0, strength=1.0, swing=0.0, humanise_ms=0.0,
+                ends="keep", legato=1.0, lo=0, hi=127, only=None, seed=1, fingered=None, max_gap=1.0):
+    """Re-time the RAW notes in place (the caller pushes undo first; `_raw` keeps each note's original start / end).
+
+    mode        "grid": snap starts to a beat grid (grid_beats, in the warped bars); "time": snap to fixed milliseconds.
+    strength    0..1: how far each start moves toward its snapped position (1 = fully snapped, 0.5 = half way: keeps feel).
+    swing       0..1: delay the off-beat grid points by this fraction of a grid step (grid mode).
+    humanise_ms random +- jitter on every start afterwards (seeded: same result every time).
+    ends        "keep" the note length, "snap" the end to the grid / time step, or "legato": run each note on toward the
+                next onset of the same voice, `legato` = fraction of that gap held (1 = joined, 1.2 = slight overlap slur).
+                "fingered": notes carrying a finger number (`fingered` = set of note ids) are joined to the next fingered
+                note of their voice (a finger-numbered run is played legato; a substitution mark means the key is held).
+                "organ": any note is joined to the next onset when the gap is at most `max_gap` beats (piano-style MIDI made
+                organ-friendly); a repeated pitch is always released 10 ms before it strikes again.
+    lo, hi      only notes with MIDI numbers lo..hi are touched; `only` = optional set of note ids (the selection).
+    Returns the number of notes changed."""
+    import random
+    rng = random.Random(seed)
+    chosen = [n for n in notes if lo <= n.pitch <= hi and (only is None or id(n) in only)]
+    for n in chosen:
+        if not hasattr(n, "_raw"):
+            n._raw = (n.start, n.end)
+    for n in chosen:
+        length = n.end - n.start
+        if mode == "time":
+            step = max(ms, 1.0) / 1000.0
+            target = round(n.start / step) * step
+        else:
+            beat = barmap.sec_to_beat(n.start)
+            unit = max(float(grid_beats), 1e-3)
+            index = round(beat / unit)
+            snapped = index * unit
+            if swing and index % 2:
+                snapped += swing * unit
+            target = barmap.beat_to_sec(snapped)
+        start = n.start + (target - n.start) * max(0.0, min(1.0, strength))
+        if humanise_ms:
+            start += rng.uniform(-humanise_ms, humanise_ms) / 1000.0
+        n.start = max(0.0, start)
+        n.end = n.start + length
+    if ends in ("fingered", "organ"):
+        voices = {}
+        for n in chosen:
+            if ends == "organ" or (fingered and id(n) in fingered):
+                voices.setdefault((n.track, n.ch), []).append(n)
+        for group in voices.values():
+            group.sort(key=lambda n: (n.start, n.pitch))
+            for i, n in enumerate(group):
+                nxt = next((m.start for m in group[i + 1:] if m.start > n.start + 0.06), None)
+                if nxt is None:
+                    continue
+                gap_beats = barmap.sec_to_beat(nxt) - barmap.sec_to_beat(n.end)
+                if ends == "fingered" or gap_beats <= max_gap:
+                    n.end = max(n.end, n.start + (nxt - n.start) * max(0.1, legato))     # only ever lengthens: held notes stay held
+        if ends == "organ":                                    # same pitch must be released before it is struck again
+            by_pitch = {}
+            for n in chosen:
+                by_pitch.setdefault((n.track, n.ch, n.pitch), []).append(n)
+            for group in by_pitch.values():
+                group.sort(key=lambda n: n.start)
+                for a, b in zip(group, group[1:]):
+                    if a.end > b.start - 0.01:
+                        a.end = max(a.start + 0.02, b.start - 0.01)
+    if ends in ("snap", "legato"):
+        voices = {}
+        for n in chosen:
+            voices.setdefault((n.track, n.ch), []).append(n)
+        for group in voices.values():
+            group.sort(key=lambda n: (n.start, n.pitch))
+            for i, n in enumerate(group):
+                nxt = next((m.start for m in group[i + 1:] if m.start > n.start + 0.06), None)
+                if ends == "legato" and nxt is not None:
+                    n.end = n.start + max(0.02, (nxt - n.start) * max(0.1, legato))
+                elif ends == "snap":
+                    if mode == "time":
+                        step = max(ms, 1.0) / 1000.0
+                        n.end = max(n.start + step, round(n.end / step) * step)
+                    else:
+                        unit = max(float(grid_beats), 1e-3)
+                        b0 = barmap.sec_to_beat(n.start)
+                        b1 = max(b0 + unit, round(barmap.sec_to_beat(n.end) / unit) * unit)
+                        n.end = barmap.beat_to_sec(b1)
+    return len(chosen)
+
+
+def restore_raw(notes, lo=0, hi=127, only=None):
+    """Put back the original start / end that shape_notes remembered."""
+    count = 0
+    for n in notes:
+        if hasattr(n, "_raw") and lo <= n.pitch <= hi and (only is None or id(n) in only):
+            n.start, n.end = n._raw
+            del n._raw
+            count += 1
+    return count

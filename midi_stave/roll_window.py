@@ -3,8 +3,12 @@ strip, a keyboard and a velocity lane that all share two scroll bars (one horizo
 
 CHANGELOG
 2026-10-25  New: the roll moved out of the main window into this pop-up.
+2026-10-26  Keys taller / shorter = Ctrl+Up / Ctrl+Down, wheel zoom reversible and centred, grid fills the window, saved layouts (Layout menu).
+2026-10-26  Edit > Shape MIDI timing.
+2026-10-26  Renamed MIDI Track / Piano Roll Editor; track list panel (track_panel.py): active track, show, names, channel, add / remove.
 """
-from PySide6.QtCore import QRectF, QSettings, QSize, Qt, QTimer
+import json
+from PySide6.QtCore import QByteArray, QRectF, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtWidgets import (QComboBox, QGridLayout, QLabel, QMainWindow, QScrollBar, QSlider, QSpacerItem, QToolBar,
                                QWidget)
@@ -112,7 +116,7 @@ class RollWindow(QMainWindow):
         import midi_stave as M
         self.M, self.stave = M, stave
         self.setWindowFlag(Qt.WindowType.Window, True)
-        self.setWindowTitle("Piano roll")
+        self.setWindowTitle("MIDI Track / Piano Roll Editor")
         self.settings = QSettings("KeyLabGrandOrgue", "MidiStave")
         self.resize(1100, 640)
         geo = self.settings.value("roll_geometry")
@@ -152,6 +156,10 @@ class RollWindow(QMainWindow):
             bar_roll.rangeChanged.connect(lambda lo, hi, b=bar_roll, m=bar_mine: m.setPageStep(b.pageStep()))
         hs.valueChanged.connect(lambda _v: (self.ruler.update(), self.overview.update()))
         roll.hoverInfo.connect(lambda text: self.statusBar().showMessage(text))
+        import track_panel
+        self.tracks = track_panel.TrackPanel(stave, self)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.tracks)
+        self.tracks.setMinimumWidth(260)
         self._build_tools()
         self._build_menus()
         self.statusBar().showMessage("Select a tool above. Wheel = up / down, Shift + wheel = sideways, Ctrl + wheel = zoom time, Alt + wheel = zoom keys.")
@@ -160,6 +168,12 @@ class RollWindow(QMainWindow):
         self.refresh_timer.timeout.connect(self._tick)
         self.refresh_timer.start()
         self._shortcuts()
+        try:
+            last = json.loads(self.settings.value("roll_last", "") or "{}")
+            if last:
+                QTimer.singleShot(0, lambda: self.apply_layout(last))
+        except ValueError:
+            pass
 
     # ---- bars
     def _tick(self):
@@ -216,7 +230,7 @@ class RollWindow(QMainWindow):
         bar.addWidget(self.h_zoom)
         bar.addWidget(QLabel(" Keys "))
         self.v_zoom = QSlider(Qt.Orientation.Horizontal)
-        self.v_zoom.setRange(3, 24)
+        self.v_zoom.setRange(3, 40)
         self.v_zoom.setValue(M.ROW)
         self.v_zoom.setFixedWidth(80)
         self.v_zoom.valueChanged.connect(self._set_row)
@@ -253,8 +267,18 @@ class RollWindow(QMainWindow):
         self.stave.refresh_roll(keep_view=True)
 
     def _set_row(self, value):
-        self.M.ROW = int(value)
+        """Change the key height, keeping the pitch in the middle of the window where it was."""
+        roll, M = self.stave.roll, self.M
+        vbar = roll.verticalScrollBar()
+        centre = roll.top - (vbar.value() + roll.viewport().height() / 2) / max(1, M.ROW)
+        M.ROW = int(value)
         self.stave.refresh_roll(keep_view=True)
+        vbar.setValue(int((roll.top - centre) * M.ROW - roll.viewport().height() / 2))
+        self.stave.keys.update()
+
+    def zoom_keys(self, step):
+        value = max(self.v_zoom.minimum(), min(self.v_zoom.maximum(), self.v_zoom.value() + step))
+        self.v_zoom.setValue(value)                    # the slider calls _set_row
 
     def set_tool(self, kind):
         from chrome import set_tool
@@ -289,6 +313,8 @@ class RollWindow(QMainWindow):
         m = self.menuBar().addMenu("&Edit")
         a(m, "Undo", st.undo, "Ctrl+Z")
         a(m, "Redo", st.redo, "Ctrl+Y")
+        m.addSeparator()
+        a(m, "Shape MIDI timing (quantise, swing, humanise, legato)...", st.open_shape, "Ctrl+Q")
         m.addSeparator()
         a(m, "Cut", lambda: st.copy_notes(True), "Ctrl+X")
         a(m, "Copy", st.copy_notes, "Ctrl+C")
@@ -325,22 +351,26 @@ class RollWindow(QMainWindow):
         a(m, "Invert the row shading", lambda on: (setattr(roll, "invert_grid", on), st.refresh_roll(True)), checkable=True)
         grid = m.addMenu("Grid lines")
         group = QActionGroup(self)
+        self.grid_acts = {}
         for label, mode in (("None", "none"), ("Bars", "bars"), ("Beats", "beats"), ("Snap steps", "grid")):
             act = QAction(label, self, checkable=True)
             act.setChecked(mode == "grid")
             act.triggered.connect(lambda _=False, md=mode: (setattr(roll, "grid_mode", md), st.refresh_roll(True)))
             group.addAction(act)
             grid.addAction(act)
+            self.grid_acts[mode] = act
         a(m, "Velocity lane", lambda on: (st.velocity_lane.setVisible(on), self.lane_label.setVisible(on)), checkable=True, checked=True)
         a(m, "Overview strip", self.overview.setVisible, checkable=True, checked=True)
         a(m, "Follow the music while playing", lambda on: setattr(roll, "follow", on), checkable=True, checked=True)
         m = self.menuBar().addMenu("&Zoom")
         a(m, "Time in", lambda: self.h_zoom.setValue(int(self.h_zoom.value() * 1.3)), "Ctrl+=")
         a(m, "Time out", lambda: self.h_zoom.setValue(int(self.h_zoom.value() / 1.3)), "Ctrl+-")
-        a(m, "Keys taller", lambda: self.v_zoom.setValue(self.v_zoom.value() + 2))
-        a(m, "Keys shorter", lambda: self.v_zoom.setValue(self.v_zoom.value() - 2))
+        a(m, "Keys taller", lambda: self.zoom_keys(2), "Ctrl+Up")
+        a(m, "Keys shorter", lambda: self.zoom_keys(-2), "Ctrl+Down")
         a(m, "Fit the whole piece", self.fit_all, "Ctrl+0")
         a(m, "Zoom to the selection", self.fit_selection, "Ctrl+Shift+0")
+        self.layout_menu = self.menuBar().addMenu("&Layout")
+        self.layout_menu.aboutToShow.connect(self._fill_layout_menu)
 
     def _shortcuts(self):
         QShortcut(QKeySequence(Qt.Key.Key_Space), self, self.stave.toggle_play)
@@ -368,6 +398,93 @@ class RollWindow(QMainWindow):
             mid = sum(n.pitch for n in st.notes) / len(st.notes)
             roll.verticalScrollBar().setValue(int((roll.top - mid) * self.M.ROW - roll.viewport().height() / 2))
 
+    # ---- layouts: zoom, snap, grid, panels, window and toolbar arrangement
+    TOGGLES = (("Note names on the notes", "labels"), ("Show the score's quantised notes as shadows", "ghosts"),
+               ("Highlight the notes of the key", "scale"), ("Invert the row shading", "invert"),
+               ("Velocity lane", "lane"), ("Overview strip", "overview"), ("Follow the music while playing", "follow"))
+
+    def _toggle_actions(self):
+        found = {}
+        for act in self.findChildren(QAction):
+            for text, key in self.TOGGLES:
+                if act.text() == text and act.isCheckable():
+                    found[key] = act
+        return found
+
+    def capture_layout(self):
+        roll = self.stave.roll
+        centre = roll.top - (roll.verticalScrollBar().value() + roll.viewport().height() / 2) / max(1, self.M.ROW)
+        return {"pps": int(roll.pps), "row": int(self.M.ROW), "snap": self.snap_box.currentIndex(), "grid": roll.grid_mode,
+                "toggles": {k: a.isChecked() for k, a in self._toggle_actions().items()}, "centre_pitch": round(centre, 1),
+                "geometry": bytes(self.saveGeometry().toBase64()).decode("ascii"),
+                "state": bytes(self.saveState().toBase64()).decode("ascii")}
+
+    def apply_layout(self, d):
+        roll = self.stave.roll
+        try:
+            if "geometry" in d:
+                self.restoreGeometry(QByteArray.fromBase64(d["geometry"].encode("ascii")))
+            if "state" in d:
+                self.restoreState(QByteArray.fromBase64(d["state"].encode("ascii")))
+            if d.get("grid") in self.grid_acts:
+                self.grid_acts[d["grid"]].setChecked(True)
+                roll.grid_mode = d["grid"]
+            for key, act in self._toggle_actions().items():
+                if key in d.get("toggles", {}) and act.isChecked() != d["toggles"][key]:
+                    act.setChecked(d["toggles"][key])                  # fires the menu's own handler
+            if "snap" in d and 0 <= d["snap"] < self.snap_box.count():
+                self.snap_box.setCurrentIndex(d["snap"])
+            if "pps" in d:
+                self.h_zoom.setValue(int(d["pps"]))
+            if "row" in d:
+                self.v_zoom.setValue(int(d["row"]))
+            if "centre_pitch" in d:
+                roll.verticalScrollBar().setValue(int((roll.top - d["centre_pitch"]) * self.M.ROW - roll.viewport().height() / 2))
+        except (TypeError, ValueError, KeyError):
+            pass
+
+    def _layouts(self):
+        try:
+            data = json.loads(self.settings.value("roll_layouts", "{}") or "{}")
+            return data if isinstance(data, dict) else {}
+        except ValueError:
+            return {}
+
+    def _fill_layout_menu(self):
+        menu = self.layout_menu
+        menu.clear()
+        menu.addAction("Save current layout as...", self.save_layout_as)
+        menu.addSeparator()
+        layouts = self._layouts()
+        for name in sorted(layouts):
+            menu.addAction(name, lambda n=name: self.apply_layout(self._layouts().get(n, {})))
+        if layouts:
+            menu.addSeparator()
+            remove = menu.addMenu("Delete layout")
+            for name in sorted(layouts):
+                remove.addAction(name, lambda n=name: self._delete_layout(n))
+        menu.addSeparator()
+        menu.addAction("Default layout", lambda: self.apply_layout({"pps": 60, "row": 6, "snap": len(SNAPS) - 1, "grid": "grid",
+                                                                     "toggles": {k: True for _t, k in self.TOGGLES if k not in ("scale", "invert")}}))
+
+    def save_layout_as(self):
+        from PySide6.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(self, "Save layout", "Name this layout (zoom, snap, grid, panels, window):")
+        if ok and name.strip():
+            data = self._layouts()
+            data[name.strip()] = self.capture_layout()
+            self.settings.setValue("roll_layouts", json.dumps(data))
+            self.statusBar().showMessage(f"Layout '{name.strip()}' saved.", 4000)
+
+    def _delete_layout(self, name):
+        data = self._layouts()
+        data.pop(name, None)
+        self.settings.setValue("roll_layouts", json.dumps(data))
+
     def closeEvent(self, event):
         self.settings.setValue("roll_geometry", self.saveGeometry())
+        try:
+            self.settings.setValue("roll_last", json.dumps(self.capture_layout()))      # reopens exactly as you left it
+        except Exception:
+            pass
         super().closeEvent(event)

@@ -697,6 +697,7 @@ class RollView(QGraphicsView):
         self.play_time = None
         self.drag = None
         self.stretch = None
+        self.band = None                      # rubber-band selection: [origin point, QRubberBand, add-to-selection]
         self.sel_notes = set()
         self.highlight_scale, self.invert_grid, self.grid_mode, self.show_ghosts = False, False, "grid", True
         self.cursor_sec = 0.0
@@ -711,12 +712,14 @@ class RollView(QGraphicsView):
         self.sel_notes = sel_notes if sel_notes is not None else set()
         if not notes:
             return
-        lo, hi = min(36, min(n.pitch for n in notes) - 2), max(96, max(n.pitch for n in notes) + 2)
+        lo, hi = 0, 127                                              # the whole keyboard, so the vertical scroll always has somewhere to go
         self.top = hi
-        height = max(120, (hi - lo + 1) * ROW)
+        view = self.viewport()
+        height = max(120, (hi - lo + 1) * ROW, view.height())        # grid and rows fill the whole window, not just the notes
         end = max(n.end for n in notes) + 2.0
         end = max(end, barmap.anchors[-1] + 1.0)
-        scene.setSceneRect(QRectF(0, 0, end * self.pps, height))
+        width = max(end * self.pps, float(view.width()))
+        scene.setSceneRect(QRectF(0, 0, width, height))
         scale = self.window_ref._scale_pcs() if self.highlight_scale and self.window_ref.notes else set()
         accent = QColor(self.palette().highlight().color())
         for pc in range(lo, hi + 1):                                # rows: keys tinted (or the black ones, inverted), scale notes in the accent
@@ -729,7 +732,7 @@ class RollView(QGraphicsView):
                 shade = QColor(255, 255, 255, 10 if pc % 12 else 22)
             else:
                 continue
-            row = scene.addRect(0, (hi - pc) * ROW, end * self.pps, ROW, QPen(Qt.PenStyle.NoPen), QBrush(shade))
+            row = scene.addRect(0, (hi - pc) * ROW, width, ROW, QPen(Qt.PenStyle.NoPen), QBrush(shade))
             row.setZValue(0)
         if self.grid_mode != "none":                                 # vertical grid from the snap step / beats / bars
             from PySide6.QtGui import QPainterPath
@@ -833,7 +836,16 @@ class RollView(QGraphicsView):
                 self.drag = (self.mapToScene(event.pos()), item.note, False)
                 return
             if not isinstance(item, BarLine):
-                self.window_ref.select_note(None, False)
+                shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+                if not shift:
+                    self.window_ref.select_note(None, False)
+                if self.window_ref.tool == "select":                  # drag on empty space: rubber-band select (Shift adds)
+                    from PySide6.QtWidgets import QRubberBand
+                    box = QRubberBand(QRubberBand.Shape.Rectangle, self.viewport())
+                    box.setGeometry(QRect(event.pos(), QSize()))
+                    box.show()
+                    self.band = [event.pos(), box, shift]
+                    return
         super().mousePressEvent(event)
 
     def _edge(self, item, pos):
@@ -846,7 +858,36 @@ class RollView(QGraphicsView):
             return "R"
         return None
 
+    def _band_finish(self, event):
+        origin, box, add = self.band
+        self.band = None
+        rect = QRect(origin, event.pos()).normalized()
+        box.hide()
+        box.deleteLater()
+        if rect.width() < 4 and rect.height() < 4:
+            return
+        area = self.mapToScene(rect).boundingRect()
+        hit = {id(it.note) for it in self.note_items if it.sceneBoundingRect().intersects(area)}
+        chosen = (set(self.window_ref.sel_notes) | hit) if add else hit
+        self.window_ref.sel_notes = chosen
+        self.apply_selection(chosen)
+        self.window_ref.mark_score()
+        self.window_ref.statusBar().showMessage(f"{len(chosen)} notes selected", 3000)
+
     def mouseMoveEvent(self, event):
+        if self.band is not None:
+            origin, box, _add = self.band
+            box.setGeometry(QRect(origin, event.pos()).normalized())
+            edge = 24                                                   # drag to the edge of the window to scroll on
+            if event.pos().x() > self.viewport().width() - edge:
+                self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() + 12)
+            elif event.pos().x() < edge:
+                self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - 12)
+            if event.pos().y() > self.viewport().height() - edge:
+                self.verticalScrollBar().setValue(self.verticalScrollBar().value() + 12)
+            elif event.pos().y() < edge:
+                self.verticalScrollBar().setValue(self.verticalScrollBar().value() - 12)
+            return
         st = getattr(self, "stretch", None)
         if st is not None:
             dx = self.mapToScene(event.pos()).x() - st["origin"].x()
@@ -880,6 +921,9 @@ class RollView(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        if self.band is not None:
+            self._band_finish(event)
+            return
         st = getattr(self, "stretch", None)
         if st is not None:
             self.stretch = None
@@ -918,21 +962,33 @@ class RollView(QGraphicsView):
             item.set_selected(i == index)
 
     def wheelEvent(self, event):
-        if event.modifiers() & Qt.KeyboardModifier.AltModifier:          # Alt + wheel: taller / shorter keys
-            global ROW
-            ROW = max(3, min(24, ROW + (1 if event.angleDelta().y() > 0 else -1)))
-            self.window_ref.refresh_roll(keep_view=True)
+        delta = event.angleDelta().y() or event.angleDelta().x()           # Qt swaps the axis when Alt / Shift is held: take whichever carries the turn
+        if not delta:
+            return
+        if event.modifiers() & Qt.KeyboardModifier.AltModifier:          # Alt + wheel: taller / shorter keys (both directions)
+            roll_window = getattr(self.window_ref, "roll_window", None)
+            if roll_window is not None:
+                roll_window.zoom_keys(1 if delta > 0 else -1)
             return
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
+            factor = 1.15 if delta > 0 else 1 / 1.15
             self.pps = max(8.0, min(600.0, self.pps * factor))
             self.window_ref.refresh_roll(keep_view=True)
         elif event.modifiers() & Qt.KeyboardModifier.ShiftModifier:        # Shift + wheel: sideways
             bar = self.horizontalScrollBar()
-            bar.setValue(bar.value() - event.angleDelta().y())
+            bar.setValue(bar.value() - delta)
         else:                                                                # wheel: up / down the keyboard
             bar = self.verticalScrollBar()
-            bar.setValue(bar.value() - event.angleDelta().y() // 2)
+            bar.setValue(bar.value() - delta // 2)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.scene() is not None and self.scene().items():             # redraw so the grid keeps filling the window
+            if getattr(self, "_fill_timer", None) is None:
+                self._fill_timer = QTimer(self)
+                self._fill_timer.setSingleShot(True)
+                self._fill_timer.timeout.connect(lambda: self.window_ref.refresh_roll(keep_view=True))
+            self._fill_timer.start(150)
 
     def contextMenuEvent(self, event):
         scene_pos = self.mapToScene(event.pos())
@@ -1235,10 +1291,21 @@ class Stave(QMainWindow):
         self.chord.setRange(0, 150)
         self.chord.setValue(45)
         self.chord.setSuffix(" ms")
+        self.source = QComboBox()
+        self.source.addItems(["Quantised (clean score)", "Raw (notes as played)"])
+        self.source.setToolTip("What the stave is built from. Quantised = snapped to the grid for a readable score.\n"
+                               "Raw = the played timing kept as closely as notation allows (32nd-note grid, no gap closing): "
+                               "shows legato and rubato, but is harder to read. The MIDI itself is never changed by this choice.")
+        self.source.currentIndexChanged.connect(lambda *_: self.changed())
+        self.shape_btn = QPushButton("Shape MIDI timing...")
+        self.shape_btn.setToolTip("Time-based or grid quantise with strength, swing, humanise, legato / slur and a MIDI-note range")
+        self.shape_btn.clicked.connect(self.open_shape)
+        q.addRow("Stave shows", self.source)
         q.addRow("Smallest note", self.grid)
         q.addRow(self.triplets)
         q.addRow("Close gaps up to (beats)", self.legato)
         q.addRow("Chord window", self.chord)
+        q.addRow(self.shape_btn)
         column.addWidget(quant)
 
         lay = QGroupBox("Staves")
@@ -1692,7 +1759,8 @@ class Stave(QMainWindow):
     def audition(self, pitch, vel=80):
         """Hear one pitch on the organ (piano keys, velocity edits)."""
         ref = self.notes[-1] if self.notes else core.Note(0, 0, pitch, vel)
-        probe = core.Note(0, 0, pitch, vel, ref.ch, ref.track)
+        av = getattr(self, "active_voice", None)
+        probe = core.Note(0, 0, pitch, vel, av[1] if av else ref.ch, av[0] if av else ref.track)
         if self.chord_hook is None:
             self.statusBar().showMessage("No organ connected - start the bridge (or the Stave Station launcher) to hear notes.")
             return
@@ -1852,6 +1920,9 @@ class Stave(QMainWindow):
                 item.setData(Qt.ItemDataRole.UserRole, (r["track"], r["channel"]))
                 self.track_list.addItem(item)
         self.track_list.blockSignals(False)
+        panel = getattr(getattr(self, "roll_window", None), "tracks", None)
+        if panel is not None:
+            panel.refresh()
 
     # ---- organ setters
     def import_setters(self, path):
@@ -2700,8 +2771,8 @@ class Stave(QMainWindow):
         start = self.snap_sec(t)
         beats = dict(self.LENGTHS).get(self.new_len.currentText(), 1.0)
         end = self.barmap.beat_to_sec(self.barmap.sec_to_beat(start) + beats)
-        channel = self.notes[-1].ch if self.notes else 0
-        track = self.notes[-1].track if self.notes else 0
+        av = getattr(self, "active_voice", None)           # the active track chosen in the Track / Roll editor
+        track, channel = (av[0], av[1]) if av else ((self.notes[-1].track, self.notes[-1].ch) if self.notes else (0, 0))
         n = core.Note(start, end, pitch, 80, channel, track)
         self.notes.append(n)
         self.sel_notes = {id(n)}
@@ -2821,7 +2892,7 @@ class Stave(QMainWindow):
         self.loaded_label = QLabel("  Nothing loaded  ")
         bar.addWidget(self.loaded_label)
         for text, handler, tip in (("New", self.new_blank, "Start a blank score: empty bars to write into (Ctrl+N)"),
-                                   ("Piano roll", self.show_roll, "Open the piano roll window (F2)"),
+                                   ("Track / Roll", self.show_roll, "Open the MIDI Track / Piano Roll Editor (F2)"),
                                    ("+ Bars", self.add_bars, "Add 4 empty bars at the end"),
                                    ("Play", self.play_on_organ, "Play on the organ (Space)"),
                                    ("Stop", self.stop_on_organ, "Stop (Space)"),
@@ -3051,6 +3122,13 @@ class Stave(QMainWindow):
         mid.save(path)
         self.statusBar().showMessage(f"Saved {path}")
 
+    def open_shape(self):
+        import quant_tools
+        if getattr(self, "_shape_dialog", None) is None or not self._shape_dialog.isVisible():
+            self._shape_dialog = quant_tools.ShapeDialog(self)
+        self._shape_dialog.show()
+        self._shape_dialog.raise_()
+
     def refresh_roll(self, keep_view=False):
         bar = self.roll.horizontalScrollBar()
         value = bar.value()
@@ -3061,6 +3139,9 @@ class Stave(QMainWindow):
         if self.roll_window is not None:
             self.keys.update()
             self.velocity_lane.update()
+            tracks = getattr(self.roll_window, "tracks", None)
+            if tracks is not None:
+                tracks.refresh()
         if keep_view:
             bar.setValue(value)
 
@@ -3068,9 +3149,11 @@ class Stave(QMainWindow):
         kind = KINDS[self.layout_kind.currentIndex()]
         return {
             "kind": kind, "split": self.split.value(), "split2": self.split2.value(), "split3": self.split3.value(),
-            "pedal": self.pedal.value(), "grid": core.GRID_CHOICES[self.grid.currentText()],
-            "triplets": self.triplets.isChecked(), "legato": Fraction(self.legato.value()).limit_denominator(8),
-            "chord": self.chord.value() / 1000.0, "key": self.key.currentText(), "dynamics": self.dynamics.isChecked(),
+            "pedal": self.pedal.value(),
+            "grid": Fraction(1, 8) if self.source.currentIndex() == 1 else core.GRID_CHOICES[self.grid.currentText()],
+            "triplets": self.triplets.isChecked(),
+            "legato": Fraction(0) if self.source.currentIndex() == 1 else Fraction(self.legato.value()).limit_denominator(8),
+            "chord": (0.02 if self.source.currentIndex() == 1 else self.chord.value() / 1000.0), "key": self.key.currentText(), "dynamics": self.dynamics.isChecked(),
             "dyn_bias": self.dyn_bias.value(), "title": self.title.text(), "composer": self.composer.text(),
             "page": self.page.currentText(), "scale": self.scale.value(),
             "bar_grid": dict(self.bar_grid), "meter": self.meter.currentText(),
