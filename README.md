@@ -158,6 +158,8 @@ can still drive the pad lights.
 4. Start **KeyLab GrandOrgue Bridge**, select the MIDI ports in settings, and press
    the keyboard's **DAW** pad.
 
+For a controller walkthrough, see the [KeyLab first-run tutorial](docs/KEYLAB_FIRST_RUN.md).
+
 ## Linux evaluation notes
 
 The [Linux prerelease](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.2-linux.1)

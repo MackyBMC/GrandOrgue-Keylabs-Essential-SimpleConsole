@@ -159,6 +159,7 @@ MENU_PAGES = (
     {"id": "files", "name": "Combination Files", "abbr": "Comb Files"},
     {"id": "couplings", "name": "Couplings", "abbr": "Couplings"},
     {"id": "system", "name": "System Console", "abbr": "Sys Console"},
+    {"id": "config", "name": "Config", "abbr": "Config"},
     {"id": "organ", "name": "Organ Selection", "abbr": "Organ Select"},
 )
 
@@ -847,4 +848,3 @@ class Bridge:
                     self.last_kl = now
                     out.append({"to": "led", "data": led_data(led_id, want[led_id])})
         return out
-

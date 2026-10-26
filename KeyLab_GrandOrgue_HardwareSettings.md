@@ -17,17 +17,21 @@ Reference for `Scripts/keylab_go_bridge.py`, with the keyboard in **DAW mode** (
 | --- | --- | --- |
 | `<<` Rewind | note 0x5B | previous step in the loaded file (activates) |
 | `>>` Forward | note 0x5C | next step in the loaded file (activates) |
-| Jog turn | CC 0x3C, 0x01 right / 0x41 left | cue next / previous setter file (does not activate) |
-| Jog press | note 0x54 | load the cued file (same as the sustain pedal) |
+| Jog turn | CC 0x3C, 0x01 right / 0x41 left | Live page: select next / previous setter combination; on other pages browse their main list/control. Cat/Char changes jog to control-focus navigation. |
+| Jog press | note 0x54 | Live page: load the selected combination; on other pages activate the selected item/control. With Cat/Char on, click the focused control. |
 | Sustain pedal | CC 64, MAIN port | GrandOrgue **Load file** (direct, not through the bridge) |
-| Part 1 / Next | note 0x31 (0x2F in bank mode) | next fader/pad bank |
-| Part 2 / Prev | note 0x30 (0x2E in bank mode) | previous fader/pad bank |
+| Part 1 / Next | note 0x31 or 0x2F | next fader/pad bank |
+| Part 2 / Prev | note 0x30 or 0x2E | previous fader/pad bank |
 | Save | note 0x50 | GrandOrgue **Save file** (opens its own dialog) |
 | Metro | note 0x59 | GrandOrgue metronome on/off |
 | Play/Pause | note 0x5E | GrandOrgue MIDI player play / pause (load the file in GrandOrgue first) |
-| Stop | note 0x5D | **Panic**; if the MIDI player is playing or paused it is stopped first |
+| Stop | note 0x5D | stop playback and send **Panic** (all sound off) |
 | Loop | note 0x56 | repeat the MIDI file (the bridge restarts Play when it ends) |
-| Undo, Punch, Record, Cat/Char, Preset, arrows | 0x51, 0x57/0x58, 0x5F, 0x65, 0x64, 0x62/0x63 | not assigned |
+| Record | note 0x5F | start / stop recording a MIDI take |
+| Cat/Char | note 0x65 | toggle control-focus navigation; LED on means jog browses interactive controls |
+| Preset | note 0x64 | toggle stop-grid mode for the pads |
+| Left / Right arrows | note 0x62 / 0x63 | previous / next GUI tab; in stop-grid mode move horizontally; in sheet music view turn pages |
+| Undo, Punch | note 0x51, 0x57 / 0x58 | not assigned |
 | Live / Bank | (nothing) | switches Part 1/2 between channel notes (0x30/0x31) and bank notes (0x2E/0x2F); both work |
 
 ## Faders, encoders and volumes
@@ -36,12 +40,25 @@ Reference for `Scripts/keylab_go_bridge.py`, with the keyboard in **DAW mode** (
 | --- | --- | --- |
 | Faders 1-8 | pitch bend, channels 1-8 | a fader you move sets its stop on (at or above half travel) or off; untouched faders change nothing |
 | Fader 9 (master) | pitch bend, channel 9 | master volume |
-| Encoders 1-4 | CC 0x10-0x13, relative | Pedal, Hauptwerk, Solowerk, Schwellwerk volume |
+| Encoders 1-5 | CC 0x10-0x14, relative | By default: Pedal, Hauptwerk, Solowerk, Schwellwerk volume, then Schwellwerk enclosure (swell) |
 | Encoders 7, 8 | CC 0x16, 0x17, relative | Tremolo II, Tremolo III: turn right = on, left = off |
-| Encoders 5, 6 | CC 0x14, 0x15 | not assigned |
+| Encoder 6 | CC 0x15 | not assigned by default |
 | Encoder 9 | (sends nothing in DAW mode) | - |
 
 Encoder values are relative: `0x01` = one click right, `0x41` = one click left, larger values when turned fast.
+
+### GUI navigation with the controller
+
+The GUI tabs, in order, are **Live / Main**, **Setter Editing**, **Combination
+Files**, **Couplings**, **System Console**, **Config**, and **Organ Selection**.
+Left / Right move between tabs. On Live / Main, turning the jog selects a setter
+combination; pressing the jog loads it. With **Cat/Char** enabled, the jog instead
+focuses controls on the current tab and a jog press activates the focused control.
+Without Cat/Char, the jog uses the current tab's main list or control.
+
+In the sheet music window, the jog browses its files/setters; Cat/Char switches
+which list it browses, and the arrows turn pages. In stop-grid mode, the jog and
+arrows move the grid focus and the pads operate the displayed slots.
 
 ## Fader and pad banks
 
