@@ -8,6 +8,7 @@ CHANGELOG
 2026-10-26  New.
 """
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QAbstractItemView, QDockWidget, QHBoxLayout, QHeaderView, QMessageBox, QPushButton,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
@@ -75,13 +76,15 @@ class TrackPanel(QDockWidget):
         if not hasattr(st, "extra_voices"):
             st.extra_voices = set()
         voices = self._voices()
+        palette = st.voice_colours()
         self.keys = [v[0] for v in voices]
         if getattr(st, "active_voice", None) not in self.keys:
             st.active_voice = self.keys[0] if self.keys else None
         self._busy = True
         self.table.setRowCount(len(voices))
         for r, (k, name, inst, count) in enumerate(voices):
-            dot = QTableWidgetItem("●" if k == st.active_voice else "")
+            dot = QTableWidgetItem("▶" if k == st.active_voice else "●")
+            dot.setForeground(palette.get(k, QColor(200, 200, 200)))
             dot.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             show = QTableWidgetItem()
             show.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsSelectable)
@@ -108,8 +111,9 @@ class TrackPanel(QDockWidget):
         self.stave.active_voice = self.keys[rows[0].row()]
         self._busy = True
         for r in range(self.table.rowCount()):
-            self.table.item(r, 0).setText("●" if self.keys[r] == self.stave.active_voice else "")
+            self.table.item(r, 0).setText("▶" if self.keys[r] == self.stave.active_voice else "●")
         self._busy = False
+        self.stave.refresh_roll(keep_view=True)                                  # fade the other tracks
         self.stave.statusBar().showMessage(f"Active track: {self.table.item(rows[0].row(), 2).text()} - new notes and piano keys use it.")
 
     def _item_changed(self, item):
@@ -120,6 +124,7 @@ class TrackPanel(QDockWidget):
             (st.hidden_tracks.discard if item.checkState() == Qt.CheckState.Checked else st.hidden_tracks.add)(key)
             st.show_tracks()
             st.changed()
+            st.refresh_roll(keep_view=True)
         elif item.column() == 2:
             text = item.text().strip() or f"Track {key[0] + 1}"
             st.info.setdefault("voice_names", {})[key] = text

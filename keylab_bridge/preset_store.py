@@ -341,7 +341,12 @@ def apply_layout(raw, config_path=None):
     layout_file = raw.get("organ_layout_file")
     if layout_file and config_path:
         import yaml
-        path = layout_file if os.path.isabs(layout_file) else os.path.join(project_root(config_path), layout_file)
+        if os.path.isabs(layout_file):
+            path = layout_file
+        else:                                                    # relative: the GrandOrgue folder first (installed / dev copies), then the old project root
+            from .paths import go_folder
+            candidates = [os.path.join(go_folder(), layout_file), os.path.join(project_root(config_path), layout_file)]
+            path = next((c for c in candidates if os.path.isfile(c)), candidates[0])
         try:
             with open(path, encoding="utf-8") as layout_stream:
                 configure_layout(yaml.safe_load(layout_stream) or {}, source=os.path.basename(path))

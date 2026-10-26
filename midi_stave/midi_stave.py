@@ -531,8 +531,10 @@ class NoteItem(QGraphicsRectItem):
             painter.drawText(QRectF(r.left() + 2, r.top(), r.width() - 3, r.height()), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                              f"{self.NAMES[self.note.pitch % 12]}{self.note.pitch // 12 - 1}")
 
+    dim = False                                    # set for notes of tracks other than the active one
+
     def style(self, selected, sounding):
-        self.setOpacity(0.35 if getattr(self.note, "mute", False) else 1.0)
+        self.setOpacity(0.35 if getattr(self.note, "mute", False) else (0.4 if self.dim and not selected else 1.0))
         self.setBrush(QBrush(QColor(230, 40, 40) if sounding else self.colour))
         self.setPen(QPen(QColor(255, 255, 255), 2) if selected else QPen(Qt.PenStyle.NoPen))
         self.setZValue(3 if selected else 1)
@@ -697,6 +699,7 @@ class RollView(QGraphicsView):
         self.play_time = None
         self.drag = None
         self.stretch = None
+        self.colour_by_track, self.dim_inactive = True, True       # roll: colour each track differently, fade the tracks that are not active
         self.band = None                      # rubber-band selection: [origin point, QRubberBand, add-to-selection]
         self.sel_notes = set()
         self.highlight_scale, self.invert_grid, self.grid_mode, self.show_ghosts = False, False, "grid", True
@@ -758,11 +761,23 @@ class RollView(QGraphicsView):
             for path, alpha, width in ((fine, 22, 1), (beat_p, 46, 1), (bar_p, 90, 1), (big_p, 150, 1.5)):
                 item = scene.addPath(path, QPen(QColor(150, 165, 180, alpha), width))
                 item.setZValue(0.2)
+        owner = self.window_ref
+        hidden = getattr(owner, "hidden_tracks", set())
+        active = getattr(owner, "active_voice", None)
+        palette = owner.voice_colours() if hasattr(owner, "voice_colours") else {}
         for n in notes:
+            key = (n.track, n.ch)
+            if key in hidden:                                          # tracks unticked in the Tracks list are not drawn
+                continue
             v = n.vel / 127.0
-            colour = QColor(int(60 + 190 * v), int(190 - 60 * v), 200 - int(120 * v))
+            if self.colour_by_track and key in palette:
+                base = palette[key]
+                colour = QColor.fromHsv(base.hue(), base.saturation(), int(150 + 105 * v))
+            else:
+                colour = QColor(int(60 + 190 * v), int(190 - 60 * v), 200 - int(120 * v))
             r = NoteItem(n, n.start * self.pps, (hi - n.pitch) * ROW + 1, max(2.0, (n.end - n.start) * self.pps),
                          ROW - 2, colour)
+            r.dim = bool(self.dim_inactive and active is not None and key != active and len(palette) > 1)
             scene.addItem(r)
             self.note_items.append(r)
         pen = QPen(QColor(242, 163, 58), 1)
@@ -1884,6 +1899,7 @@ class Stave(QMainWindow):
             return
         (self.hidden_tracks.discard if item.checkState() == Qt.CheckState.Checked else self.hidden_tracks.add)(key)
         self.changed()
+        self.refresh_roll(keep_view=True)
 
     def set_all_tracks(self, show):
         self.track_list.blockSignals(True)
@@ -1895,6 +1911,7 @@ class Stave(QMainWindow):
                 (self.hidden_tracks.discard if show else self.hidden_tracks.add)(key)
         self.track_list.blockSignals(False)
         self.changed()
+        self.refresh_roll(keep_view=True)
 
     def only_current_track(self):
         cur = self.track_list.currentItem()
@@ -3121,6 +3138,11 @@ class Stave(QMainWindow):
         mid.tracks.append(track)
         mid.save(path)
         self.statusBar().showMessage(f"Saved {path}")
+
+    def voice_colours(self):
+        """(track, channel) -> a colour of its own, stable while the file's tracks stay the same."""
+        keys = sorted({(n.track, n.ch) for n in self.notes} | set(getattr(self, "extra_voices", ())))
+        return {k: QColor.fromHsv((i * 137 + 20) % 360, 175, 255) for i, k in enumerate(keys)}
 
     def open_shape(self):
         import quant_tools

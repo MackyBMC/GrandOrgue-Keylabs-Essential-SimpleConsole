@@ -326,8 +326,8 @@ class RollWindow(QMainWindow):
         a(m, "Shift right by one snap step", lambda: st.shift_selected(1), "Shift+Right")
         a(m, "Transpose up", lambda: st.transpose_selected(1), "Shift+Up")
         a(m, "Transpose down", lambda: st.transpose_selected(-1), "Shift+Down")
-        a(m, "Octave up", lambda: st.transpose_selected(12), "Ctrl+Up")
-        a(m, "Octave down", lambda: st.transpose_selected(-12), "Ctrl+Down")
+        a(m, "Octave up", lambda: st.transpose_selected(12), "Ctrl+Shift+Up")
+        a(m, "Octave down", lambda: st.transpose_selected(-12), "Ctrl+Shift+Down")
         m.addSeparator()
         a(m, "Snap the starts to the grid", st.quantise_starts, "Ctrl+Q")
         a(m, "Discard lengths (one snap step each)", st.discard_lengths, "Shift+D")
@@ -347,6 +347,8 @@ class RollWindow(QMainWindow):
         m = self.menuBar().addMenu("&View")
         a(m, "Note names on the notes", lambda on: (setattr(self.M.NoteItem, "show_labels", on), roll.viewport().update()), checkable=True, checked=True)
         a(m, "Show the score's quantised notes as shadows", lambda on: (setattr(roll, "show_ghosts", on), st.refresh_roll(True)), checkable=True, checked=True)
+        a(m, "Colour notes by track", lambda on: (setattr(roll, "colour_by_track", on), st.refresh_roll(True)), checkable=True, checked=True)
+        a(m, "Fade the notes of the other tracks", lambda on: (setattr(roll, "dim_inactive", on), st.refresh_roll(True)), checkable=True, checked=True)
         a(m, "Highlight the notes of the key", lambda on: (setattr(roll, "highlight_scale", on), st.refresh_roll(True)), checkable=True)
         a(m, "Invert the row shading", lambda on: (setattr(roll, "invert_grid", on), st.refresh_roll(True)), checkable=True)
         grid = m.addMenu("Grid lines")
@@ -400,7 +402,7 @@ class RollWindow(QMainWindow):
 
     # ---- layouts: zoom, snap, grid, panels, window and toolbar arrangement
     TOGGLES = (("Note names on the notes", "labels"), ("Show the score's quantised notes as shadows", "ghosts"),
-               ("Highlight the notes of the key", "scale"), ("Invert the row shading", "invert"),
+               ("Highlight the notes of the key", "scale"), ("Colour notes by track", "bytrack"), ("Fade the notes of the other tracks", "fade"), ("Invert the row shading", "invert"),
                ("Velocity lane", "lane"), ("Overview strip", "overview"), ("Follow the music while playing", "follow"))
 
     def _toggle_actions(self):
