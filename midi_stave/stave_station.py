@@ -49,6 +49,7 @@ def main():
         window.stop_hook = player.stop
         window.pos_hook = player.position
         window.chord_hook = player.chord
+        window.gate_hook = player.gate
         app.aboutToQuit.connect(lambda: (player.stop(), port.close()))
     try:                                        # global theme shared with the console (Appearance settings)
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

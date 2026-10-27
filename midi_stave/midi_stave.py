@@ -314,7 +314,7 @@ class SolfaDialog(QDialog):
         self.resize(1000, 760)
         p = stave.params()
         self.staves = core.make_staves(p["kind"], p["split"], p["split2"], p["split3"], p["pedal"], stave.notes,
-                                       stave.info.get("voice_names"))
+                                       stave.info.get("voice_names"), organ=p.get("organ"))
         per = core.assign(stave.qnotes, self.staves)
         typed = [n for n in p["names"]]
         self.voices = []
@@ -436,7 +436,7 @@ class LyricsDialog(QDialog):
         self.resize(760, 560)
         p = stave.params()
         staves = core.make_staves(p["kind"], p["split"], p["split2"], p["split3"], p["pedal"], stave.notes,
-                                  stave.info.get("voice_names"))
+                                  stave.info.get("voice_names"), organ=p.get("organ"))
         typed = p["names"]
         self.scopes = [("all", "All voices (same words under every stave)")] + [
             (str(i), typed[i] if i < len(typed) and typed[i] else spec.name) for i, spec in enumerate(staves)]
@@ -580,7 +580,7 @@ class PianoKeys(QWidget):
 
     def mousePressEvent(self, event):
         self.down = self.pitch_at(int(event.position().y()))
-        self.stave.audition(self.down)
+        self.stave.audition_on(self.down)               # sounds for as long as the button is held
         self.update()
 
     def mouseMoveEvent(self, event):
@@ -588,11 +588,12 @@ class PianoKeys(QWidget):
             pitch = self.pitch_at(int(event.position().y()))
             if pitch != self.down:
                 self.down = pitch
-                self.stave.audition(pitch)
+                self.stave.audition_on(pitch)
                 self.update()
 
     def mouseReleaseEvent(self, event):
         self.down = None
+        self.stave.audition_off()
         self.update()
 
 
@@ -789,6 +790,7 @@ class RollView(QGraphicsView):
             item = BarLine(i, t * self.pps, height, self)
             scene.addItem(item)
             self.bar_items.append(item)
+        self._aud_line = None
         self.playhead = scene.addLine(0, 0, 0, height, QPen(QColor(255, 60, 60), 2))
         self.playhead.setZValue(30)
         self.playhead.setVisible(False)
@@ -822,7 +824,31 @@ class RollView(QGraphicsView):
         self.apply_selection()
 
     # ---- note editing with the mouse
+    def show_audition(self, t):
+        """The audition line (None hides it); redrawn after the roll is rebuilt."""
+        self.audition_t = t
+        item = getattr(self, "_aud_line", None)
+        if item is not None and item.scene() is not self.scene():
+            item = None
+        if t is None:
+            if item is not None:
+                item.setVisible(False)
+            return
+        if item is None:
+            item = self.scene().addLine(0, 0, 0, max(120, self.scene().sceneRect().height()), QPen(QColor(120, 220, 255), 2))
+            item.setZValue(40)
+            self._aud_line = item
+        item.setVisible(True)
+        item.setPos(t * self.pps, 0)
+
+    def _scrub_event(self, event):
+        self.window_ref.scrub_to(max(0.0, self.mapToScene(event.pos()).x() / self.pps))
+
     def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and getattr(self.window_ref, "audition_mode", False):
+            self.scrubbing = True
+            self._scrub_event(event)
+            return
         if event.button() == Qt.MouseButton.LeftButton and self.mapToScene(event.pos()).y() < 0 and self.bar_items:
             x = self.mapToScene(event.pos()).x()                   # the bar-number ruler: a click selects that bar
             index = max(0, sum(1 for b in self.bar_items if b.x() <= x) - 1)
@@ -890,6 +916,9 @@ class RollView(QGraphicsView):
         self.window_ref.statusBar().showMessage(f"{len(chosen)} notes selected", 3000)
 
     def mouseMoveEvent(self, event):
+        if getattr(self, "scrubbing", False):
+            self._scrub_event(event)
+            return
         if self.band is not None:
             origin, box, _add = self.band
             box.setGeometry(QRect(origin, event.pos()).normalized())
@@ -936,6 +965,10 @@ class RollView(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        if getattr(self, "scrubbing", False):
+            self.scrubbing = False
+            self.window_ref.scrub_end()
+            return
         if self.band is not None:
             self._band_finish(event)
             return
@@ -1072,13 +1105,23 @@ class StopPicker(QDialog):
         self.accept()
 
 
+class _Ticked:
+    """Stands in for a ticked check box when a track (not a stave voice) carries the registration."""
+
+    def __init__(self, value):
+        self.value = value
+
+    def isChecked(self):
+        return self.value
+
+
 class VoiceRegDialog(QDialog):
     """A voice's registration changes, bar by bar: setters or individual stops."""
 
-    def __init__(self, stave, index):
+    def __init__(self, stave, index=None, entries=None):
         super().__init__(stave)
         self.stave, self.index = stave, index
-        self.entries = stave.voice_reg[index]
+        self.entries = entries if entries is not None else stave.voice_reg[index]
         self.setWindowTitle("Registration changes for this voice")
         layout = QVBoxLayout(self)
         self.list = QListWidget()
@@ -1136,7 +1179,7 @@ class VoiceRegDialog(QDialog):
             self.refresh()
 
 
-KINDS = ['solo', 'grand', 'organ', 'choir', 'channels', 'voices']
+KINDS = ['solo', 'grand', 'organ', 'choir', 'channels', 'voices', 'organbass', 'organx']
 
 
 class SetterPicker(QDialog):
@@ -1328,7 +1371,8 @@ class Stave(QMainWindow):
         self.layout_kind = QComboBox()
         self.layout_kind.addItems(["Solo (one stave)", "Grand staff (piano)", "Organ (2 manuals + pedal)",
                                    "Choir SATB", "One stave per channel",
-                                   "Orchestral: one stave per MIDI track / channel"])
+                                   "Orchestral: one stave per MIDI track / channel",
+                                   "Organ (2 manuals + bass-note pedal)", "Organ (choose manuals + pedal)"])
         self.split = QSpinBox()
         self.split.setRange(24, 100)
         self.split.setValue(60)
@@ -1342,7 +1386,34 @@ class Stave(QMainWindow):
         self.pedal.setRange(24, 80)
         self.pedal.setValue(48)
         self.stave_names = QLineEdit()
+        # organ options (layouts "Organ (2 manuals + bass-note pedal)" and "Organ (choose manuals + pedal)")
+        self.organ_manuals = QSpinBox()
+        self.organ_manuals.setRange(1, 5)
+        self.organ_manuals.setValue(2)
+        self.organ_names_set = QComboBox()
+        self.organ_names_set.addItems(list(core.NAME_SETS) + ["Custom"])
+        self.organ_names = QLineEdit()
+        self.organ_names.setToolTip("Manual names, highest stave first, comma separated. These are display names: the first manual "
+                                    "always maps to the same GrandOrgue manual however you name it.")
+        self.organ_pedal = QComboBox()
+        self.organ_pedal.addItems(["Pedal by range", "Pedal from the bass notes", "No pedal"])
+        self.organ_pedal.setToolTip("Range: everything below the Pedal limit. Bass notes: the lowest note of every chord (at or below the limit) as a mono bass line.")
+        self.organ_box = QWidget()
+        og = QFormLayout(self.organ_box)
+        og.setContentsMargins(0, 0, 0, 0)
+        og.addRow("Manuals", self.organ_manuals)
+        og.addRow("Names", self.organ_names_set)
+        og.addRow("  ", self.organ_names)
+        og.addRow("Pedal", self.organ_pedal)
+        choice = self.organ_names_set.currentText()                 # first fill without rebuilding the rows (they do not exist yet)
+        self.organ_names.setText(", ".join(core.NAME_SETS[choice][0]))
+        self.organ_names.setEnabled(False)
+        self.organ_names_set.currentIndexChanged.connect(self._organ_names_preset)
+        for w in (self.organ_manuals, self.organ_pedal):
+            (w.valueChanged if isinstance(w, QSpinBox) else w.currentIndexChanged).connect(lambda *_: self.update_name_hint())
+        self.organ_names.editingFinished.connect(self.update_name_hint)
         l.addRow("Layout", self.layout_kind)
+        l.addRow(self.organ_box)
         l.addRow("Stave names (comma separated)", self.stave_names)
         self.manuals = sessionmeta.manual_channels()
         self.manual_channel = {n: ch for n, _p, ch in self.manuals}
@@ -1359,6 +1430,7 @@ class Stave(QMainWindow):
         outer.addWidget(QLabel("Tick the manuals a voice plays (many voices can share one). "
                                "'Reg' gives the voice its own stop registration from an existing setter."))
         self.manual_checks = []                      # per stave: {manual name: QCheckBox}
+        self.track_map = {}                          # (track, channel) -> {"manuals": [names], "reg": [registration changes]}: the Tracks list's organ mapping
         self.voice_reg = []                          # per stave: [{"bar", "kind": "setter"|"stops", ...}] registration changes
         self.seek_hook = None
         self.lyrics = {}
@@ -1369,6 +1441,8 @@ class Stave(QMainWindow):
         self.hits, self.page_dims, self.hit_params, self.spaces = [], [], {}, []
         self.signs = {}                              # pedal marks: (track, channel, pitch, start s) -> 'toe' | 'heel'
         self.chord_hook = None                       # set by the bridge: sound notes on the organ at once
+        self.gate_hook = None                        # set by the bridge: gate_hook(on, [(channel, note, velocity)]) holds / releases notes
+        self.audition_mode, self._aud_items, self._scrub_on = False, [], set()
         self.step_groups, self.step_index, self.step_ids, self.step_until = [], 0, frozenset(), 0.0
         self.play_timer = QTimer(self)
         self.play_timer.timeout.connect(self.poll_playhead)
@@ -1655,10 +1729,29 @@ class Stave(QMainWindow):
         self.transpose.blockSignals(False)
         self.changed()
 
+    def _organ_names_preset(self, *_):
+        choice = self.organ_names_set.currentText()
+        if choice in core.NAME_SETS:
+            manuals, pedal = core.NAME_SETS[choice]
+            self.organ_names.setText(", ".join(manuals))
+            self.organ_pedal_name = pedal
+        self.organ_names.setEnabled(choice == "Custom")
+        self.update_name_hint()
+
+    def organ_params(self):
+        choice = self.organ_names_set.currentText()
+        pedal_name = core.NAME_SETS.get(choice, (None, "Pedal"))[1]
+        return {"manuals": self.organ_manuals.value(), "names": [x.strip() for x in self.organ_names.text().split(",")],
+                "pedal_name": pedal_name, "pedal": ("range", "bass", "off")[self.organ_pedal.currentIndex()]}
+
     def update_name_hint(self, *_):
         kind = KINDS[self.layout_kind.currentIndex()]
+        if hasattr(self, "organ_box"):
+            self.organ_box.setVisible(kind in ("organbass", "organx"))
+            self.organ_manuals.setEnabled(kind == "organx")
+            self.organ_pedal.setEnabled(kind == "organx")
         staves = core.make_staves(kind, self.split.value(), self.split2.value(), self.split3.value(), self.pedal.value(),
-                                  self.notes, self.info.get("voice_names"))
+                                  self.notes, self.info.get("voice_names"), organ=self.organ_params())
         self.stave_names.setPlaceholderText(", ".join(s.name for s in staves))
         self.build_manual_rows(kind, staves)
 
@@ -1721,7 +1814,7 @@ class Stave(QMainWindow):
                 self.statusBar().showMessage("No stave selected", 2000)
             else:
                 p = self.params()
-                specs = core.make_staves(p["kind"], p["split"], p["split2"], p["split3"], p["pedal"], self.notes, self.info.get("voice_names"))
+                specs = core.make_staves(p["kind"], p["split"], p["split2"], p["split3"], p["pedal"], self.notes, self.info.get("voice_names"), organ=p.get("organ"))
                 name = (p["names"][new] if new < len(p["names"]) and p["names"][new] else specs[new].name if new < len(specs) else f"stave {new + 1}")
                 self.statusBar().showMessage(f"Stave selected: {name}  (click it again to deselect)", 4000)
 
@@ -1780,6 +1873,63 @@ class Stave(QMainWindow):
             self.statusBar().showMessage("No organ connected - start the bridge (or the Stave Station launcher) to hear notes.")
             return
         self.preview_pitch(pitch + self.hit_params.get("transpose", 0), probe, fallback=True)
+
+    # ---- audition: hold a piano key, or scrub the audition line, and hear it on the organ for as long as the mouse is down
+    def gate(self, on, items):
+        if not items:
+            return
+        if self.gate_hook is not None:
+            self.gate_hook(on, items)
+        elif on and self.chord_hook is not None:
+            self.chord_hook(items, 0.35)                   # older bridge: a short blip
+
+    def _audition_items(self, pitch, vel=80):
+        ref = self.notes[-1] if self.notes else core.Note(0, 0, pitch, vel)
+        av = getattr(self, "active_voice", None)
+        track, ch = (av[0], av[1]) if av else (ref.track, ref.ch)
+        staves = self.staves_for_export()
+        chans = core.stave_go_channels(pitch, ch, staves, track, -1, pitch < 48 and (track, ch) in core.TRACK_SPLIT) or [ch]
+        return [(c, pitch, max(50, vel)) for c in chans]
+
+    def audition_on(self, pitch, vel=80):
+        if self.chord_hook is None and self.gate_hook is None:
+            self.statusBar().showMessage("No organ connected - start the bridge (or the Stave Station launcher) to hear notes.")
+            return
+        self.audition_off()
+        self._aud_items = self._audition_items(pitch, vel)
+        self.gate(True, self._aud_items)
+
+    def audition_off(self):
+        if self._aud_items:
+            self.gate(False, self._aud_items)
+        self._aud_items = []
+
+    def scrub_to(self, t):
+        """Audition line at t seconds: sound exactly the notes under it, on the manuals the tracks are mapped to."""
+        t = max(0.0, t)
+        staves = self.staves_for_export()
+        hidden = self.hidden_tracks
+        want = {}
+        for n in self.notes:
+            if n.start <= t < n.end and (n.track, n.ch) not in hidden and not n.mute:
+                for c in core.stave_go_channels(n.pitch, n.ch, staves, n.track, -1, id(n) in core.PEDAL_LEAD_IDS):
+                    want[(c, n.pitch)] = max(50, n.vel)
+        self.gate(False, [(c, p, 0) for c, p in self._scrub_on if (c, p) not in want])
+        self.gate(True, [(c, p, v) for (c, p), v in want.items() if (c, p) not in self._scrub_on])
+        self._scrub_on = set(want)
+        self.roll.show_audition(t)
+        self.statusBar().showMessage(f"Audition at {t:.2f} s: {len(want)} note{'s' if len(want) != 1 else ''} sounding", 2000)
+
+    def scrub_end(self):
+        self.gate(False, [(c, p, 0) for c, p in self._scrub_on])
+        self._scrub_on = set()
+
+    def set_audition_mode(self, on):
+        self.audition_mode = bool(on)
+        if not on:
+            self.scrub_end()
+            self.roll.show_audition(None)
+        self.statusBar().showMessage("Audition: click or drag on the roll to hear the notes under the line." if on else "Audition off.", 4000)
 
     def add_bars(self, count=4):
         """Append empty bars (same length as the last one) after the final bar."""
@@ -1885,7 +2035,7 @@ class Stave(QMainWindow):
             self.changed(delay=50)
         else:
             voices = {(n.track, n.ch) for n in self.notes if n.ch != 9}
-            if len(voices) >= 3:                                  # multi-track / orchestral file: one stave per voice
+            if len(voices) >= 2:                                  # a file with several tracks: one stave per track, highest first
                 self.layout_kind.blockSignals(True)
                 self.layout_kind.setCurrentIndex(KINDS.index("voices"))
                 self.layout_kind.blockSignals(False)
@@ -1920,7 +2070,36 @@ class Stave(QMainWindow):
         self.set_all_tracks(False)
         cur.setCheckState(Qt.CheckState.Checked)
 
+    def sync_track_info(self):
+        """Keep info["tracks"] (the list in the Quantise / Tracks panels) in step with the notes: tracks made by 'Add track' or
+        'Extract the bass', moved channels and edited note counts all show up."""
+        live = {}
+        for n in self.notes:
+            live.setdefault((n.track, n.ch), []).append(n.pitch)
+        names = self.info.setdefault("voice_names", {})
+        rows, seen = [], set()
+        for r in self.info.get("tracks", []):
+            if r.get("channel") is None:
+                rows.append(r)
+                continue
+            key = (r["track"], r["channel"])
+            if key in live:
+                pitches = live[key]
+                r.update(notes=len(pitches), lo=min(pitches), hi=max(pitches))
+                rows.append(r)
+                seen.add(key)
+        for key in sorted(set(live) - seen):
+            pitches = live[key]
+            rows.append({"track": key[0], "name": names.get(key, ""), "channel": key[1], "program": None, "instrument": "",
+                         "notes": len(pitches), "lo": min(pitches), "hi": max(pitches)})
+        for r in rows:
+            key = (r["track"], r.get("channel"))
+            if names.get(key) and key in live:
+                r["name"] = names[key]
+        self.info["tracks"] = sorted(rows, key=lambda r: (r["track"], -1 if r.get("channel") is None else r["channel"]))
+
     def show_tracks(self):
+        self.sync_track_info()
         names = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
         note = lambda p: f"{names[p % 12]}{p // 12 - 1}"
         self.track_list.blockSignals(True)
@@ -2003,9 +2182,15 @@ class Stave(QMainWindow):
         keep_reg = self.voice_reg if len(self.voice_reg) == len(staves) else [[] for _ in staves]
         self.manual_checks, self.voice_reg = [], keep_reg
         defaults = {"Pedal": ("Pedal",), "Manual II": ("Schwellwerk",), "Left hand": ("Schwellwerk",)}
+        slots = ("Hauptwerk", "Schwellwerk", "Solowerk")           # GrandOrgue manual slots in order; display names are separate
         for i, spec in enumerate(staves):
             row = QHBoxLayout()
             sugg = self._suggest_voice(spec)
+            role = getattr(spec, "role", "")
+            if role == "pedal":
+                defaults[spec.name] = ("Pedal",)
+            elif role.startswith("manual:"):
+                defaults[spec.name] = (slots[min(int(role.split(":")[1]), len(slots) - 1)],)
             label = QLabel(spec.name)
             label.setToolTip(getattr(self, "voice_hint", {}).get(spec.name, ""))
             row.addWidget(label)
@@ -2064,7 +2249,9 @@ class Stave(QMainWindow):
         stops; 'stops' entries set the named stops of their own manual exactly. Both apply from that bar on."""
         cum = self.barmap.cumulative()
         marks = []
-        for entries, checks in zip(self.voice_reg, self.manual_checks):
+        groups = [(entries, {name: _Ticked(True) for name in (m.get("manuals", []) + (["Pedal"] if m.get("bass_split") else []))}) for m in self.track_map.values()
+                  for entries in [m.get("reg", [])]]
+        for entries, checks in list(zip(self.voice_reg, self.manual_checks)) + groups:
             for e in entries or []:
                 beat = float(cum[min(e["bar"], len(cum) - 1)])
                 if e["kind"] == "setter":
@@ -2129,9 +2316,22 @@ class Stave(QMainWindow):
     def staves_for_export(self):
         p = self.params()
         staves = core.make_staves(p["kind"], p["split"], p["split2"], p["split3"], p["pedal"], self.notes,
-                                  self.info.get("voice_names"))
+                                  self.info.get("voice_names"), organ=p.get("organ"))
         for spec, checks in zip(staves, self.manual_checks):
             spec.go_chs = tuple(self.manual_channel[n] for n, box in checks.items() if box.isChecked())   # none ticked = not written
+        core.TRACK_ROUTES = {k: tuple(self.manual_channel[n] for n in m["manuals"] if n in self.manual_channel)
+                             for k, m in self.track_map.items() if m.get("manuals")}
+        core.TRACK_SPLIT = {}
+        for k, m in self.track_map.items():                       # "lowest note on the pedal, the rest on other manuals"
+            split = m.get("bass_split")
+            if split and split.get("rest") and "Pedal" in self.manual_channel:
+                core.TRACK_SPLIT[k] = ((self.manual_channel["Pedal"],), tuple(self.manual_channel[n] for n in split["rest"] if n in self.manual_channel))
+        leads = []
+        for k in core.TRACK_SPLIT:
+            limit = self.track_map[k]["bass_split"].get("limit", 55)
+            leads += core.pedal_leads(self.notes, [k], self.chord.value() / 1000.0, limit)
+        core.PEDAL_LEAD_IDX = {i for i, _n in leads}
+        core.PEDAL_LEAD_IDS = {id(n) for _i, n in leads}
         return staves
 
     def setter_markers(self):
@@ -2462,7 +2662,7 @@ class Stave(QMainWindow):
             return
         staves = self.staves_for_export()
         src = pitch - self.hit_params.get("transpose", 0)
-        chans = core.stave_go_channels(src, note.ch, staves, note.track)
+        chans = core.stave_go_channels(src, note.ch, staves, note.track, -1, id(note) in core.PEDAL_LEAD_IDS or (id(note) not in {id(x) for x in self.notes} and pitch < 48))
         if not chans and fallback:                       # piano key outside every stave's range: still sound it on the note's own channel
             chans = [note.ch]
         self.chord_hook([(ch, src, max(50, note.vel)) for ch in chans], 0.35)
@@ -2843,7 +3043,7 @@ class Stave(QMainWindow):
         try:
             p = self.params()
             specs = core.make_staves(p["kind"], p["split"], p["split2"], p["split3"], p["pedal"], self.notes,
-                                     self.info.get("voice_names"))
+                                     self.info.get("voice_names"), organ=p.get("organ"))
             for i, spec in enumerate(specs):
                 label = p["names"][i] if i < len(p["names"]) and p["names"][i] else spec.name
                 on.addAction(label, lambda i=i: self.set_stave(notes, i))
@@ -2880,7 +3080,7 @@ class Stave(QMainWindow):
         self.step_index %= len(self.step_groups)
         group = self.step_groups[self.step_index]
         staves = self.staves_for_export()
-        items = [(ch, n.pitch, n.vel) for n in group for ch in core.stave_go_channels(n.pitch, n.ch, staves, n.track)]
+        items = [(ch, n.pitch, n.vel) for n in group for ch in core.stave_go_channels(n.pitch, n.ch, staves, n.track, -1, id(n) in core.PEDAL_LEAD_IDS)]
         hold = min(3.0, max(0.15, max(n.end - n.start for n in group)))
         self.chord_hook(items, hold)
         import time as _t
@@ -3171,7 +3371,7 @@ class Stave(QMainWindow):
         kind = KINDS[self.layout_kind.currentIndex()]
         return {
             "kind": kind, "split": self.split.value(), "split2": self.split2.value(), "split3": self.split3.value(),
-            "pedal": self.pedal.value(),
+            "pedal": self.pedal.value(), "organ": self.organ_params(),
             "grid": Fraction(1, 8) if self.source.currentIndex() == 1 else core.GRID_CHOICES[self.grid.currentText()],
             "triplets": self.triplets.isChecked(),
             "legato": Fraction(0) if self.source.currentIndex() == 1 else Fraction(self.legato.value()).limit_denominator(8),
@@ -3252,7 +3452,7 @@ class Stave(QMainWindow):
                     k = render.detect_key(q)
                     src_key = (k.tonic.pitchClass, f"{k.tonic.name.replace('-', 'b')} {k.mode}")
                 staves = core.make_staves(p["kind"], p["split"], p["split2"], p["split3"], p["pedal"], notes,
-                                          self.info.get("voice_names"))
+                                          self.info.get("voice_names"), organ=p.get("organ"))
                 label = p["meter"] if p["meter"] in ("6/8", "12/8", "3/8", "2/2") else None
                 score = render.build_score(q, barmap, staves, p["key"], p["title"], p["composer"], p["dynamics"],
                                            p["dyn_bias"], p["legato"], barmap.average_bpm(),

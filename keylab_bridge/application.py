@@ -1082,6 +1082,9 @@ class BridgeApp:
         elif event == "chord":
             items, hold = value
             self.take_player.chord(items, hold)
+        elif event == "gate":
+            on, items = value
+            self.take_player.gate(on, items)
         elif event == "take_tempo":
             self.take_player.speed = max(0.25, min(2.0, float(value) / 100.0))      # percent of the written tempo
         elif event == "preview_play":

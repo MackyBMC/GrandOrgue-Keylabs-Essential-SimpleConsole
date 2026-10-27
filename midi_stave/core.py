@@ -347,9 +347,49 @@ class StaveSpec:
     channels: tuple = ()          # empty = any
     voices: tuple = ()            # ((track, channel), ...) this stave takes; empty = any
     go_chs: tuple = None          # MIDI channels (1-16) this stave is written on (one per manual it plays); empty = keep source
+    role: str = ""                # "manual:<n>" (0 = first manual) or "pedal": lets the editor suggest the GrandOrgue manual
+    lead_limit: int = None        # pedal stave fed only by the lowest note of each chord, at or below this MIDI note
 
 
-def make_staves(kind, split=60, split2=53, split3=67, pedal=48, notes=None, voice_names=None):
+NAME_SETS = {"English": (["Great", "Swell", "Choir", "Solo", "Echo"], "Pedal"),
+             "German": (["Hauptwerk", "Schwellwerk", "Positiv", "Solowerk", "Echowerk"], "Pedal"),
+             "French": (["Grand-Orgue", "R\u00e9cit", "Positif", "Solo", "\u00c9cho"], "P\u00e9dale"),
+             "Numbered": (["Manual I", "Manual II", "Manual III", "Manual IV", "Manual V"], "Pedal")}
+
+
+def organ_staves(organ, split, pedal):
+    """N manual staves (highest band first) and an optional pedal stave. organ = {"manuals": 1-5, "names": [...],
+    "pedal_name": str, "pedal": "range" | "bass" | "off"}. Manual names are display names: the slot (first manual,
+    second manual ...) is what maps to GrandOrgue."""
+    n = max(1, min(5, int(organ.get("manuals", 2))))
+    names = [x.strip() for x in organ.get("names", []) if x and x.strip()]
+    names += [f"Manual {'I' * (i + 1) if i < 3 else ('IV', 'V')[i - 3]}" for i in range(len(names), n)]
+    mode = organ.get("pedal", "range")
+    low = pedal if mode == "range" else 0                 # lowest note a manual stave takes
+    if n == 1:
+        edges = [(low, 127)]
+    elif n == 2:
+        edges = [(split, 127), (low, split - 1)]
+    else:
+        pts = [low + round((128 - low) * k / n) for k in range(n + 1)]
+        edges = [(pts[n - 1 - k], pts[n - k] - 1) for k in range(n)]
+    result = []
+    for i, (lo, hi) in enumerate(edges):
+        result.append(StaveSpec(names[i], "treble" if lo >= 55 else "bass", lo, hi, role=f"manual:{i}"))
+    if mode != "off":
+        pedal_name = organ.get("pedal_name") or "Pedal"
+        if mode == "bass":
+            result.append(StaveSpec(pedal_name, "bass", 0, 127, role="pedal", lead_limit=pedal))
+        else:
+            result.append(StaveSpec(pedal_name, "bass", 0, pedal - 1, role="pedal"))
+    return result
+
+
+def make_staves(kind, split=60, split2=53, split3=67, pedal=48, notes=None, voice_names=None, organ=None):
+    if kind == "organbass":
+        return organ_staves(dict(organ or {}, manuals=2, pedal="bass"), split, pedal)
+    if kind == "organx":
+        return organ_staves(organ or {}, split, pedal)
     if kind == "grand":
         return [StaveSpec("Right hand", "treble", split, 127), StaveSpec("Left hand", "bass", 0, split - 1)]
     if kind == "organ":
@@ -438,14 +478,24 @@ def assign(qnotes, staves, hold=None):
     hold = STAVE_HOLD if hold is None else hold
     result = [[] for _ in staves]
     last = {}                                          # (track, ch) -> (stave index, end beat)
+    lead_of = next((i for i, sp in enumerate(staves) if getattr(sp, "lead_limit", None) is not None), None)
+    lead_ids = set()
+    if lead_of is not None:                            # pedal fed by the lowest note of each chord
+        lows = {}
+        for q in qnotes:
+            if lows.get(q.start) is None or q.pitch < lows[q.start].pitch:
+                lows[q.start] = q
+        lead_ids = {id(q) for q in lows.values() if q.pitch <= staves[lead_of].lead_limit}
     for q in sorted(qnotes, key=lambda x: (x.start, x.pitch)):
         forced = getattr(q, "stave", -1)
         target = None
         if 0 <= forced < len(staves):
             target = forced
+        elif lead_of is not None and id(q) in lead_ids:
+            target = lead_of
         else:
             for i, spec in enumerate(staves):
-                if spec.lo <= q.pitch <= spec.hi and _accepts(spec, q):
+                if spec.lead_limit is None and spec.lo <= q.pitch <= spec.hi and _accepts(spec, q):
                     target = i
                     break
             if target is not None and hold > 0:
@@ -463,9 +513,49 @@ def assign(qnotes, staves, hold=None):
     return result
 
 
-def stave_go_channels(pitch, ch, staves, track=0, forced=-1):
+TRACK_SPLIT = {}       # (track, source channel) -> (pedal channels, other channels), 1-16: lowest note of each chord on the pedal, the rest elsewhere
+PEDAL_LEAD_IDS = set()  # id() of the notes that are the lowest of their chord in a split track
+PEDAL_LEAD_IDX = set()  # the same as indexes into the editor's note list (for the quantised notes, which carry `src`)
+
+
+def pedal_leads(notes, keys, window=0.045, limit=127):
+    """Notes that are the lowest of each onset cluster (starts within `window` s) in the tracks `keys`, and no higher than
+    MIDI note `limit` (a lone melody note above it stays on the manual): [(index, note)]."""
+    result = []
+    for key in keys:
+        mine = sorted(((i, n) for i, n in enumerate(notes) if (n.track, n.ch) == key), key=lambda x: x[1].start)
+        cluster = []
+        for item in mine + [None]:
+            if item is not None and (not cluster or item[1].start - cluster[0][1].start <= window):
+                cluster.append(item)
+                continue
+            if cluster:
+                low = min(cluster, key=lambda x: x[1].pitch)
+                if low[1].pitch <= limit:
+                    result.append(low)
+            cluster = [item] if item is not None else []
+    return result
+
+
+def is_polyphonic(notes, key, window=0.045):
+    starts = sorted(n.start for n in notes if (n.track, n.ch) == key)
+    return any(b - a <= window for a, b in zip(starts, starts[1:])) or any(
+        a.end > b.start + 0.02 for a, b in zip(sorted((n for n in notes if (n.track, n.ch) == key), key=lambda n: n.start),
+                                                sorted((n for n in notes if (n.track, n.ch) == key), key=lambda n: n.start)[1:]))
+
+
+TRACK_ROUTES = {}      # (track, source channel) -> GrandOrgue channels 1-16 chosen for that track in the Tracks list (set by the editor)
+
+
+def stave_go_channels(pitch, ch, staves, track=0, forced=-1, lead=False):
     """Output channels (0-15) for a note, from the stave that owns it (same rule as assign). A stave that plays
     several manuals gives several channels (the note is written once per manual); source channel if none set."""
+    split = TRACK_SPLIT.get((track, ch))
+    if split and not (staves and 0 <= forced < len(staves)):
+        return [c - 1 for c in (split[0] if lead else split[1])]
+    route = TRACK_ROUTES.get((track, ch))
+    if route and not (staves and 0 <= forced < len(staves)):          # the track's own manual mapping wins over the stave layout
+        return [c - 1 for c in route]
     if staves and 0 <= forced < len(staves):
         spec = staves[forced]
         return [c - 1 for c in spec.go_chs] if spec.go_chs is not None else [ch]
@@ -588,12 +678,12 @@ def export_fixed_midi(notes, barmap, path, bpm=None, quantised=None, staves=None
     events = []
     if quantised is not None:
         for q in quantised:
-            for ch in stave_go_channels(q.pitch, q.ch, staves, q.track, getattr(q, 'stave', -1)):
+            for ch in stave_go_channels(q.pitch, q.ch, staves, q.track, getattr(q, 'stave', -1), q.src in PEDAL_LEAD_IDX):
                 events.append((int(round(float(q.start) * tpb)), 1, max(0, min(127, q.pitch + transpose)), q.vel, ch))
                 events.append((int(round(float(q.end) * tpb)), 0, max(0, min(127, q.pitch + transpose)), 0, ch))
     else:
         for n in notes:
-            for ch in stave_go_channels(n.pitch, n.ch, staves, n.track, getattr(n, 'stave', -1)):
+            for ch in stave_go_channels(n.pitch, n.ch, staves, n.track, getattr(n, 'stave', -1), id(n) in PEDAL_LEAD_IDS):
                 events.append((int(round(barmap.sec_to_beat(n.start) * tpb)), 1, max(0, min(127, n.pitch + transpose)), n.vel, ch))
                 events.append((int(round(barmap.sec_to_beat(n.end) * tpb)), 0, max(0, min(127, n.pitch + transpose)), 0, ch))
     for beat, text in markers or []:

@@ -1,5 +1,6 @@
 name: release
-# A v*-linux.* tag builds only the experimental Linux package; other v* tags build all platforms.
+# Stable v* tags build Windows and experimental Linux; macOS is deferred.
+# A v*-linux.* tag builds only the experimental Linux package.
 on:
   push:
     tags: ["v*"]
@@ -18,7 +19,7 @@ jobs:
           if [[ "$GITHUB_REF_NAME" == *-linux.* ]]; then
             echo 'matrix={"include":[{"os":"ubuntu-22.04","name":"linux","experimental":true}]}' >> "$GITHUB_OUTPUT"
           else
-            echo 'matrix={"include":[{"os":"windows-latest","name":"windows","experimental":false},{"os":"ubuntu-22.04","name":"linux","experimental":true},{"os":"macos-14","name":"macos","experimental":true}]}' >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[{"os":"windows-latest","name":"windows","experimental":false},{"os":"ubuntu-22.04","name":"linux","experimental":true}]}' >> "$GITHUB_OUTPUT"
           fi
   build:
     needs: prepare
@@ -46,12 +47,11 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$appVersion" packaging\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed." }
           Compress-Archive -Path dist\keylab_go_bridge.dist\* -DestinationPath dist\installer\KeyLabGrandOrgueBridge-portable-windows.zip
-      - name: Linux / macOS archive
+      - name: Linux archive
         if: matrix.name != 'windows'
         run: |
           mkdir -p dist/installer
-          if [ "${{ matrix.name }}" = "macos" ]; then ditto -c -k --keepParent dist/keylab_go_bridge.app dist/installer/KeyLabGrandOrgueBridge-macos.zip;
-          else tar -C dist -czf dist/installer/KeyLabGrandOrgueBridge-linux.tar.gz keylab_go_bridge.dist; fi
+          tar -C dist -czf dist/installer/KeyLabGrandOrgueBridge-linux.tar.gz keylab_go_bridge.dist
       - uses: actions/upload-artifact@v4
         with: {name: "${{ matrix.name }}", path: dist/installer/*}
   publish:
@@ -68,5 +68,5 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
-            **Platform status:** Windows is supported; Linux and macOS packages are experimental. See the assets for the platforms included in this release. macOS will be published after further testing.
+            **Platform status:** Windows is supported; the Linux package is experimental and requires validation on real hardware. macOS is deferred. See the assets for the platforms included in this release.
             Settings live in your user folder and survive upgrades. Verify downloads with `SHA256SUMS.txt`.

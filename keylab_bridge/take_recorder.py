@@ -205,6 +205,12 @@ class TakePlayer:
         if self.thread is not None and self.thread is not threading_current():
             self.thread.join(timeout=1.0)
 
+    def gate(self, on, items):
+        """Hold notes while a key / the audition line is held: note_on now, note_off when asked."""
+        import mido
+        for ch, note, vel in items:
+            self.send(mido.Message("note_on" if on else "note_off", channel=ch, note=note, velocity=vel if on else 0))
+
     def chord(self, items, hold):
         """Sound [(channel, note, velocity)] now and release after `hold` seconds (step sequence from the stave editor)."""
         import mido, threading

@@ -242,6 +242,13 @@ class RollWindow(QMainWindow):
             act.setToolTip(tip)
             act.triggered.connect(lambda _=False, h=handler: h())
             bar.addAction(act)
+        audition = QAction("Audition", self)
+        audition.setCheckable(True)
+        audition.setToolTip("Click or drag on the roll: hear the notes under the line, on the manuals the tracks are mapped to, "
+                            "for as long as the button is held")
+        audition.toggled.connect(st.set_audition_mode)
+        bar.addAction(audition)
+        self.audition_action = audition
         self.time_label = QLabel("  ")
         bar.addWidget(self.time_label)
 

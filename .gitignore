@@ -9,3 +9,11 @@ build/
 window_layout.json
 takes/
 *.patch
+*.mid
+midi/
+# MIDI and music-notation formats in the MIDI assets folder
+/midi/*.midi
+/midi/*.xml
+/midi/*.musicxml
+/midi/*.mxl
+/midi/*.kar

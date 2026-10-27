@@ -2602,6 +2602,7 @@ class BridgeWindow(QMainWindow):
                 self.stave_window.stop_hook = lambda: self.bridge.post_ui_event("preview_stop")
                 self.stave_window.pos_hook = lambda: self.bridge.take_player.position()
                 self.stave_window.chord_hook = lambda items, hold: self.bridge.post_ui_event("chord", (items, hold))
+                self.stave_window.gate_hook = lambda on, items: self.bridge.post_ui_event("gate", (on, items))
                 self.bridge.stave_step_hook = self.stave_window.hw_step
                 midi_dir = getattr(self.bridge, "midi_dir", "")
                 if midi_dir and hasattr(self.stave_window, "default_dir"):

@@ -16,11 +16,11 @@ registration resources are tested.
 
 | Platform | Release | Status |
 |---|---|---|
-| Windows | [v2.0.1 stable release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.1) | Supported; tested on the maintainer's Windows 11 setup |
-| Linux | [v2.0.2-linux.1 experimental prerelease](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.2-linux.1) | Build is available for evaluation; MIDI routing and hardware have not been validated on a real Linux system |
+| Windows | [v2.0.3 stable release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.3) | Supported; tested on the maintainer's Windows 11 setup |
+| Linux | [v2.0.3 experimental package](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.3) | Build is available for evaluation; MIDI routing and hardware have not been validated on a real Linux system |
 | macOS | None yet | Deferred until a later release and testing |
 
-The Linux archive is a separate prerelease and does not replace the stable Windows
+The Linux archive is experimental and is included alongside the stable Windows
 release. Linux users will need to configure MIDI ports for their own system; the
 Windows `loopMIDI` port names and sample configuration are not Linux defaults. See
 [Known limits](#known-limits) before trying the experimental build.
@@ -121,7 +121,7 @@ between keyboard models or firmware versions; see
 
 ## Windows installation and setup
 
-Download the Windows installer from the [v2.0.1 stable release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.1)
+Download the Windows installer from the [v2.0.3 stable release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.3)
 and verify it with that release's `SHA256SUMS.txt`. The installer offers:
 
 1. **Standard:** program files are installed separately; settings and takes live in
@@ -162,8 +162,8 @@ For a controller walkthrough, see the [KeyLab first-run tutorial](docs/KEYLAB_FI
 
 ## Linux evaluation notes
 
-The [Linux prerelease](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.2-linux.1)
-contains a Linux standalone build, but it is not a tested Linux installation guide.
+The [v2.0.3 release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.3)
+includes an experimental Linux standalone build, but it is not a tested Linux installation guide.
 GrandOrgue should be installed and working first. The bridge's `--list` option can
 show the MIDI port names visible to it; configure the port-name fragments in
 `config.yaml` to match the system. ALSA/RtMidi names can include client and port
@@ -257,9 +257,9 @@ Version 2 turns the bridge into a standalone desktop application:
 - Include Matplotlib in the Nuitka standalone build and derive installer version
   from the application's version metadata.
 
-The current `v2.0.2-linux.1` tag is a packaging-only experimental Linux prerelease;
-it does not change the stable Windows v2.0.1 application. See
-[CHANGELOG.md](CHANGELOG.md) for release history.
+The current `v2.0.3` release includes the new MIDI editing features and an
+experimental Linux package. Earlier Linux prereleases remain available in the
+release history. See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Known limits
 
