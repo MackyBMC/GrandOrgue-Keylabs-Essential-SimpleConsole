@@ -7,7 +7,7 @@ CHANGELOG
 2026-10-24  File dialogs (MIDI, YAML, organ, save) remember their last folder between sessions (lastdir.py).
 2026-10-23  Stave editor: step sequence + interactive printed score hooks (chord event, KeyLab >> / << in step mode).
 2026-10-21  Stave editor opened from here gets the playback position (red playhead on the roll, current bar red in the score).
-2026-10-21  Transport frame: Tempo % spin box for MIDI file playback.
+2026-10-24  Transport tempo is a session-wide BPM target with synchronized controls and shared undo / redo.
 2026-10-21  Transport frame: "Channels..." remaps each channel of the active MIDI file to a GrandOrgue channel (sidecar file).
 2026-10-20  Transport frame: Previous/Next file = MIDI files in the midi folder, Save = Save As, new "Open MIDI..." button,
             active MIDI file shown under the buttons.
@@ -97,6 +97,7 @@ from PySide6.QtWidgets import (
 
 from keylab_bridge.midi_protocol import UNASSIGNED_PAD_COLOR, VOLS
 from keylab_bridge.preset_store import set_config_value
+from tempo_control import TempoControl
 from translations import LANGUAGE_NAMES, THEME_PALETTES, contrast_text, translate
 TRANSPORT_ACTIONS = (
     ("gui_previous_step", "previous_step"),
@@ -1454,20 +1455,8 @@ class BridgeWindow(QMainWindow):
         self.open_midi_button.clicked.connect(self._open_midi_file)
         rows = (len(TRANSPORT_ACTIONS) + 1) // 2
         transport_layout.addWidget(self.open_midi_button, rows, 0, 1, 2)
-        tempo_row = QHBoxLayout()
-        tempo_row.addWidget(QLabel("Tempo"))
-        self.tempo_spin = QSpinBox()
-        self.tempo_spin.setRange(25, 200)
-        self.tempo_spin.setValue(100)
-        self.tempo_spin.setSuffix(" %")
-        self.tempo_spin.setSingleStep(5)
-        self.tempo_spin.setToolTip("Speed of MIDI file playback (100 % = as written). Works while playing.")
-        self.tempo_spin.valueChanged.connect(lambda v: self.bridge.post_ui_event("take_tempo", v))
-        tempo_row.addWidget(self.tempo_spin)
-        reset = QPushButton("100 %")
-        reset.clicked.connect(lambda: self.tempo_spin.setValue(100))
-        tempo_row.addWidget(reset)
-        transport_layout.addLayout(tempo_row, rows + 1, 0, 1, 2)
+        self.tempo_control = TempoControl(self.bridge.tempo)
+        transport_layout.addWidget(self.tempo_control, rows + 1, 0, 1, 2)
         self.channels_button = QPushButton("Channels...")
         self.channels_button.setToolTip("Send each MIDI channel of the active file to another channel (manual) in GrandOrgue")
         self.channels_button.clicked.connect(self._midi_channels)
@@ -2292,7 +2281,7 @@ class BridgeWindow(QMainWindow):
 
     def _open_midi_file(self):
         folder = lastdir.get("midi", getattr(self.bridge, "midi_dir", "") or "")
-        path, _ = QFileDialog.getOpenFileName(self, "Open MIDI file", folder, "MIDI files (*.mid *.midi)")
+        path, _ = QFileDialog.getOpenFileName(self, "Open MIDI file", folder, "MIDI files (*.mid *.midi *.kar)")
         if path:
             lastdir.put("midi", path)
             self.bridge.post_ui_event("take_open", path)
@@ -2390,7 +2379,7 @@ class BridgeWindow(QMainWindow):
         if not current:
             QMessageBox.information(self, "Save", "No MIDI file is active.")
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Save MIDI file as", lastdir.get("midi_save", os.path.dirname(current)) + os.sep + os.path.basename(current), "MIDI files (*.mid)")
+        path, _ = QFileDialog.getSaveFileName(self, "Save MIDI file as", lastdir.get("midi_save", os.path.dirname(current)) + os.sep + os.path.basename(current), "MIDI files (*.mid *.midi *.kar)")
         if path:
             lastdir.put("midi_save", path)
             self.bridge.post_ui_event("take_saveas", path)
@@ -2597,6 +2586,7 @@ class BridgeWindow(QMainWindow):
                     stave_module = importlib.import_module("midi_stave.midi_stave")
                 stave_module.render.init_verovio()
                 self.stave_window = stave_module.Stave()
+                self.stave_window.set_tempo_controller(self.bridge.tempo)
                 self.stave_window.play_hook = lambda path, offset=0.0: self.bridge.post_ui_event("preview_play", f"{path}|@{offset}")
                 self.stave_window.seek_hook = lambda t: self.bridge.post_ui_event("take_seek", t)
                 self.stave_window.stop_hook = lambda: self.bridge.post_ui_event("preview_stop")

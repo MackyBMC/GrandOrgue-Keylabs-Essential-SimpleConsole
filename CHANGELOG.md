@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.0.4 (in development)
+
+### New
+- Session-wide BPM target with synchronized, graded faders and shared undo / redo in the Bridge, Stave, and Piano Roll windows.
+- Playback scales each file's tempo map to the selected BPM; GrandOrgue metronome tempo feedback and tempo-step controls follow the same target.
+- MIDI, karaoke MIDI, and MusicXML exports save the selected tempo; changing the session tempo alone does not rewrite files.
+- Opening a file sets the BPM to the file's own average tempo; the stave editor's play preview keeps the chosen BPM.
+- Organ dialog, track list and stave rows show the organ's own manual names (Great / Swell / Choir, German, French, custom); the saved mapping is unchanged.
+
+### Fixed
+- Choosing German / French / Custom manual names (or changing the manual count / pedal) now updates the stave and track list; before, only a hint changed.
+- Playhead, timeline and step-sequence length follow the playback BPM.
+
 ## 2.0.3
 
 ### New

@@ -40,10 +40,15 @@ def main():
     render.init_verovio()
     import midi_stave
     from keylab_bridge.take_recorder import TakePlayer
+    from keylab_bridge.tempo import TempoSession
     window = midi_stave.Stave()
+    tempo = TempoSession()
+    window.set_tempo_controller(tempo)
     port, message = open_go_port()
     if port is not None:
         player = TakePlayer(port.send)
+        player.set_tempo_bpm(tempo.bpm)
+        tempo.add_listener(lambda bpm, _origin: player.set_tempo_bpm(bpm))
         window.play_hook = lambda path, offset=0.0: player.start(path, offset=offset)
         window.seek_hook = player.seek
         window.stop_hook = player.stop

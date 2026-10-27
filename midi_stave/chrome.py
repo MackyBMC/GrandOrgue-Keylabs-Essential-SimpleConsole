@@ -422,7 +422,7 @@ class Properties(QGroupBox):
         try:
             staves = self.stave.staves_for_export()
             chans = self.stave_channels(n, staves)
-            names = {ch: name for name, _p, ch in self.stave.manuals}
+            names = {ch: self.stave.manual_label(name) for name, _p, ch in self.stave.manuals}
             return ", ".join(names.get(c + 1, f"ch {c + 1}") for c in chans) or "(not written)"
         except Exception:
             return ""

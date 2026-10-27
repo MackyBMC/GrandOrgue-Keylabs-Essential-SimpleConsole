@@ -182,7 +182,8 @@ class RollWindow(QMainWindow):
             self.overview.update()
             st = self.stave
             t = st.pos_hook() if st.pos_hook else None
-            self.time_label.setText(f"  bar {st.barmap.bar_of_beat(st.barmap.sec_to_beat(st.barmap.beat_to_sec(t * st.barmap.average_bpm() / 60.0))) + 1}  " if t is not None else "  ")
+            beat = t * st.barmap.average_bpm() / 60.0 if t is not None else 0
+            self.time_label.setText(f"  bar {st.barmap.bar_of_beat(beat) + 1}  " if t is not None else "  ")
 
     def _build_tools(self):
         st, M = self.stave, self.M
@@ -228,6 +229,10 @@ class RollWindow(QMainWindow):
         self.h_zoom.setFixedWidth(110)
         self.h_zoom.valueChanged.connect(self._set_pps)
         bar.addWidget(self.h_zoom)
+        bar.addSeparator()
+        from tempo_control import TempoControl
+        self.tempo_control = TempoControl(st.tempo_controller, self)
+        bar.addWidget(self.tempo_control)
         bar.addWidget(QLabel(" Keys "))
         self.v_zoom = QSlider(Qt.Orientation.Horizontal)
         self.v_zoom.setRange(3, 40)

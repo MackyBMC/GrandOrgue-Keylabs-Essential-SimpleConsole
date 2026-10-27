@@ -57,6 +57,8 @@ from fractions import Fraction
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+if os.path.dirname(HERE) not in sys.path:
+    sys.path.insert(1, os.path.dirname(HERE))
 
 from PySide6.QtCore import QByteArray, QPointF, QRect, QRectF, QSettings, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QKeySequence, QPageSize, QPainter, QPdfWriter, QPen, QShortcut
@@ -67,16 +69,15 @@ from PySide6.QtWidgets import (
     QGraphicsView, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QMainWindow, QMenu, QMessageBox,
     QPushButton, QScrollArea, QSlider, QSpinBox, QSplitter, QVBoxLayout, QWidget,
 )
+from keylab_bridge.tempo import TempoSession
+from tempo_control import TempoControl
 
 import core
 import render
 import sessionmeta
 import chrome
-if os.path.dirname(HERE) not in sys.path:
-    sys.path.append(os.path.dirname(HERE))          # polish.py lives next to the midi_stave folder
 import polish
 import solfa
-sys.path.insert(1, os.path.dirname(HERE))      # so keylab_bridge (setter list) can be imported
 
 ROW = 6                                    # piano-roll pixel height of one semitone
 SHEET_FOLDER = r"C:\Audio\sheet music"
@@ -1233,6 +1234,7 @@ class SetterPicker(QDialog):
 class Stave(QMainWindow):
     result_ready = Signal(int, object)
     hwStep = Signal(int)
+    tempoChanged = Signal(int)
 
     def __init__(self):
         super().__init__()
@@ -1247,6 +1249,9 @@ class Stave(QMainWindow):
         self.generation = 0
         self.lock = threading.Lock()
         self.settings = QSettings("KeyLabGrandOrgue", "MidiStave")
+        self.tempo_controller = TempoSession()
+        self.tempo_controller.add_listener(self._tempo_session_changed)
+        self.tempoChanged.connect(self._tempo_changed)
         self.result_ready.connect(self._on_result)
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
@@ -1261,6 +1266,20 @@ class Stave(QMainWindow):
         if state:
             self.splitter.restoreState(state)
             self.body.restoreState(self.settings.value("body", self.body.saveState()))
+
+    def set_tempo_controller(self, controller):
+        if self.tempo_controller is not controller:
+            self.tempo_controller.remove_listener(self._tempo_session_changed)
+            self.tempo_controller = controller
+            self.tempo_controller.add_listener(self._tempo_session_changed)
+            self.tempo_control.set_controller(controller)
+            self.changed(delay=0)
+
+    def _tempo_session_changed(self, bpm, _origin):
+        self.tempoChanged.emit(bpm)
+
+    def _tempo_changed(self, _bpm):
+        self.changed(delay=0)
 
     # ---- ui
     def _build_ui(self):
@@ -1296,9 +1315,8 @@ class Stave(QMainWindow):
         b = QFormLayout(bars)
         self.meter = QComboBox()
         self.meter.addItems(list(TIME_SIGS))
-        self.bpm = QDoubleSpinBox()
-        self.bpm.setRange(0, 240)
-        self.bpm.setSpecialValueText("auto")
+        self.tempo_control = TempoControl(self.tempo_controller)
+        self.bpm = self.tempo_control
         self.follow = QSlider(Qt.Orientation.Horizontal)
         self.follow.setRange(0, 100)
         self.follow.setValue(60)
@@ -1310,7 +1328,7 @@ class Stave(QMainWindow):
             btn.clicked.connect(lambda _=False, s=step: self.shift_downbeat(s))
             shift_row.addWidget(btn)
         b.addRow("Time signature", self.meter)
-        b.addRow("Tempo (BPM)", self.bpm)
+        b.addRow(self.bpm)
         b.addRow("Follow my timing", self.follow)
         b.addRow(detect)
         b.addRow("Start on another beat", shift_row)
@@ -1410,8 +1428,8 @@ class Stave(QMainWindow):
         self.organ_names.setEnabled(False)
         self.organ_names_set.currentIndexChanged.connect(self._organ_names_preset)
         for w in (self.organ_manuals, self.organ_pedal):
-            (w.valueChanged if isinstance(w, QSpinBox) else w.currentIndexChanged).connect(lambda *_: self.update_name_hint())
-        self.organ_names.editingFinished.connect(self.update_name_hint)
+            (w.valueChanged if isinstance(w, QSpinBox) else w.currentIndexChanged).connect(self._organ_changed)
+        self.organ_names.editingFinished.connect(self._organ_changed)
         l.addRow("Layout", self.layout_kind)
         l.addRow(self.organ_box)
         l.addRow("Stave names (comma separated)", self.stave_names)
@@ -1736,7 +1754,25 @@ class Stave(QMainWindow):
             self.organ_names.setText(", ".join(manuals))
             self.organ_pedal_name = pedal
         self.organ_names.setEnabled(choice == "Custom")
+        self._organ_changed()
+
+    def _organ_changed(self, *_):
+        """Names / manual count / pedal changed: relabel rows and track list, and engrave again (the names were only shown as a hint before)."""
         self.update_name_hint()
+        self.changed(delay=0)
+
+    def manual_label(self, slot, short=False):
+        """Display name of a GrandOrgue manual slot (Pedal / Hauptwerk / Schwellwerk / Solowerk) from the organ names in use
+        (English Great / Swell / Choir, German, French or custom). The slot itself - and the saved mapping - never change."""
+        if slot == "Pedal":
+            name = getattr(self, "organ_pedal_name", "Pedal") if hasattr(self, "organ_names_set") else "Pedal"
+            name = core.NAME_SETS.get(self.organ_names_set.currentText(), (None, name))[1] if hasattr(self, "organ_names_set") else name
+        else:
+            order = [n for n, _p, _c in self.manuals if n != "Pedal"]
+            names = [x.strip() for x in self.organ_names.text().split(",")] if hasattr(self, "organ_names") else []
+            i = order.index(slot) if slot in order else -1
+            name = names[i] if 0 <= i < len(names) and names[i] else slot
+        return (name[:1] if slot == "Pedal" else name[:2]) if short else name
 
     def organ_params(self):
         choice = self.organ_names_set.currentText()
@@ -1754,6 +1790,10 @@ class Stave(QMainWindow):
                                   self.notes, self.info.get("voice_names"), organ=self.organ_params())
         self.stave_names.setPlaceholderText(", ".join(s.name for s in staves))
         self.build_manual_rows(kind, staves)
+        roll = getattr(self, "roll_window", None)
+        panel = getattr(roll, "tracks", None)
+        if panel is not None:
+            panel.refresh()
 
     # ---- files
     def takes_folder(self):
@@ -1769,14 +1809,14 @@ class Stave(QMainWindow):
         self.takes_list.clear()
         folder = self.takes_folder()
         if os.path.isdir(folder):
-            names = sorted((n for n in os.listdir(folder) if n.lower().endswith((".mid", ".midi"))), reverse=True)
+            names = sorted((n for n in os.listdir(folder) if n.lower().endswith((".mid", ".midi", ".kar"))), reverse=True)
             for name in names:
                 item = self.takes_list.addItem(name)
                 self.takes_list.item(self.takes_list.count() - 1).setData(Qt.ItemDataRole.UserRole, os.path.join(folder, name))
 
     def open_dialog(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open MIDI", self.settings.value("last_dir", self.takes_folder()),
-                                              "MIDI and MusicXML (*.mid *.midi *.musicxml *.xml *.mxl);;MIDI (*.mid *.midi);;MusicXML (*.musicxml *.xml *.mxl)")
+                                              "MIDI and MusicXML (*.mid *.midi *.kar *.musicxml *.xml *.mxl);;MIDI (*.mid *.midi *.kar);;MusicXML (*.musicxml *.xml *.mxl)")
         if path:
             self.settings.setValue("last_dir", os.path.dirname(path))
             self.load(path)
@@ -1963,7 +2003,7 @@ class Stave(QMainWindow):
         if not ok:
             return
         import tempfile, mido
-        bpm = float(self.bpm.value() or 100)
+        bpm = float(self.bpm.value() or 120)
         meter = self.meter.currentText()
         beats = TIME_SIGS.get(meter, 4)
         mid = mido.MidiFile(ticks_per_beat=480)
@@ -2031,6 +2071,7 @@ class Stave(QMainWindow):
                 self.layout_kind.blockSignals(False)
                 self.stave_names.setText(", ".join(imported["names"]))
             self.update_name_hint()
+            self._adopt_file_tempo()
             self.refresh_roll()
             self.changed(delay=50)
         else:
@@ -2041,7 +2082,15 @@ class Stave(QMainWindow):
                 self.layout_kind.blockSignals(False)
             self.update_name_hint()
             self.detect_bars()
+            self._adopt_file_tempo()
             self.import_setters(path)
+
+    def _adopt_file_tempo(self):
+        """A newly opened file sets the session BPM to its own average tempo (no undo step): playback then starts as written."""
+        try:
+            self.tempo_controller.set_bpm(self.barmap.average_bpm(), origin="load", record=False)
+        except Exception:
+            pass
 
     def _track_toggled(self, item):
         key = item.data(Qt.ItemDataRole.UserRole)
@@ -2196,8 +2245,8 @@ class Stave(QMainWindow):
             row.addWidget(label)
             checks = {}
             for name, _path, _ch in self.manuals:
-                box = QCheckBox(sessionmeta.MANUAL_SHORT[name])
-                box.setToolTip(f"{name}: MIDI channel {self.manual_channel[name]}")
+                box = QCheckBox(self.manual_label(name, short=True))
+                box.setToolTip(f"{self.manual_label(name)}: MIDI channel {self.manual_channel[name]}")
                 if len(old) == len(staves) and old[i]:
                     box.setChecked(old[i].get(name, False))
                 else:
@@ -2291,7 +2340,8 @@ class Stave(QMainWindow):
                 and not self.job_running):                 # the quantised score, in the stave's key (transpose) as engraved
             quant = [q for q in self.qnotes if (q.track, q.ch) not in hidden
                      and not (0 <= q.src < len(self.notes) and self.notes[q.src].mute)]
-        core.export_fixed_midi(notes, self.barmap, path, quantised=quant, staves=self.staves_for_export(),
+        core.export_fixed_midi(notes, self.barmap, path,       # preview: written at the file's own average tempo; the player scales it to the session BPM
+                               quantised=quant, staves=self.staves_for_export(),
                                markers=[] if selection_only else self.setter_markers() + self.voice_markers(),
                                transpose=self.transpose.value())
         try:
@@ -3081,7 +3131,8 @@ class Stave(QMainWindow):
         group = self.step_groups[self.step_index]
         staves = self.staves_for_export()
         items = [(ch, n.pitch, n.vel) for n in group for ch in core.stave_go_channels(n.pitch, n.ch, staves, n.track, -1, id(n) in core.PEDAL_LEAD_IDS)]
-        hold = min(3.0, max(0.15, max(n.end - n.start for n in group)))
+        hold = min(3.0, max(0.15, max(n.end - n.start for n in group) * self.barmap.average_bpm()
+                             / max(1.0, self.tempo_controller.bpm)))       # note length in seconds at the session tempo
         self.chord_hook(items, hold)
         import time as _t
         self.step_until = _t.time() + hold
@@ -3229,18 +3280,19 @@ class Stave(QMainWindow):
 
     def _update_timeline(self, t_file, dragging=False):
         total = max((n.end for n in self.notes), default=0.0)
-        beat_total = self.barmap.sec_to_beat(total) * 60.0 / max(1.0, self.barmap.average_bpm()) if total else 0.0
+        file_total = self.barmap.sec_to_beat(total) * 60.0 / max(1.0, self.barmap.average_bpm()) if total else 0.0
         t = t_file or 0.0
-        if beat_total > 0 and not self.time_slider.dragging:
-            self.time_slider.setValue(int(min(1.0, t / beat_total) * 1000))
+        if file_total > 0 and not self.time_slider.dragging:
+            self.time_slider.setValue(int(min(1.0, t / file_total) * 1000))
         fmt = lambda x: f"{int(x) // 60}:{int(x) % 60:02d}"
-        bar = int(self.barmap.bar_of_beat(t * self.barmap.average_bpm() / 60.0)) + 1 if self.notes else 0
+        beat = t * self.barmap.average_bpm() / 60.0 if self.notes else 0
+        bar = int(self.barmap.bar_of_beat(beat)) + 1 if self.notes else 0
         self.goto_bar.setMaximum(max(1, self.barmap.bar_count if self.notes else 1))
         if t_file is not None and not self.goto_bar.hasFocus():
             self.goto_bar.blockSignals(True)
             self.goto_bar.setValue(max(1, bar))
             self.goto_bar.blockSignals(False)
-        self.time_label.setText(f" {fmt(t)} / {fmt(beat_total)}  bar {bar}/{self.barmap.bar_count if self.notes else 0} ")
+        self.time_label.setText(f" {fmt(t)} / {fmt(file_total)}  bar {bar}/{self.barmap.bar_count if self.notes else 0} ")
 
     # ---- playback indicator (fed by the bridge while a file plays)
     def poll_playhead(self):
@@ -3251,7 +3303,7 @@ class Stave(QMainWindow):
                 self.roll.set_playhead(None)
                 self.highlight_bar(None)
             return
-        beat = t_file * self.barmap.average_bpm() / 60.0          # the preview is written at the average tempo
+        beat = t_file * self.barmap.average_bpm() / 60.0          # the preview is written at the average tempo (file time, whatever the playback BPM)
         sec = self.barmap.beat_to_sec(beat)
         self.roll.set_playhead(sec)
         bar = min(self.barmap.bar_count - 1, max(0, int(self.barmap.bar_of_beat(beat))))
@@ -3314,18 +3366,18 @@ class Stave(QMainWindow):
         """Write the (edited) notes as played - real timing, original tracks' channels - to a new MIDI file."""
         if not self.notes:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Save edited MIDI", self._suggest(" (edited).mid"), "MIDI (*.mid)")
+        path, _ = QFileDialog.getSaveFileName(self, "Save edited MIDI", self._suggest(" (edited).mid"), "MIDI (*.mid *.midi *.kar)")
         if not path:
             return
         import mido
         events = []
         for n in self.notes:
-            events.append((int(round(n.start * 960)), 1, n.pitch, n.vel, n.ch))
-            events.append((int(round(n.end * 960)), 0, n.pitch, 0, n.ch))
+            events.append((int(round(self.barmap.sec_to_beat(n.start) * 480)), 1, n.pitch, n.vel, n.ch))
+            events.append((int(round(self.barmap.sec_to_beat(n.end) * 480)), 0, n.pitch, 0, n.ch))
         events.sort(key=lambda e: (e[0], e[1]))
-        track = mido.MidiTrack([mido.MetaMessage("set_tempo", tempo=500000, time=0)])
+        track = mido.MidiTrack([mido.MetaMessage("set_tempo", tempo=int(60_000_000 / self.tempo_controller.bpm), time=0)])
         for text_beat, text in self.setter_markers():
-            events.append((int(round(self.barmap.beat_to_sec(text_beat) * 960)), -1, 0, 0, text))
+            events.append((int(round(text_beat * 480)), -1, 0, 0, text))
         events.sort(key=lambda e: (e[0], e[1]))
         prev = 0
         for tick, kind, pitch, vel, ch in events:
@@ -3379,6 +3431,7 @@ class Stave(QMainWindow):
             "dyn_bias": self.dyn_bias.value(), "title": self.title.text(), "composer": self.composer.text(),
             "page": self.page.currentText(), "scale": self.scale.value(),
             "bar_grid": dict(self.bar_grid), "meter": self.meter.currentText(),
+            "tempo_bpm": self.tempo_controller.bpm,
             "transpose": self.transpose.value(), "names": [s.strip() for s in self.stave_names.text().split(",")],
             "slurs": self.slurs.isChecked(), "staccato": self.staccato.isChecked(),
             "final_bar": self.final_bar.isChecked(), "probe": self.need_probe,
@@ -3455,7 +3508,7 @@ class Stave(QMainWindow):
                                           self.info.get("voice_names"), organ=p.get("organ"))
                 label = p["meter"] if p["meter"] in ("6/8", "12/8", "3/8", "2/2") else None
                 score = render.build_score(q, barmap, staves, p["key"], p["title"], p["composer"], p["dynamics"],
-                                           p["dyn_bias"], p["legato"], barmap.average_bpm(),
+                                           p["dyn_bias"], p["legato"], p["tempo_bpm"],
                                            {0: label} if label else None, p["transpose"], p["names"], p["slurs"],
                                            p["staccato"], p["final_bar"], p["setters"], p.get("signs"), p.get("adv"), p.get("lyrics"))
                 xml = render.musicxml(score)
@@ -3565,16 +3618,27 @@ class Stave(QMainWindow):
     def export_xml(self):
         if not self.xml:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Export MusicXML", self._suggest(".musicxml"), "MusicXML (*.musicxml *.xml)")
+        path, _ = QFileDialog.getSaveFileName(self, "Export MusicXML", self._suggest(".musicxml"), "MusicXML (*.musicxml *.xml *.mxl)")
         if path:
-            with open(path, "w", encoding="utf-8") as stream:
-                stream.write(self.xml)
+            if path.lower().endswith(".mxl"):
+                import zipfile
+                container = ('<?xml version="1.0" encoding="UTF-8"?>'
+                             '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+                             '<rootfiles><rootfile full-path="score.musicxml" '
+                             'media-type="application/vnd.recordare.musicxml+xml"/></rootfiles></container>')
+                with zipfile.ZipFile(path, "w") as archive:
+                    archive.writestr("mimetype", "application/vnd.recordare.musicxml", compress_type=zipfile.ZIP_STORED)
+                    archive.writestr("META-INF/container.xml", container)
+                    archive.writestr("score.musicxml", self.xml)
+            else:
+                with open(path, "w", encoding="utf-8") as stream:
+                    stream.write(self.xml)
             self.statusBar().showMessage(f"Saved {path}")
 
     def export_midi(self):
         if not self.notes:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Export straightened MIDI", self._suggest(" (straight).mid"), "MIDI (*.mid)")
+        path, _ = QFileDialog.getSaveFileName(self, "Export straightened MIDI", self._suggest(" (straight).mid"), "MIDI (*.mid *.midi *.kar)")
         if not path:
             return
         box = QMessageBox(self)
@@ -3582,7 +3646,8 @@ class Stave(QMainWindow):
         grid_btn = box.addButton("On the grid", QMessageBox.ButtonRole.AcceptRole)
         box.addButton("Keep my feel", QMessageBox.ButtonRole.RejectRole)
         box.exec()
-        core.export_fixed_midi(self.notes, self.barmap, path, quantised=self.qnotes if box.clickedButton() is grid_btn else None,
+        core.export_fixed_midi(self.notes, self.barmap, path, bpm=self.tempo_controller.bpm,
+                               quantised=self.qnotes if box.clickedButton() is grid_btn else None,
                                staves=self.staves_for_export(), markers=self.setter_markers() + self.voice_markers())
         self.statusBar().showMessage(f"Saved {path}")
 

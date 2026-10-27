@@ -37,7 +37,7 @@ def run(p, notes, anchors, beats, voice_names, page_wh):
         staves = core.make_staves(p["kind"], p["split"], p["split2"], p["split3"], p["pedal"], notes, voice_names, organ=p.get("organ"))
         label = p["meter"] if p["meter"] in ("6/8", "12/8", "3/8", "2/2") else None
         score = render.build_score(q, barmap, staves, p["key"], p["title"], p["composer"], p["dynamics"], p["dyn_bias"],
-                                   p["legato"], barmap.average_bpm(), {0: label} if label else None, p["transpose"],
+                                   p["legato"], p["tempo_bpm"], {0: label} if label else None, p["transpose"],
                                    p["names"], p["slurs"], p["staccato"], p["final_bar"], p["setters"], p.get("signs"), p.get("adv"), p.get("lyrics"))
         xml = render.musicxml(score)
         render.init_verovio()

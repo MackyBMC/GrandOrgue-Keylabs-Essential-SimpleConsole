@@ -6,6 +6,8 @@ Everything edited here goes through the stave editor, so the engraved score foll
 
 CHANGELOG
 2026-10-26  New.
+2026-10-27  Manuals shown by the organ's own names (Great / Swell / Choir, German, French, custom) in the Organ dialog,
+            the Organ column and the stave rows; the saved mapping still uses the fixed manual slots.
 2026-10-26  Organ column + "Organ..." dialog: each track chooses the manual(s) (MIDI channel) it plays on and its registration changes
             (setters / stops, bar by bar), whatever the stave layout is. Like choosing an instrument for a track in a DAW.
 """
@@ -29,7 +31,7 @@ class OrganDialog(QDialog):
         lay.addWidget(QLabel(f"Play track \"{name}\" on:"))
         self.boxes = {}
         for manual, _path, channel in stave.manuals:
-            box = QCheckBox(f"{manual}   (MIDI channel {channel})")
+            box = QCheckBox(f"{stave.manual_label(manual)}   (MIDI channel {channel})")
             box.setChecked(manual in current.get("manuals", []))
             self.boxes[manual] = box
             lay.addWidget(box)
@@ -83,6 +85,7 @@ class OrganDialog(QDialog):
         pitches = sorted(n.pitch for n in st.notes if (n.track, n.ch) == key) or [60]
         name = (st.info or {}).get("voice_names", {}).get(key) or row.get("name", "")
         manuals, stops, why = sessionmeta.suggest(name, row.get("program"), pitches[len(pitches) // 2])
+        label = st.manual_label
         poly = core_is_poly(st.notes, key)
         if poly and "Pedal" in manuals:                       # a polyphonic "bass" track: bass line on the pedal, the rest on a manual
             manuals = tuple(manuals) + tuple(m for m in ("Hauptwerk",) if m not in manuals)
@@ -90,7 +93,7 @@ class OrganDialog(QDialog):
         for manual, box in self.boxes.items():
             box.setChecked(manual in manuals)
         tip = ", ".join(x["name"] for x in sessionmeta.suggest_stops(manuals[0], stops)[:6])
-        self.hint.setText(f"Suggested {'/'.join(manuals)} ({why})" + (f" - stops such as {tip}" if tip else ""))
+        self.hint.setText(f"Suggested {'/'.join(label(m) for m in manuals)} ({why})" + (f" - stops such as {tip}" if tip else ""))
 
     def edit_reg(self):
         self.M.VoiceRegDialog(self.stave, entries=self.reg).exec()
@@ -183,9 +186,9 @@ class TrackPanel(QDockWidget):
         m = self.stave.track_map.get(key)
         if not m or not m.get("manuals"):
             return "stave layout"
-        text = "+".join(sessionmeta.MANUAL_SHORT.get(n, n) for n in m["manuals"])
+        text = "+".join(self.stave.manual_label(n, short=True) for n in m["manuals"])
         if m.get("bass_split"):
-            text = "bass P / " + text
+            text = f"bass {self.stave.manual_label('Pedal', short=True)} / " + text
         return text + (f"  ({len(m['reg'])} reg)" if m.get("reg") else "")
 
     def map_organ(self):

@@ -137,7 +137,7 @@ def build_score(qnotes, barmap, staves, key_name="auto", title="", composer="", 
                 measure.insert(0, clef.TrebleClef() if (spec.clef == "treble" and not in_bass) else clef.BassClef())
                 measure.insert(0, key_obj)
                 if si == 0 and tempo_bpm:
-                    measure.insert(0, tempo.TempoText(f"c. {int(round(tempo_bpm))} BPM"))   # text only: Qt cannot draw the note glyph
+                    measure.insert(0, tempo.MetronomeMark(number=int(round(tempo_bpm))))
             if si == 0 and adv.get("divisions") and bar in adv["divisions"]:       # division / coupler labels (Great, Swell, II/I ...)
                 from music21 import expressions
                 label = expressions.TextExpression(adv["divisions"][bar])

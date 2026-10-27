@@ -16,7 +16,7 @@ CHANGELOG
             Playback log now says how many messages were sent.
 2026-10-23  Stave editor step sequence: selected notes are played again chord by chord on the organ ("chord" event);
             KeyLab >> / << step it while its Step mode is ticked (stave_step_hook).
-2026-10-21  Tempo for MIDI file playback: Transport "Tempo %" (25-200), changeable while playing.
+2026-10-24  Session-wide BPM target scales MIDI playback, synchronizes GrandOrgue tempo, and is written only on export.
 2026-10-21  Playback diagnostics (log says when the output port is down / messages were dropped); a plain channel-1
             keyboard recording is fanned out to the manual channels like the KeyLab key ranges. Stave editor: "MIDI
             tracks in this file" list (track name, channel, GM instrument, note count, range, empty tracks marked) and
@@ -65,6 +65,7 @@ import tempfile
 import threading
 import time
 import traceback
+import re
 from collections import deque
 from typing import Any, cast
 
@@ -84,6 +85,7 @@ from .combination_transfer import (
 )
 from .odf_scan import compare_with_builtin, scan_odf, spec_from_profile, summarize
 from .organ_layout import ACTIVE_LAYOUT, STOP_CHANNELS
+from .tempo import TempoSession
 from .preset_store import (
     _normalized_mapping_key, _write_managed_switches, combination_root, load_combinations, project_root, set_config_key,
     load_language, load_preset_activation, load_theme, bridge_settings,
@@ -99,6 +101,8 @@ class BridgeApp:
         self.br_settings = br_settings
         self.cfg_path = cfg_path
         self.ui = ui
+        self.tempo = TempoSession()
+        self._go_tempo_target = self.tempo.bpm
         self.combinations = load_combinations(cfg_path, raw)
         self.selected_combination_index = None
         self.loaded_combination_index = None
@@ -125,6 +129,7 @@ class BridgeApp:
         self.take_player = TakePlayer(lambda m: self.ports.send("go_out", m),
                                       int(forced) - 1 if forced else None,
                                       on_marker=lambda text: self.post_ui_event("setter_marker", text))
+        self.take_player.set_tempo_bpm(self.tempo.bpm)
         self.language = load_language(cfg_path, raw)
         self.language_path = os.path.join(os.path.dirname(cfg_path), "language.txt") if cfg_path else ""
         self.theme = load_theme(cfg_path, raw)
@@ -143,6 +148,7 @@ class BridgeApp:
         self.stop_grid_pad_handler = None
         self.ports = MidiPorts(backend, args, self.stats, self.recent_times, br_settings.get("pad_ccs"))
         self.br = self.make_bridge()
+        self.tempo.add_listener(self._tempo_changed)
         self.debug = bool(args.verbose)
         self.running = True
         self.fatal = None
@@ -1085,8 +1091,12 @@ class BridgeApp:
         elif event == "gate":
             on, items = value
             self.take_player.gate(on, items)
-        elif event == "take_tempo":
-            self.take_player.speed = max(0.25, min(2.0, float(value) / 100.0))      # percent of the written tempo
+        elif event in ("take_tempo", "tempo_bpm"):
+            self.tempo.set_bpm(value)
+        elif event == "tempo_undo":
+            self.tempo.undo()
+        elif event == "tempo_redo":
+            self.tempo.redo()
         elif event == "preview_play":
             path, _, offset = str(value).partition("|@")       # "path|@seconds" starts part-way in
             self.set_take(path)
@@ -1161,7 +1171,7 @@ class BridgeApp:
         rec.close()
         if path and os.path.isfile(path):
             stave = path[:-4] + " (stave).mid"
-            ok = write_stave_friendly(path, stave)
+            ok = write_stave_friendly(path, stave, self.tempo.bpm)
             self.take_to_play = path
             self.log(f"Recording saved: {os.path.basename(path)}" + (" + stave version" if ok else "")
                      + ". Press Play to hear it through GrandOrgue.")
@@ -1255,7 +1265,7 @@ class BridgeApp:
     def list_takes(self):
         try:
             return sorted(os.path.join(self.midi_dir, f) for f in os.listdir(self.midi_dir)
-                          if f.lower().endswith((".mid", ".midi")) and not f.startswith("_"))
+                          if f.lower().endswith((".mid", ".midi", ".kar")) and not f.startswith("_"))
         except OSError:
             return []
 
@@ -1268,6 +1278,9 @@ class BridgeApp:
             try:
                 import mido
                 self.take_length = mido.MidiFile(path).length
+                from .take_recorder import midi_average_bpm
+                if not os.path.basename(path).startswith("_preview"):         # the stave editor's preview keeps the chosen BPM
+                    self.tempo.set_bpm(midi_average_bpm(path), origin="load", record=False)      # a newly chosen file plays as written
                 from .take_recorder import stave_module
                 sm = stave_module("sessionmeta")
                 voices = sm.file_voices(path)
@@ -1301,9 +1314,10 @@ class BridgeApp:
         if not self.take_to_play or not os.path.isfile(self.take_to_play) or not target:
             self.log("No MIDI file to save")
             return
-        if not target.lower().endswith((".mid", ".midi")):
+        if not target.lower().endswith((".mid", ".midi", ".kar")):
             target += ".mid"
-        shutil.copyfile(self.take_to_play, target)
+        from .take_recorder import save_midi_at_tempo
+        save_midi_at_tempo(self.take_to_play, target, self.tempo.bpm)
         stave = self.take_to_play[:-4] + " (stave).mid"
         if os.path.isfile(stave):
             shutil.copyfile(stave, target[:-4] + " (stave).mid")
@@ -1688,6 +1702,7 @@ class BridgeApp:
             "active_combination_index": active_combination_index,
             "internal_position": br.pos.strip(),
             "preset_activation": self.preset_activation,
+            "tempo_bpm": self.tempo.bpm,
             "active_stops": active_stops, "metro_bpm": br.metro_bpm, "metro_lit": br.metro_lit,
             "volumes": {key: br.vol_sent.get(key, br.vol[key]) for key in VOLS},
             "volume_active": self._volume_activity(),
@@ -1771,6 +1786,39 @@ class BridgeApp:
             if self.ports.send(port_key, message) and target == "kl":
                 self.debug_log(f"TX KL  SysEx {len(output['data'])} bytes")
 
+    def _tempo_changed(self, bpm, origin):
+        self.take_player.set_tempo_bpm(bpm)
+        if origin != "grandorgue":
+            self._go_tempo_target = bpm
+            self._sync_grandorgue_tempo()
+
+    @staticmethod
+    def _parse_bpm(text):
+        match = re.search(r"\d+(?:\.\d+)?", str(text or ""))
+        return int(round(float(match.group()))) if match else None
+
+    def _sync_grandorgue_tempo(self):
+        current = self._parse_bpm(self.br.metro_bpm)
+        target = self._go_tempo_target
+        if target is None or current is None:
+            return
+        if current == target:
+            self._go_tempo_target = None
+            return
+        self.emit(self.br._press("tempo_up" if current < target else "tempo_down"))
+
+    def handle_go_message(self, message):
+        before = self.br.metro_bpm
+        self.emit(self.br.from_go(message, time.time()))
+        if self.br.metro_bpm != before:
+            current = self._parse_bpm(self.br.metro_bpm)
+            if current is None:
+                return
+            if self._go_tempo_target is None:
+                self.tempo.set_bpm(current, origin="grandorgue")
+            else:
+                self._sync_grandorgue_tempo()
+
     def drain_port(self, key, count_key, handler, sysex=False):
         for message in self.ports.drain_input(key):
             self.stats[count_key] += 1
@@ -1811,7 +1859,7 @@ class BridgeApp:
                 self.handle_main_message(message, now)
         else:
             self.drain_port("main_in", "main_in", lambda message: self.handle_main_message(message, now))
-        self.drain_port("go_in", "go_in", lambda message: self.emit(self.br.from_go(message, now)), sysex=True)
+        self.drain_port("go_in", "go_in", self.handle_go_message, sysex=True)
         for key, error in self.ports.take_error_events():
             self.log(f"{key} MIDI worker failed: {error}", level="ERROR")
 

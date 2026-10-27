@@ -29,6 +29,38 @@ def stave_module(name):
 TICKS_PER_SECOND = 960         # 480 ticks per beat at the fixed 500000 us/beat (120 BPM) tempo
 
 
+def midi_average_bpm(path):
+    """Return the duration-weighted average tempo of a MIDI file, defaulting to 120 BPM."""
+    import mido
+    seconds = beats = 0.0
+    tempo = 500000
+    for msg in mido.MidiFile(path):
+        seconds += msg.time
+        beats += msg.time * 1_000_000 / tempo
+        if msg.type == "set_tempo":
+            tempo = msg.tempo
+    return beats * 60.0 / seconds if seconds > 0 else 120.0
+
+
+def save_midi_at_tempo(source, destination, target_bpm):
+    """Scale every tempo event by the ratio needed to make the file average target_bpm."""
+    import mido
+    mid = mido.MidiFile(source)
+    base_bpm = midi_average_bpm(source)
+    factor = float(target_bpm) / max(1.0, base_bpm)
+    if not mid.tracks:
+        mid.tracks.append(mido.MidiTrack())
+    found = False
+    for track in mid.tracks:
+        for index, msg in enumerate(track):
+            if msg.type == "set_tempo":
+                found = True
+                track[index] = msg.copy(tempo=max(1, min(0xFFFFFF, round(msg.tempo / factor))))
+    if not found:
+        mid.tracks[0].insert(0, mido.MetaMessage("set_tempo", tempo=round(60_000_000 / target_bpm), time=0))
+    mid.save(destination)
+
+
 class TakeRecorder:
     def __init__(self, folder, gap=25.0, min_notes=6, autosave=30.0, log=None):
         self.folder = folder
@@ -141,7 +173,7 @@ def make_midi_recorder(folder, log=None):
     return TakeRecorder(folder, gap=1e12, min_notes=1, autosave=10, log=log)
 
 
-def write_stave_friendly(path, out_path):
+def write_stave_friendly(path, out_path, target_bpm=None):
     """'Stave Friendly' copy of a take: bar lines found and straightened to a steady beat (midi_stave.export_fixed_midi).
     Returns True when written; False when midi_stave / music21 are not installed."""
     try:
@@ -155,6 +187,8 @@ def write_stave_friendly(path, out_path):
         barmap = estimate_bars(notes)
         marks = [(barmap.sec_to_beat(t), text) for t, text in read_all_markers(path)]
         export_fixed_midi(notes, barmap, out_path, markers=marks)
+        if target_bpm is not None:
+            save_midi_at_tempo(out_path, out_path, target_bpm)
         return True
     except Exception:
         return False
@@ -170,12 +204,39 @@ class TakePlayer:
         self.chmap = {}
         self.fanout = {}
         self.failed = 0
-        self.speed = 1.0
+        import threading
+        self._speed_changed = threading.Condition()
+        self._speed = 1.0
+        self.tempo_bpm = 120.0
+        self.base_bpm = 120.0
         self.pos_file, self.pos_wall = 0.0, 0.0
         self.sent = 0
         self.next_file = 0.0
         self.thread = None
         self.stop_flag = False
+
+    @property
+    def speed(self):
+        return self._speed
+
+    @speed.setter
+    def speed(self, value):
+        self._set_speed(value)
+
+    def _set_speed(self, value):
+        value = max(0.01, float(value))
+        with self._speed_changed:
+            if getattr(self, "_speed", None) is not None and self.active:
+                now = time.perf_counter()
+                self.pos_file += max(0.0, min(self.next_file - self.pos_file,
+                                              (now - self.pos_wall) * self._speed))
+                self.pos_wall = now
+            self._speed = value
+            self._speed_changed.notify_all()
+
+    def set_tempo_bpm(self, bpm):
+        self.tempo_bpm = float(bpm)
+        self._set_speed(self.tempo_bpm / max(1.0, self.base_bpm))
 
     @property
     def active(self):
@@ -186,6 +247,8 @@ class TakePlayer:
         self.stop()
         self.path, self.on_done_cb = path, on_done
         self.stop_flag = False
+        self.base_bpm = midi_average_bpm(path)
+        self._set_speed(self.tempo_bpm / max(1.0, self.base_bpm))
         try:
             channel_map = stave_module('sessionmeta').channel_map
             self.chmap = channel_map(path)
@@ -202,6 +265,8 @@ class TakePlayer:
 
     def stop(self):
         self.stop_flag = True
+        with self._speed_changed:
+            self._speed_changed.notify_all()
         if self.thread is not None and self.thread is not threading_current():
             self.thread.join(timeout=1.0)
 
@@ -226,8 +291,9 @@ class TakePlayer:
         """Seconds into the file now (file time, so tempo scaling does not matter); None when nothing is playing."""
         if not self.active:
             return None
-        import time as _time
-        return self.pos_file + max(0.0, min(self.next_file - self.pos_file, (_time.perf_counter() - self.pos_wall) * self.speed))
+        with self._speed_changed:
+            return self.pos_file + max(0.0, min(self.next_file - self.pos_file,
+                                                (time.perf_counter() - self.pos_wall) * self._speed))
 
     def _targets(self, msg):
         """Channels a message is sent on. A plain channel-1 keyboard recording is fanned out the way the KeyLab's own
@@ -280,18 +346,19 @@ class TakePlayer:
                                 self.send(msg.copy(channel=target))
                         continue
                     skipping = False
-                    clock = _time.perf_counter() + (cumulative - offset) / max(0.1, self.speed)
+                    wait_file = max(0.0, cumulative - offset)
                     self.pos_file, self.pos_wall = offset, _time.perf_counter()
                     if last_marker and self.on_marker:
                         self.on_marker(last_marker)
                 else:
-                    clock += msg.time / max(0.1, self.speed)       # speed: live tempo factor (1.0 = as written)
-                while not self.stop_flag:
-                    wait = clock - _time.perf_counter()
-                    if wait <= 0:
-                        break
-                    if wait > 0.004:                   # coarse sleep, then spin the last ~2 ms: no timer-tick jitter (Windows sleeps in 1-15 ms steps)
-                        _time.sleep(min(wait - 0.002, 0.01))
+                    wait_file = msg.time
+                while wait_file > 0 and not self.stop_flag:
+                    with self._speed_changed:
+                        speed = self._speed
+                        before = _time.perf_counter()
+                        self._speed_changed.wait(timeout=wait_file / speed)
+                        elapsed = _time.perf_counter() - before
+                    wait_file = max(0.0, wait_file - elapsed * speed)
                 if self.stop_flag:
                     break
                 self.pos_file, self.pos_wall = cumulative, _time.perf_counter()     # the position this message sits at
