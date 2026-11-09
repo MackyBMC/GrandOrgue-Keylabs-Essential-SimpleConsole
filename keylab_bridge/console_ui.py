@@ -1,5 +1,8 @@
 """Simple and Textual terminal user interfaces."""
 
+# CHANGELOG
+# 2026-11-09  Use a consistently typed Rich escape wrapper and Textual Binding objects.
+
 import os
 import queue
 import shutil
@@ -13,10 +16,13 @@ from .midi_protocol import UNASSIGNED_PAD_COLOR, pad_screen_color
 from translations import THEME_PALETTES, contrast_text
 
 try:
-    from rich.markup import escape
+    from rich.markup import escape as _rich_escape
 except ImportError:      # the simple console does not need Rich; still keep "[" from being read as markup
-    def escape(text):
+    def escape(text: str) -> str:
         return str(text).replace("[", "\\[")
+else:
+    def escape(text: str) -> str:
+        return _rich_escape(text)
 
 
 class ConsoleUI:
@@ -190,6 +196,7 @@ class TextualConsoleUI:
             return
         try:
             from textual.app import App, ComposeResult
+            from textual.binding import Binding
             from textual.color import Color
             from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
             from textual.widgets import Footer, Header, Input, Static
@@ -280,19 +287,19 @@ class TextualConsoleUI:
             Screen.theme-contrast #command {{ border: round {_p['contrast']['accent']}; }}
             """
             BINDINGS = [
-                ("f1", "toggle_help", bridge.t("help"), True),
-                ("f2", "debug", bridge.t("debug"), True),
-                ("f3", "reconnect", bridge.t("reconnect"), True),
-                ("f4", "recover", bridge.t("recover"), True),
-                ("f5", "restart", bridge.t("restart"), True),
-                ("f6", "toggle_control_nav", "", False),
-                ("ctrl+left", "menu_left", "", False),
-                ("ctrl+right", "menu_right", "", False),
-                ("ctrl+up", "menu_up", "", False),
-                ("ctrl+down", "menu_down", "", False),
-                ("f8", "resync", bridge.t("resync"), True),
-                ("f9", "clear", bridge.t("clear"), True),
-                ("f10", "exit_bridge", bridge.t("quit"), True),
+                Binding("f1", "toggle_help", bridge.t("help"), show=True),
+                Binding("f2", "debug", bridge.t("debug"), show=True),
+                Binding("f3", "reconnect", bridge.t("reconnect"), show=True),
+                Binding("f4", "recover", bridge.t("recover"), show=True),
+                Binding("f5", "restart", bridge.t("restart"), show=True),
+                Binding("f6", "toggle_control_nav", show=False),
+                Binding("ctrl+left", "menu_left", show=False),
+                Binding("ctrl+right", "menu_right", show=False),
+                Binding("ctrl+up", "menu_up", show=False),
+                Binding("ctrl+down", "menu_down", show=False),
+                Binding("f8", "resync", bridge.t("resync"), show=True),
+                Binding("f9", "clear", bridge.t("clear"), show=True),
+                Binding("f10", "exit_bridge", bridge.t("quit"), show=True),
             ]
 
             def compose(self) -> ComposeResult:

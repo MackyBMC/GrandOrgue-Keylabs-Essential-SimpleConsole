@@ -8,6 +8,7 @@
 ### Fixed (2.0.5 work)
 - Sheet music: >> / << scroll a zoomed page by one screenful, then turn to the next page at the same zoom (<< walks back up). Zoom + / - start from the zoom on screen. Two-page view no longer opens blank.
 - Textual console: restored Rich markup escaping (the last cleanup removed it, so `[` in LCD / log text could break the console).
+- Textual console: type the Rich escape wrapper and key bindings for Pylance without changing footer visibility or shortcuts.
 - Jog / LCD sync: setters sharing a name and step are resolved to the one nearest the last position, not always the first.
 - Personal files (`last_dirs.json`, `preset_activation.txt`) are ignored by git.
 
