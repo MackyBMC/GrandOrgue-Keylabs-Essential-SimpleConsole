@@ -159,10 +159,11 @@ class TakeRecorder:
             track.append(mido.MetaMessage("end_of_track", time=0))
             mid = mido.MidiFile(type=0, ticks_per_beat=480)
             mid.tracks.append(track)
-            temporary = self.path + ".tmp"
-            mid.save(temporary)
-            os.replace(temporary, self.path)
-            self.last_save, self.dirty = time.time(), False
+            if self.path is not None:
+                temporary = self.path + ".tmp"
+                mid.save(temporary)
+                os.replace(temporary, self.path)
+                self.last_save, self.dirty = time.time(), False
         except Exception as exc:                                # recording must never disturb playing
             self.log(f"Take save failed: {exc}")
 

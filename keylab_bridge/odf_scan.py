@@ -109,7 +109,7 @@ def scan_odf(path):
         manuals.append({"number": number, "name": section.get("name", f"Manual{number:03d}"),
                         "stops": stops, "couplers": couplers, "switches": switches,
                         "divisionals": _int(section.get("numberofdivisionals"))})
-    declared = _int(organ.get("numberofmanuals"), None)
+    declared = _int(organ.get("numberofmanuals")) if organ.get("numberofmanuals") is not None else None
     if declared is not None and declared != len([m for m in manuals if m["number"] != 0]):
         warnings.append(f"[Organ] declares {declared} manuals but {len([m for m in manuals if m['number'] != 0])} "
                         "non-pedal [ManualNNN] sections were found")

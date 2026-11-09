@@ -12,11 +12,8 @@ from .organ_layout import BANKS
 from .midi_protocol import UNASSIGNED_PAD_COLOR, pad_screen_color
 from translations import THEME_PALETTES, contrast_text
 
-try:
-    from rich.markup import escape
-except ImportError:      # the simple console does not need Rich
-    def escape(text):
-        return text
+def escape(text):
+    return text
 
 
 class ConsoleUI:
@@ -280,19 +277,19 @@ class TextualConsoleUI:
             Screen.theme-contrast #command {{ border: round {_p['contrast']['accent']}; }}
             """
             BINDINGS = [
-                ("f1", "toggle_help", bridge.t("help")),
-                ("f2", "debug", bridge.t("debug")),
-                ("f3", "reconnect", bridge.t("reconnect")),
-                ("f4", "recover", bridge.t("recover")),
-                ("f5", "restart", bridge.t("restart")),
+                ("f1", "toggle_help", bridge.t("help"), True),
+                ("f2", "debug", bridge.t("debug"), True),
+                ("f3", "reconnect", bridge.t("reconnect"), True),
+                ("f4", "recover", bridge.t("recover"), True),
+                ("f5", "restart", bridge.t("restart"), True),
                 ("f6", "toggle_control_nav", "", False),
                 ("ctrl+left", "menu_left", "", False),
                 ("ctrl+right", "menu_right", "", False),
                 ("ctrl+up", "menu_up", "", False),
                 ("ctrl+down", "menu_down", "", False),
-                ("f8", "resync", bridge.t("resync")),
-                ("f9", "clear", bridge.t("clear")),
-                ("f10", "exit_bridge", bridge.t("quit")),
+                ("f8", "resync", bridge.t("resync"), True),
+                ("f9", "clear", bridge.t("clear"), True),
+                ("f10", "exit_bridge", bridge.t("quit"), True),
             ]
 
             def compose(self) -> ComposeResult:

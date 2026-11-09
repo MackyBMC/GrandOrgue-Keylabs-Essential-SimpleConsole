@@ -1159,7 +1159,8 @@ class BridgeApp:
             self.take_player.stop()
             self.midi_rec = make_midi_recorder(self.midi_dir, log=lambda t, **k: self.log(t, notify=False))
             self.midi_rec._begin(now)
-            self.midi_rec.path = self.midi_rec.path.replace("Take ", "Recording ")
+            if self.midi_rec.path is not None:
+                self.midi_rec.path = self.midi_rec.path.replace("Take ", "Recording ")
             start = self.loaded_combination_index
             if start is None:
                 start = self._combination_index_from_feedback()
@@ -1438,15 +1439,15 @@ class BridgeApp:
         sheet = getattr(self, "sheet_music_navigation_enabled", None)
         if sheet is not None and sheet.is_set() and getattr(self, "sheet_jog_handler", None) is not None:
             # Sheet music open: jog walks its file/setter list, jog press acts on it, Cat/Char swaps the list.
-            if message.type == "control_change" and message.control == CC_JOG:
+            if message.type == "control_change" and message.control == CC_JOG and self.sheet_jog_handler is not None:
                 self.sheet_jog_handler(-1 if message.value >= 64 else 1)
                 return
             if message.type == "note_on" and message.channel == 0 and message.velocity > 0:
-                if message.note == N_JOG_PRESS:
+                if message.note == N_JOG_PRESS and self.sheet_press_handler is not None:
                     self.sheet_press_handler()
                     return
                 if message.note in (N_CAT_CHAR, N_SAVE, 0x57, 0x58):
-                    if now - self.__dict__.get("_sheet_zone_at", -1.0) > 0.3:
+                    if now - self.__dict__.get("_sheet_zone_at", -1.0) > 0.3  and self.sheet_zone_handler is not None:
                         self._sheet_zone_at = now
                         self.sheet_zone_handler()
                     return
