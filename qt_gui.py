@@ -1,6 +1,10 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-09  "LCD float" button: always-on-top vintage-style LCD panel (lcd_float.py) with setter, step and drawn stops by division.
+2026-11-09  Sheet music: >> / << (and Left / Right) scroll down a zoomed page by one screenful and turn to the next page
+            (same zoom) at its end; << walks back up. Zoom + / - start from the zoom actually on screen (Fit page / Fit
+            width no longer jump to 120 %). Two-page view no longer comes up blank.
 2026-10-24  The MIDI timeline can be clicked / dragged to move to a position (playback restarts there, registration restored).
 2026-10-24  Polished look (polish.py): slim rounded scroll bars, rounded flat buttons, soft focus rings, tidy tool bars / docks.
 2026-10-24  Theme (light / dark / contrast) now also applies to the stave editor and sheet music windows, live.
@@ -333,6 +337,7 @@ class SheetMusicWindow(QDialog):
             if self._two_page_mode:
                 self._spread_first_page = 0
                 self._render_spread()
+                QTimer.singleShot(100, self._render_spread)
             else:
                 item = self.file_list.currentItem()
                 self.status_label.setText(f"{item.text() if item else ''} - {self.document.pageCount()} pages "
@@ -470,11 +475,20 @@ class SheetMusicWindow(QDialog):
             self._spread_first_page = target
             self._render_spread()
             return
+        bar = self.pdf_view.verticalScrollBar()
+        step = max(1, int(self.pdf_view.viewport().height() * 0.9))      # one screenful, a little overlap so no staff is lost
+        if delta > 0 and bar.value() < bar.maximum() - 2:                # zoomed: more of this page below
+            bar.setValue(min(bar.maximum(), bar.value() + step))
+            return
+        if delta < 0 and bar.value() > bar.minimum() + 2:
+            bar.setValue(max(bar.minimum(), bar.value() - step))
+            return
         page = self.pdf_view.pageNavigator().currentPage()
         target_page = page + delta
         if 0 <= target_page < self.document.pageCount():
-            target_y = self.document.pagePointSize(target_page).height() if delta < 0 else 0
-            self.pdf_view.pageNavigator().jump(target_page, QPointF(0, target_y))
+            self.pdf_view.pageNavigator().jump(target_page, QPointF(0, 0))
+            # same zoom on the next page: forward starts at its top, backward at its bottom
+            QTimer.singleShot(40, lambda b=bar, up=delta < 0: b.setValue(b.maximum() if up else b.minimum()))
 
     def _select_zoom_mode(self, index):
         if self._two_page_mode:
@@ -482,13 +496,30 @@ class SheetMusicWindow(QDialog):
         mode = self.zoom_box.itemData(index)
         self.pdf_view.setZoomMode(mode)
         if mode == QPdfView.ZoomMode.Custom:
-            self.pdf_view.setZoomFactor(1.0)
+            self.pdf_view.setZoomFactor(1.0)                  # "Actual size"
+
+    def _effective_zoom(self):
+        """The zoom factor really on screen (zoomFactor() is stale in the Fit modes)."""
+        view = self.pdf_view
+        mode = view.zoomMode()
+        if mode == QPdfView.ZoomMode.Custom:
+            return view.zoomFactor()
+        page = max(0, view.pageNavigator().currentPage())
+        size = self.document.pagePointSize(page)
+        if size.width() <= 0 or size.height() <= 0:
+            return 1.0
+        dpi = view.logicalDpiX() / 72.0
+        port = view.viewport()
+        fit_w = (port.width() - 8) / (size.width() * dpi)
+        fit_h = (port.height() - 8) / (size.height() * dpi)
+        return max(0.1, fit_w if mode == QPdfView.ZoomMode.FitToWidth else min(fit_w, fit_h))
 
     def _change_zoom(self, factor):
         if self._two_page_mode:
             return
+        base = self._effective_zoom()
         self.pdf_view.setZoomMode(QPdfView.ZoomMode.Custom)
-        self.pdf_view.setZoomFactor(max(0.25, min(5.0, self.pdf_view.zoomFactor() * factor)))
+        self.pdf_view.setZoomFactor(max(0.25, min(5.0, base * factor)))
         self.zoom_box.blockSignals(True)
         self.zoom_box.setCurrentIndex(2)
         self.zoom_box.blockSignals(False)
@@ -504,7 +535,10 @@ class SheetMusicWindow(QDialog):
         if checked and self.document.pageCount():
             page = self.pdf_view.pageNavigator().currentPage()
             self._spread_first_page = page - (page % 2)
-            self._render_spread()
+            self.spread_label.setMinimumSize(1, 1)
+            self.spread_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+            QTimer.singleShot(0, self._render_spread)          # the label has no size until the layout has run
+            QTimer.singleShot(150, self._render_spread)
         elif not checked and self.document.pageCount():
             self.pdf_view.pageNavigator().jump(self._spread_first_page, QPointF(0, 0))
 
@@ -1363,6 +1397,10 @@ class BridgeWindow(QMainWindow):
         self.licenses_button = QPushButton()
         self.licenses_button.clicked.connect(self.show_licenses)
         toolbar.addWidget(self.licenses_button)
+        self.lcd_float_button = QPushButton("LCD float")
+        self.lcd_float_button.setToolTip("A small always-on-top LCD with the setter and its drawn stops (right-click it for options)")
+        self.lcd_float_button.clicked.connect(self.toggle_lcd_float)
+        toolbar.addWidget(self.lcd_float_button)
         self.sheet_music_button = QPushButton("Show sheet music")
         self.sheet_music_button.clicked.connect(self.show_sheet_music)
         toolbar.addWidget(self.sheet_music_button)
@@ -2605,6 +2643,16 @@ class BridgeWindow(QMainWindow):
             QMessageBox.warning(self, "Stave editor", f"Could not open the stave editor: {exc}\n"
                                 "Install its libraries: pip install music21 verovio mido")
 
+    def toggle_lcd_float(self):
+        from lcd_float import LcdFloat
+        if getattr(self, "lcd_float", None) is None:
+            self.lcd_float = LcdFloat()
+        if self.lcd_float.isVisible():
+            self.lcd_float.hide()
+        else:
+            self.lcd_float.update_state(self.bridge.get_snapshot())
+            self.lcd_float.show()
+
     def show_sheet_music(self):
         if self.sheet_music_window is None:
             self.sheet_music_window = SheetMusicWindow(self)
@@ -2777,6 +2825,8 @@ class BridgeWindow(QMainWindow):
             metro_button.setText(f"{self._t('gui_metro')}  {snapshot['metro_bpm']}")
 
         self.lcd_text.setText(f"{snapshot['lcd'][0][:16].ljust(16)}\n{snapshot['lcd'][1][:16].ljust(16)}")
+        if getattr(self, "lcd_float", None) is not None and self.lcd_float.isVisible():
+            self.lcd_float.update_state(snapshot)
         self.bank_box_combo.blockSignals(True)
         if self.bank_box_combo.count() != len(snapshot["banks"]):
             self.bank_box_combo.clear()

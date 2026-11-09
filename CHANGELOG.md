@@ -2,6 +2,15 @@
 
 ## 2.0.4 (in development)
 
+### New (2.0.5 work)
+- LCD float: always-on-top vintage-style LCD panel (toolbar "LCD float") with the setter, step, and drawn stops by division; drag, right-click for size / opacity / compact.
+
+### Fixed (2.0.5 work)
+- Sheet music: >> / << scroll a zoomed page by one screenful, then turn to the next page at the same zoom (<< walks back up). Zoom + / - start from the zoom on screen. Two-page view no longer opens blank.
+- Textual console: restored Rich markup escaping (the last cleanup removed it, so `[` in LCD / log text could break the console).
+- Jog / LCD sync: setters sharing a name and step are resolved to the one nearest the last position, not always the first.
+- Personal files (`last_dirs.json`, `preset_activation.txt`) are ignored by git.
+
 ### New
 - Session-wide BPM target with synchronized, graded faders and shared undo / redo in the Bridge, Stave, and Piano Roll windows.
 - Playback scales each file's tempo map to the selected BPM; GrandOrgue metronome tempo feedback and tempo-step controls follow the same target.

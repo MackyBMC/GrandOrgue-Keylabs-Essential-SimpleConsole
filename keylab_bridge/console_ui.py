@@ -12,8 +12,11 @@ from .organ_layout import BANKS
 from .midi_protocol import UNASSIGNED_PAD_COLOR, pad_screen_color
 from translations import THEME_PALETTES, contrast_text
 
-def escape(text):
-    return text
+try:
+    from rich.markup import escape
+except ImportError:      # the simple console does not need Rich; still keep "[" from being read as markup
+    def escape(text):
+        return str(text).replace("[", "\\[")
 
 
 class ConsoleUI:

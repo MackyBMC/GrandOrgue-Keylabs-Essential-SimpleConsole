@@ -1,6 +1,8 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-09  Jog / LCD sync: when several setters share a name (and step number) the one nearest the last known position is
+            chosen instead of always the first, which showed as "out by one or more" on the jog and LCD.
 2026-10-17  Sheet music open: Punch (notes 0x57/0x58) and Save (0x50) now toggle the jog between the Files list and
             the Setters list, in addition to Cat/Char. Save does not send GrandOrgue Save while the score is open
             (the save function is not ready). A 0.3 s lockout stops a Punch that sends both notes toggling twice.
@@ -940,9 +942,12 @@ class BridgeApp:
         position = self.br.pos.strip()
         if position.isdigit():
             internal_id = f"{int(position):03d}"
-            for index, preset in matches:
-                if preset["internal_id"] == internal_id:
-                    return index
+            same_step = [index for index, preset in matches if preset["internal_id"] == internal_id]
+            matches = [(i, p) for i, p in matches if i in same_step] or matches
+        if len(matches) > 1:                                   # same name (and step) in several files: stay near where we were
+            anchor = self.loaded_combination_index if self.loaded_combination_index is not None else self.selected_combination_index
+            if anchor is not None:
+                return min(matches, key=lambda m: (abs(m[0] - anchor), m[0]))[0]
         return matches[0][0]
 
     def save_combination_editor(self, payload):
@@ -1704,6 +1709,8 @@ class BridgeApp:
             "internal_position": br.pos.strip(),
             "preset_activation": self.preset_activation,
             "tempo_bpm": self.tempo.bpm,
+            "active_stop_items": [(item.division, item.name) for item in ITEMS
+                                  if item.kind == "stop" and self.br.state.get(item.cc)],
             "active_stops": active_stops, "metro_bpm": br.metro_bpm, "metro_lit": br.metro_lit,
             "volumes": {key: br.vol_sent.get(key, br.vol[key]) for key in VOLS},
             "volume_active": self._volume_activity(),
