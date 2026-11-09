@@ -7,8 +7,12 @@ MIDI-settings import format; it only describes the organ and proposes a bridge-s
 The parser is deliberately tolerant: ODF files are hand-edited INI with BOMs, mixed encodings, duplicate
 keys, comments after ';' or '#', and keys with no value, which configparser rejects.
 """
+# CHANGELOG
+# 2026-11-09  Type _int's optional fallback so missing ODF references remain distinguishable from integer values.
+
 import os
 import re
+from typing import overload
 
 from .organ_layout import (CCS_PER_CHANNEL, DEFAULT_SPILL_CHANNELS, DIVISIONS, SWITCH_OFFSET, TREMULANT_SWITCH,
                            items_for_spec)
@@ -58,7 +62,15 @@ def parse_odf(text):
     return sections
 
 
-def _int(value, default=0):
+@overload
+def _int(value, default: int = 0) -> int: ...
+
+
+@overload
+def _int(value, default: None) -> int | None: ...
+
+
+def _int(value, default: int | None = 0) -> int | None:
     try:
         return int(str(value).strip())
     except (TypeError, ValueError):

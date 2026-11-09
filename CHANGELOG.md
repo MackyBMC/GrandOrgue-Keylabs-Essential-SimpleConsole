@@ -10,6 +10,7 @@
 - Organ dialog, track list and stave rows show the organ's own manual names (Great / Swell / Choir, German, French, custom); the saved mapping is unchanged.
 
 ### Fixed
+- ODF scanning types missing switch/stop references as optional integers, clearing the two Pylance argument-type diagnostics.
 - Choosing German / French / Custom manual names (or changing the manual count / pedal) now updates the stave and track list; before, only a hint changed.
 - Playhead, timeline and step-sequence length follow the playback BPM.
 
