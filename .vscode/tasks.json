@@ -8,7 +8,8 @@
   },
   "inputs": [
     { "id": "msg", "type": "promptString", "description": "Commit message" },
-    { "id": "patch", "type": "promptString", "description": "Patch file name (in this repo folder)", "default": "v2.0.8.patch" }
+    { "id": "patch", "type": "promptString", "description": "Patch file name (in this repo folder)", "default": "v2.0.8.patch" },
+    { "id": "releaseRef", "type": "promptString", "description": "Remote branch/ref to build (artifacts only; does not publish a release)", "default": "release-2.0" }
   ],
   "tasks": [
     {
@@ -64,6 +65,13 @@
       "label": "9. Git: status + commit all (message prompt)",
       "type": "shell",
       "command": "git status --short; git add -A; git commit -m '${input:msg}'",
+      "problemMatcher": []
+    },
+    {
+      "label": "10. GitHub: build release artifacts (manual; no publish)",
+      "type": "shell",
+      "command": "if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI (gh) is not installed.' }; gh auth status; if ($LASTEXITCODE -ne 0) { throw 'Sign in with gh auth login, then retry.' }; gh workflow run release.yml --ref '${input:releaseRef}'; if ($LASTEXITCODE -ne 0) { throw 'Workflow dispatch failed.' }; Write-Host 'Build queued. This manual run uploads artifacts but does not publish a GitHub Release.' -ForegroundColor Green",
+      "presentation": { "reveal": "always", "panel": "shared" },
       "problemMatcher": []
     }
   ]
