@@ -3,9 +3,14 @@
 ## 2.0.4 (in development)
 
 ### New (2.0.5 work)
+- LCD float v2: transport, recording and metronome icons with clocks; live volume knobs and swell fader (drag or wheel to set); spectrum or oscilloscope of the output sound (needs PyAudioWPatch); colour schemes plus custom colours; jog-list badge.
+- Cat/Char in the sheet music window is shown on every LCD (message plus an F / S marker).
 - LCD float: always-on-top vintage-style LCD panel (toolbar "LCD float") with the setter, step, and drawn stops by division; drag, right-click for size / opacity / compact.
 
 ### Fixed (2.0.5 work)
+- Dev deployment preserves target venvs; `-Pip` installs requirements into the deployed `.venv-build`, and `-Run` launches with that interpreter.
+- MIDI file playback no longer drifts slow or catches up in bursts: absolute schedule, stalls absorbed, output queue wakes at once. The playback log now reports the worst lateness.
+- Stave editor score follow keeps the playing bar in view and restarts cleanly after Stop.
 - Sheet music: >> / << scroll a zoomed page by one screenful, then turn to the next page at the same zoom (<< walks back up). Zoom + / - start from the zoom on screen. Two-page view no longer opens blank.
 - Textual console: restored Rich markup escaping (the last cleanup removed it, so `[` in LCD / log text could break the console).
 - Textual console: type the Rich escape wrapper and key bindings for Pylance without changing footer visibility or shortcuts.

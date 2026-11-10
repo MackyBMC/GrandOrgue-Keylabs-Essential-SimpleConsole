@@ -271,6 +271,7 @@ class Bridge:
         self.menu_tab = 0                     # index into MENU_PAGES; 0 = Live / Main
         self.menu_override = False            # Cat/Char toggle: jog focus navigation within the active tab
         self.menu_focus = ""                  # text of the GUI's jog-focused control, shown on LCD line 2
+        self.sheet_zone = ""                  # sheet music open: "FILES" or "SETTERS" = which list the jog / Cat-Char drives ("" = closed)
         self.cat_led_enabled = True           # SysEx ID 22 from go_interface.yaml; physical behavior still needs verification
         self.state = {}                       # cc -> bool, stop/coupler/tremulant state
         self.last_sent = {}                   # cc -> (state, time) of the last stop command sent
@@ -792,7 +793,10 @@ class Bridge:
         code = BANKS[self.bank]["code"]
         l1, l2 = split_lines(self.text or "GrandOrgue", TEXT_WIDTH)
         step = "->" if self.cued else (self.pos[-2:].rjust(2) if self.pos else "  ")
-        return f"{code:<2} {l1}", f"{step} {l2}"
+        first = f"{code:<2} {l1}"
+        if self.sheet_zone:                                   # which list the jog drives: F = files, S = setters (last LCD column)
+            first = first.ljust(16)[:14] + " " + self.sheet_zone[0]
+        return first, f"{step} {l2}"
 
     def tick(self, now):
         out = []

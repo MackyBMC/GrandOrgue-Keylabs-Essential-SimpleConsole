@@ -5,6 +5,11 @@ Takes folder (real-time, 120 BPM at 480 ticks per beat, so 1 tick = 1/960 s). A 
 silence, so a practice session becomes a row of separate takes. The take in progress is autosaved every
 AUTOSAVE seconds, so a crash or power cut never loses more than that.
 
+CHANGELOG
+2026-11-10  TakePlayer timing: absolute schedule (no slow-down creep); a stall (note later than 60 ms) is absorbed instead of
+            bursting out to catch up; tempo changes re-anchor the schedule; shorter GIL switch interval while playing.
+            The playback log reports the worst lateness and the number of stalls.
+
 Config (config.yaml):
     recorder:
       enabled: true
@@ -211,6 +216,8 @@ class TakePlayer:
         self.tempo_bpm = 120.0
         self.base_bpm = 120.0
         self.pos_file, self.pos_wall = 0.0, 0.0
+        self.ac_file, self.ac_wall = 0.0, 0.0          # schedule anchor: file time <-> wall clock at the current speed
+        self.max_late, self.reanchors = 0.0, 0
         self.sent = 0
         self.next_file = 0.0
         self.thread = None
@@ -232,6 +239,8 @@ class TakePlayer:
                 self.pos_file += max(0.0, min(self.next_file - self.pos_file,
                                               (now - self.pos_wall) * self._speed))
                 self.pos_wall = now
+                self.ac_file += (now - self.ac_wall) * self._speed       # re-anchor the schedule: the new speed applies from here on
+                self.ac_wall = now
             self._speed = value
             self._speed_changed.notify_all()
 
@@ -325,14 +334,42 @@ class TakePlayer:
         self.start(path, getattr(self, "on_done_cb", None), max(0.0, float(seconds)))
         return True
 
+    LATE_RESYNC_S = 0.06       # a message later than this (a stall) moves the schedule instead of bursting out to catch up
+
+    def _wait_until(self, target_file):
+        """Block until file time `target_file` is due at the current speed. Absolute schedule: a late message does not
+        delay the next ones (no slow-down creep), and a stall is absorbed (no fast catch-up burst)."""
+        import time as _time
+        while not self.stop_flag:
+            with self._speed_changed:
+                due = self.ac_wall + (target_file - self.ac_file) / self._speed
+            wait = due - _time.perf_counter()
+            if wait <= 0:
+                late = -wait
+                if late > self.max_late:
+                    self.max_late = late
+                if late > self.LATE_RESYNC_S:
+                    with self._speed_changed:
+                        self.ac_wall += late                  # keep the musical spacing from here on
+                    self.reanchors += 1
+                return
+            if wait > 0.004:                                   # coarse sleep, then spin the last ~2 ms
+                _time.sleep(min(wait - 0.002, 0.01))
+
     def _run(self, path, on_done, offset=0.0):
         import mido
         sounding, used = set(), set()
         boost = _realtime_boost()
+        old_switch = None
         try:
-            import time as _time
-            clock = _time.perf_counter()
-            self.pos_file, self.pos_wall = offset, clock
+            import sys, time as _time
+            old_switch = sys.getswitchinterval()
+            sys.setswitchinterval(0.001)                       # let this thread back in quickly when the GUI holds the interpreter
+            self.max_late, self.reanchors = 0.0, 0
+            now = _time.perf_counter()
+            self.pos_file, self.pos_wall = offset, now
+            with self._speed_changed:
+                self.ac_file, self.ac_wall = offset, now
             cumulative = 0.0
             skipping, last_marker = offset > 0, None
             for msg in list(mido.MidiFile(path)):      # parsed up front, so nothing is read from disk mid-play; msg.time = seconds at the file's own tempo
@@ -347,19 +384,13 @@ class TakePlayer:
                                 self.send(msg.copy(channel=target))
                         continue
                     skipping = False
-                    wait_file = max(0.0, cumulative - offset)
-                    self.pos_file, self.pos_wall = offset, _time.perf_counter()
+                    now = _time.perf_counter()
+                    self.pos_file, self.pos_wall = offset, now
+                    with self._speed_changed:
+                        self.ac_file, self.ac_wall = offset, now
                     if last_marker and self.on_marker:
                         self.on_marker(last_marker)
-                else:
-                    wait_file = msg.time
-                while wait_file > 0 and not self.stop_flag:
-                    with self._speed_changed:
-                        speed = self._speed
-                        before = _time.perf_counter()
-                        self._speed_changed.wait(timeout=wait_file / speed)
-                        elapsed = _time.perf_counter() - before
-                    wait_file = max(0.0, wait_file - elapsed * speed)
+                self._wait_until(cumulative)
                 if self.stop_flag:
                     break
                 self.pos_file, self.pos_wall = cumulative, _time.perf_counter()     # the position this message sits at
@@ -382,6 +413,12 @@ class TakePlayer:
             self.error = str(exc)
         finally:
             _realtime_restore(boost)
+            if old_switch is not None:
+                try:
+                    import sys
+                    sys.setswitchinterval(old_switch)
+                except Exception:
+                    pass
             for target, note in sounding:
                 self.send(mido.Message("note_off", channel=target, note=note, velocity=0))
             for target in used:

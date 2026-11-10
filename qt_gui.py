@@ -1,6 +1,8 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-10  LCD float v2: transport / recording / metronome icons + clocks, live volume knobs and swell fader (drag / wheel), spectrum / oscilloscope
+            of the output sound (audio_tap.py, optional PyAudioWPatch), colour schemes. Sheet music Cat/Char (jog list switch) is shown on every LCD: transient "Jog: FILES / Cat/Char: SETTERS" and a F / S marker in the LCD's last column.
 2026-11-09  "LCD float" button: always-on-top vintage-style LCD panel (lcd_float.py) with setter, step and drawn stops by division.
 2026-11-09  Sheet music: >> / << (and Left / Right) scroll down a zoomed page by one screenful and turn to the next page
             (same zoom) at its end; << walks back up. Zoom + / - start from the zoom actually on screen (Fit page / Fit
@@ -384,6 +386,13 @@ class SheetMusicWindow(QDialog):
         self._apply_pending()
         self.jog_zone = "setters" if self.jog_zone == "files" else "files"
         self._update_zone_titles()
+        self._publish_zone()
+
+    def _publish_zone(self, closed=False):
+        """Tell the bridge which list the jog drives, so every LCD (keyboard, window, floating) shows it."""
+        parent = self.parentWidget()
+        if isinstance(parent, BridgeWindow):
+            parent.bridge.set_sheet_zone("" if closed else self.jog_zone, announce=not closed)
 
     def jog_move(self, direction):
         """Jog wheel while the score is open: the highlight moves at once, the action waits for the jog to settle."""
@@ -637,6 +646,7 @@ class SheetMusicWindow(QDialog):
         parent = self.parentWidget()
         if isinstance(parent, BridgeWindow):
             parent.bridge.sheet_music_navigation_enabled.set()
+        self._publish_zone()
         super().showEvent(event)
 
     def hideEvent(self, event):
@@ -644,12 +654,14 @@ class SheetMusicWindow(QDialog):
         parent = self.parentWidget()
         if isinstance(parent, BridgeWindow):
             parent.bridge.sheet_music_navigation_enabled.clear()
+        self._publish_zone(closed=True)
         super().hideEvent(event)
 
     def closeEvent(self, event):
         parent = self.parentWidget()
         if isinstance(parent, BridgeWindow):
             parent.bridge.sheet_music_navigation_enabled.clear()
+        self._publish_zone(closed=True)
         event.accept()
 
 CONFIG_CHOICES = {
@@ -2646,7 +2658,7 @@ class BridgeWindow(QMainWindow):
     def toggle_lcd_float(self):
         from lcd_float import LcdFloat
         if getattr(self, "lcd_float", None) is None:
-            self.lcd_float = LcdFloat()
+            self.lcd_float = LcdFloat(volume_cb=lambda key, value: self.bridge.post_ui_event("volume", (key, value)))
         if self.lcd_float.isVisible():
             self.lcd_float.hide()
         else:

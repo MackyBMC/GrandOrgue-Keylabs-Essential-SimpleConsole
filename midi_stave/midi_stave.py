@@ -1,5 +1,7 @@
 """
 CHANGELOG
+2026-11-10  Score follow: keeps the playing bar in view while it stays on one bar, a new bar always follows, and Play after Stop follows
+            from the first bar; scrolling by hand pauses the follow for 3 s.
 2026-10-24  Words: "Words (lyrics)..." - up to six verses under the staves, for all voices or one voice (hyphens split
             syllables, _ = note without a new syllable); kept next to the file as <file>.lyrics.json.
 2026-10-24  Timeline is a seek bar: click or drag to move to a position (plays from there); "Bar N" box goes to a bar.
@@ -1716,6 +1718,7 @@ class Stave(QMainWindow):
         self.preview_layout = QVBoxLayout(self.preview_host)
         self.preview_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.preview.setWidget(self.preview_host)
+        self.preview.verticalScrollBar().valueChanged.connect(self._note_manual_scroll)
         self.preview.setStyleSheet("background: #888;")
         self.splitter.addWidget(self.preview)
         self.splitter.setSizes([260, 700])
@@ -3295,10 +3298,15 @@ class Stave(QMainWindow):
         self.time_label.setText(f" {fmt(t)} / {fmt(file_total)}  bar {bar}/{self.barmap.bar_count if self.notes else 0} ")
 
     # ---- playback indicator (fed by the bridge while a file plays)
+    def _note_manual_scroll(self, _value):
+        if not getattr(self, "_auto_scroll", False):
+            self._manual_scroll_until = time.time() + 3.0           # you took the scroll bar: leave it alone for a moment
+
     def poll_playhead(self):
         t_file = self.pos_hook() if self.pos_hook else None
         self._update_timeline(t_file)
         if t_file is None:
+            self._followed = None                                    # next Play follows from its first bar
             if self.roll.play_time is not None and time.time() > self.step_until:
                 self.roll.set_playhead(None)
                 self.highlight_bar(None)
@@ -3310,7 +3318,10 @@ class Stave(QMainWindow):
         self.highlight_bar(bar)
         if bar != getattr(self, "_followed", None):                 # the score follows the music
             self._followed = bar
+            self._manual_scroll_until = 0.0                          # a new bar always follows, even just after you scrolled
             self.scroll_to_bar(bar)
+        elif time.time() >= getattr(self, "_manual_scroll_until", 0.0):
+            self.scroll_to_bar(bar)                                  # still on this bar: keep it in view (page re-laid out, window resized...)
 
     def bar_y(self, bar):
         """(page index, y in that page widget's pixels) of a bar in the engraved score, from where its note heads sit."""
@@ -3339,7 +3350,11 @@ class Stave(QMainWindow):
         sb = self.preview.verticalScrollBar()
         view = self.preview.viewport().height()
         if always or not (sb.value() + view * 0.08 < y < sb.value() + view * 0.62):
-            sb.setValue(int(max(0, y - view * 0.25)))
+            self._auto_scroll = True
+            try:
+                sb.setValue(int(max(0, y - view * 0.25)))
+            finally:
+                self._auto_scroll = False
 
     def highlight_bar(self, bar, colour="#e02020"):
         """Colour the current bar in the engraved score (red = playing, blue = selected; only changed pages reload)."""

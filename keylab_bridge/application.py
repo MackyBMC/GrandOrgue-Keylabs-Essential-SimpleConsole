@@ -1357,7 +1357,8 @@ class BridgeApp:
             return
         self.take_player.error = ""
         self.take_player.start(path, offset=offset, on_done=lambda: self.log(
-            f"Playback finished: {self.take_player.sent} messages sent, {self.take_player.failed} not sent" + (f": {self.take_player.error}" if self.take_player.error else ""),
+            f"Playback finished: {self.take_player.sent} messages sent, {self.take_player.failed} not sent"
+            + f"; worst lateness {self.take_player.max_late * 1000:.0f} ms, {self.take_player.reanchors} stall(s) absorbed" + (f": {self.take_player.error}" if self.take_player.error else ""),
             notify=False))
         self.log(f"Playing {os.path.basename(path)} on the organ (GrandOrgue must listen on the manual channels: run "
                  "make_go_midi_import.py and import the result, once)", notify=False)
@@ -1709,6 +1710,9 @@ class BridgeApp:
             "internal_position": br.pos.strip(),
             "preset_activation": self.preset_activation,
             "tempo_bpm": self.tempo.bpm,
+            "sheet_zone": self.br.sheet_zone,
+            "transport": self._transport_state(),
+            "volume_labels": {key: VOLS[key][2] for key in VOLS},
             "active_stop_items": [(item.division, item.name) for item in ITEMS
                                   if item.kind == "stop" and self.br.state.get(item.cc)],
             "active_stops": active_stops, "metro_bpm": br.metro_bpm, "metro_lit": br.metro_lit,
@@ -1793,6 +1797,38 @@ class BridgeApp:
                 message = self.backend.Message("sysex", data=output["data"])
             if self.ports.send(port_key, message) and target == "kl":
                 self.debug_log(f"TX KL  SysEx {len(output['data'])} bytes")
+
+    def _transport_state(self):
+        """What the floating LCD shows about playing / recording (all plain values, safe to read from the GUI thread)."""
+        player, rec, br = self.take_player, self.midi_rec, self.br
+        try:
+            position = player.position() if player.active else None
+        except Exception:
+            position = None
+        started = getattr(rec, "started", None) if rec is not None else None
+        return {
+            "take_file": os.path.basename(self.take_to_play) if self.take_to_play else "",
+            "take_playing": bool(player.active),
+            "take_pos": position,                       # seconds into the file at its own tempo
+            "take_len": float(self.take_length or 0.0),
+            "speed": float(getattr(player, "speed", 1.0)),
+            "go_playing": bool(br.play_lit), "go_paused": bool(br.pause_lit),
+            "loop": bool(br.loop), "metro_on": bool(br.metro_lit),
+            "recording": rec is not None,
+            "rec_started": started, "rec_notes": int(getattr(rec, "notes", 0)) if rec is not None else 0,
+            "rec_file": os.path.basename(getattr(rec, "path", "") or "") if rec is not None else "",
+            "now": time.time(),
+        }
+
+    def set_sheet_zone(self, zone, announce=True):
+        """Sheet music window tells the LCD what the jog / Cat-Char drives: "files", "setters" or "" (window closed)."""
+        label = {"files": "FILES", "setters": "SETTERS"}.get(zone, "")
+        if label == self.br.sheet_zone:
+            return
+        self.br.sheet_zone = label
+        self.br.dirty = True
+        if label and announce:
+            self.br._detail(f"Jog: {label}", "Cat/Char: " + ("SETTERS" if label == "FILES" else "FILES"), 1.5)
 
     def _tempo_changed(self, bpm, origin):
         self.take_player.set_tempo_bpm(bpm)

@@ -1,4 +1,8 @@
-"""MIDI port lifecycle and optional KeyLab MAIN-port relay."""
+"""MIDI port lifecycle and optional KeyLab MAIN-port relay.
+
+CHANGELOG
+2026-11-10  Output worker blocks on the queue instead of polling with a lost-wakeup window (notes could be delayed 10-15 ms).
+"""
 
 import queue
 import threading
@@ -138,9 +142,11 @@ class _PortWorker:
 
             if not self.input_port and self.port is not None:
                 try:
-                    messages = self.output_queue.get_nowait()
+                    messages = self.output_queue.get(timeout=PORT_POLL_INTERVAL_S)    # wakes the moment a message is queued (a missed notify used to cost up to 10-15 ms)
                 except queue.Empty:
                     messages = None
+                if messages is None:
+                    continue
                 if messages is not None:
                     try:
                         for message in messages:
