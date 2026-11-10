@@ -1,0 +1,70 @@
+{
+  // Ctrl+Shift+P > "Tasks: Run Task" > pick one. Dev only. Paths: edit "options.env" below if they ever change.
+  "version": "2.0.0",
+  "options": {
+    "env": {
+      "LIVE": "H:\\Users\\bmche\\Documents\\GrandOrgue\\Scripts"
+    }
+  },
+  "inputs": [
+    { "id": "msg", "type": "promptString", "description": "Commit message" },
+    { "id": "patch", "type": "promptString", "description": "Patch file name (in this repo folder)", "default": "v2.0.8.patch" }
+  ],
+  "tasks": [
+    {
+      "label": "1. Apply patch (check, then apply)",
+      "type": "shell",
+      "command": "git apply --check ${input:patch}; if ($?) { git apply ${input:patch}; Write-Host 'Patch applied' -ForegroundColor Green } else { Write-Host 'Patch does NOT apply - copy the error to Claude' -ForegroundColor Red }",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "2. Deploy to live folder (preview first)",
+      "type": "shell",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ${workspaceFolder}\\tools\\deploy_dev.ps1 -Preview",
+      "problemMatcher": []
+    },
+    {
+      "label": "3. Deploy to live folder",
+      "type": "shell",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ${workspaceFolder}\\tools\\deploy_dev.ps1",
+      "problemMatcher": []
+    },
+    {
+      "label": "4. Deploy + install requirements (live venv)",
+      "type": "shell",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ${workspaceFolder}\\tools\\deploy_dev.ps1 -Pip",
+      "problemMatcher": []
+    },
+    {
+      "label": "5. Run from this repo (test)",
+      "type": "shell",
+      "command": "& \"${workspaceFolder}\\.venv-build\\Scripts\\python.exe\" keylab_go_bridge.py",
+      "problemMatcher": []
+    },
+    {
+      "label": "6. Run the live copy",
+      "type": "shell",
+      "command": "Set-Location $env:LIVE; & \"$env:LIVE\\.venv-build\\Scripts\\python.exe\" keylab_go_bridge.py",
+      "problemMatcher": []
+    },
+    {
+      "label": "7. Check live venv",
+      "type": "shell",
+      "command": "& \"$env:LIVE\\.venv-build\\Scripts\\python.exe\" \"${workspaceFolder}\\tools\\check_env.py\"",
+      "problemMatcher": []
+    },
+    {
+      "label": "8. Fix live venv (force reinstall broken libraries)",
+      "type": "shell",
+      "command": "& \"$env:LIVE\\.venv-build\\Scripts\\python.exe\" \"${workspaceFolder}\\tools\\check_env.py\" --fix",
+      "problemMatcher": []
+    },
+    {
+      "label": "9. Git: status + commit all (message prompt)",
+      "type": "shell",
+      "command": "git status --short; git add -A; git commit -m '${input:msg}'",
+      "problemMatcher": []
+    }
+  ]
+}

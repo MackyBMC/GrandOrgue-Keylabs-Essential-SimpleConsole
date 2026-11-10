@@ -4,6 +4,9 @@ volume knobs and the swell fader (they turn and slide as the real ones move; dra
 spectrum / oscilloscope of the sound going to the output (audio_tap.py). Drag the panel anywhere; right-click for options.
 
 CHANGELOG
+2026-11-10  Cue preview: with a setter cued (not yet loaded) a "NEXT" line shows its name and +/- counts, stops it will add flash with "+",
+            stops it will take away are struck through. Stops drawn / taken off by hand since the loaded setter flash with a pencil /
+            are struck through too.
 2026-11-10  Transport icons + clocks (file position, recording timer, tempo), metronome pendulum, loop, jog-list badge,
             volume knobs / swell fader (live and draggable), spectrum / oscilloscope, colour schemes + custom colours,
             section switches. Metronome pendulum is a visual aid: it keeps the metronome's BPM but is not phase-locked to GrandOrgue.
@@ -125,7 +128,8 @@ class LcdFloat(QWidget):
             self._analyse()
             moving = True
         t = self.snap.get("transport") or {}
-        if moving or t.get("recording") or t.get("metro_on") or t.get("take_playing") or self.show_["transport"]:
+        if moving or t.get("recording") or t.get("metro_on") or t.get("take_playing") or self.show_["transport"] \
+                or self.snap.get("cue_diff") or self.snap.get("manual_diff"):
             self.update()
 
     def _analyse(self):
@@ -321,13 +325,39 @@ class LcdFloat(QWidget):
             self._draw_scope(p, QRectF(x, bottom - scope_h, w, scope_h), small, ink, dim, ghost)
         p.end()
 
+    def _stop_rows(self):
+        """{division: [(name, state)]}: state "on" | "add" (the cued setter will draw it) | "remove" (it will take it in)
+        | "madd" / "mremove" (changed by hand since the loaded setter). Cue wins over the manual changes."""
+        snap = self.snap
+        cue, manual = snap.get("cue_diff"), snap.get("manual_diff")
+        rows = {}
+        for division, name in (snap.get("active_stop_items") or []):
+            rows.setdefault(division, []).append([name, "on"])
+        mark = {}
+        if cue:
+            for d, n, _k in cue.get("remove", []): mark[(d, n)] = "remove"
+            for d, n, _k in cue.get("add", []): rows.setdefault(d, []).append([n, "add"])
+        elif manual:
+            for d, n, _k in manual.get("add", []): mark[(d, n)] = "madd"
+            for d, n, _k in manual.get("remove", []): rows.setdefault(d, []).append([n, "mremove"])
+        for d, items in rows.items():
+            for item in items:
+                if item[1] == "on" and (d, item[0]) in mark:
+                    item[1] = mark[(d, item[0])]
+        return {d: [tuple(i) for i in items] for d, items in rows.items()}
+
     def _draw_stops(self, p, area, small, ink, dim):
         p.setFont(self._font(small))
         line_h = small * 1.9
-        divisions = (self.snap.get("active_stop_items") or [])
-        grouped = {}
-        for division, name in divisions:
-            grouped.setdefault(division, []).append(name)
+        cue = self.snap.get("cue_diff")
+        now = (self.snap.get("transport") or {}).get("now") or time.time()
+        flash = int(now * 2.5) % 2 == 0
+        if cue:                                                     # the intention: what pressing Jog / the pedal will do
+            p.setPen(QPen(ink if flash else dim))
+            self._text(p, area.left(), area.top(), area.width(), line_h,
+                       f"\u25b6 NEXT: {cue.get('name', '')[:24]}  (+{len(cue['add'])} / -{len(cue['remove'])})")
+            area = QRectF(area.left(), area.top() + line_h * 1.1, area.width(), area.height() - line_h * 1.1)
+        grouped = self._stop_rows()
         if not grouped:
             p.setPen(QPen(dim)); self._text(p, area.left(), area.top(), area.width(), line_h, "no stops drawn")
             return
@@ -341,11 +371,20 @@ class LcdFloat(QWidget):
             for c, (division, stops) in enumerate(row):
                 cx, cy = area.left() + c * col_w, row_y
                 p.setPen(QPen(dim)); self._text(p, cx, cy, col_w, line_h, division.upper()[:15]); cy += line_h
-                p.setPen(QPen(ink))
-                for name in stops:
+                for name, state in stops:
                     if cy + line_h > area.bottom() + 1:
-                        self._text(p, cx, cy, col_w, line_h, "..."); break
-                    self._text(p, cx, cy, col_w, line_h, "\u2611 " + name[:13]); cy += line_h
+                        p.setPen(QPen(ink)); self._text(p, cx, cy, col_w, line_h, "..."); break
+                    if state == "on":
+                        p.setPen(QPen(ink)); self._text(p, cx, cy, col_w, line_h, "\u2611 " + name[:13])
+                    elif state in ("remove", "mremove"):                  # struck through: going away / taken off by hand
+                        p.setPen(QPen(dim)); label = ("\u2612 " if state == "remove" else "\u2610 ") + name[:13]
+                        self._text(p, cx, cy, col_w, line_h, label)
+                        w = p.fontMetrics().horizontalAdvance(label)
+                        p.setPen(QPen(ink if flash else dim, 1.5)); p.drawLine(QPointF(cx, cy + line_h / 2), QPointF(cx + w, cy + line_h / 2))
+                    else:                                                  # "add" (cued) / "madd" (drawn by hand): flashing
+                        p.setPen(QPen(ink if flash else dim))
+                        self._text(p, cx, cy, col_w, line_h, ("+ " if state == "add" else "\u270e ") + name[:13])
+                    cy += line_h
                 row_h = max(row_h, cy - row_y)
             row_y += row_h + line_h * 0.3
             i += fit

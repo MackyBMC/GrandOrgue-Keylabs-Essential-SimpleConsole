@@ -1,6 +1,9 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-10  Snapshot carries the cue diff (what the cued setter would add / remove) and the manual diff (changes by hand since
+            the loaded setter) for the floating LCD. Option: the sustain pedal turns sheet music pages (tap = forward, double
+            tap = back) instead of activating the cued setter (Jog press still activates).
 2026-11-09  Jog / LCD sync: when several setters share a name (and step number) the one nearest the last known position is
             chosen instead of always the first, which showed as "out by one or more" on the jog and LCD.
 2026-10-17  Sheet music open: Punch (notes 0x57/0x58) and Save (0x50) now toggle the jog between the Files list and
@@ -165,6 +168,7 @@ class BridgeApp:
         self.snapshot_lock = threading.Lock()
         self._ui_snapshot = {}
         self.gui_hosted = False
+        self.sustain_sheet_nav = False          # option (sheet music window): the sustain pedal turns pages instead of activating the cued setter
         self.sheet_music_navigation_enabled = threading.Event()
         self.sheet_music_navigation_handler = None
         self.menu_jog_handler = None
@@ -1382,6 +1386,16 @@ class BridgeApp:
             self.recorder.feed(message, now)
         if message.type == "control_change" and message.control == CC_SUSTAIN and message.value < 64:
             self._pedal_down = False
+        if message.type == "control_change" and message.control == CC_SUSTAIN and message.value >= 64 \
+                and self.sustain_sheet_nav and self.sheet_music_navigation_enabled.is_set() \
+                and self.sheet_music_navigation_handler is not None:
+            if not self.__dict__.get("_pedal_down", False):          # sheet music open + option on: the pedal turns pages
+                self._pedal_down = True
+                last = self.__dict__.get("_pedal_nav_at", -9.0)
+                self._pedal_nav_at = now
+                # one tap = forward; a second tap within 0.5 s = back (undoes the forward step and goes one further)
+                self.sheet_music_navigation_handler(-2 if now - last < 0.5 else 1)
+            return
         if message.type == "control_change" and message.control == CC_SUSTAIN and message.value >= 64:
             if self.combinations and not self._play_locked() and self.selected_combination_index is not None:
                 if not self.__dict__.get("_pedal_down", False):   # one activation per press: swallow repeats while held
@@ -1671,6 +1685,7 @@ class BridgeApp:
         self._last_feedback_cued = br.cued
         self._sync_loaded_combination_from_feedback(load_confirmed=load_confirmed)
         active_combination_index = self.loaded_combination_index
+        cue_diff, manual_diff = self._registration_diff()
         snapshot = {
             "title": self.t("title"), "language": self.language, "language_names": dict(LANGUAGE_NAMES),
             "theme": self.theme, "message": self.message, "status": self.status_row(), "lcd": tuple(lcd_lines),
@@ -1712,6 +1727,7 @@ class BridgeApp:
             "tempo_bpm": self.tempo.bpm,
             "sheet_zone": self.br.sheet_zone,
             "transport": self._transport_state(),
+            "cue_diff": cue_diff, "manual_diff": manual_diff,
             "volume_labels": {key: VOLS[key][2] for key in VOLS},
             "active_stop_items": [(item.division, item.name) for item in ITEMS
                                   if item.kind == "stop" and self.br.state.get(item.cc)],
@@ -1797,6 +1813,28 @@ class BridgeApp:
                 message = self.backend.Message("sysex", data=output["data"])
             if self.ports.send(port_key, message) and target == "kl":
                 self.debug_log(f"TX KL  SysEx {len(output['data'])} bytes")
+
+    def _registration_diff(self):
+        """For the floating LCD: what the cued setter would change (cue) and what was changed by hand since the loaded
+        setter (manual). Each is {"add": [(division, name, kind)], "remove": [...]} or None."""
+        managed = {item.path: item for item in ITEMS}
+        current = self._current_registration_paths()
+
+        def pairs(paths):
+            return sorted(((managed[p].division, managed[p].name, managed[p].kind) for p in paths if p in managed),
+                          key=lambda x: (x[0], x[1]))
+        cue = manual = None
+        sel, loaded, combos = self.selected_combination_index, self.loaded_combination_index, self.combinations
+        if sel is not None and 0 <= sel < len(combos) and sel != loaded:
+            target = set(combos[sel]["switch_paths"]) & set(managed)
+            cue = {"name": combos[sel]["name"], "add": pairs(target - current), "remove": pairs(current - target)}
+        base = self.loaded_switch_paths
+        settle = getattr(self, "_baseline_settle_at", None)
+        if base is not None and (settle is None or time.time() >= settle):
+            add, remove = pairs(current - set(base)), pairs(set(base) - current)
+            if add or remove:
+                manual = {"add": add, "remove": remove}
+        return cue, manual
 
     def _transport_state(self):
         """What the floating LCD shows about playing / recording (all plain values, safe to read from the GUI thread)."""

@@ -1,6 +1,7 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-10  Sheet music: option "Pedal turns pages" (tap = forward, double tap = back; only the Jog press then loads a setter).
 2026-11-10  LCD float v2: transport / recording / metronome icons + clocks, live volume knobs and swell fader (drag / wheel), spectrum / oscilloscope
             of the output sound (audio_tap.py, optional PyAudioWPatch), colour schemes. Sheet music Cat/Char (jog list switch) is shown on every LCD: transient "Jog: FILES / Cat/Char: SETTERS" and a F / S marker in the LCD's last column.
 2026-11-09  "LCD float" button: always-on-top vintage-style LCD panel (lcd_float.py) with setter, step and drawn stops by division.
@@ -55,7 +56,7 @@ import threading
 import time
 
 from PySide6.QtCore import (
-    QEvent, QEasingCurve, QObject, QParallelAnimationGroup, QPoint, QPointF, QPropertyAnimation, QRect, QSize, Qt, QTimer, Signal,
+    QEvent, QEasingCurve, QObject, QParallelAnimationGroup, QPoint, QPointF, QPropertyAnimation, QRect, QSettings, QSize, Qt, QTimer, Signal,
 )
 from PySide6.QtGui import QBrush, QColor, QImage, QPen, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtPdf import QPdfDocument
@@ -167,6 +168,11 @@ class SheetMusicWindow(QDialog):
         self.zoom_in_button.clicked.connect(lambda: self._change_zoom(1.2))
         toolbar.addWidget(self.zoom_in_button)
         toolbar.addSpacing(16)
+        self.pedal_pages = QCheckBox("Pedal turns pages")
+        self.pedal_pages.setToolTip("Sustain pedal: tap = next page / screen, double tap = back. Then only the Jog press loads a setter.")
+        self.pedal_pages.setChecked(str(QSettings("KeyLabGrandOrgue", "SheetMusic").value("pedal_pages", "false")) == "true")
+        self.pedal_pages.toggled.connect(self._pedal_pages_changed)
+        toolbar.addWidget(self.pedal_pages)
         self.two_page_button = QPushButton("Two-page view")
         self.two_page_button.setCheckable(True)
         self.two_page_button.setToolTip(
@@ -387,6 +393,13 @@ class SheetMusicWindow(QDialog):
         self.jog_zone = "setters" if self.jog_zone == "files" else "files"
         self._update_zone_titles()
         self._publish_zone()
+
+    def _pedal_pages_changed(self, on=None):
+        on = self.pedal_pages.isChecked() if on is None else on
+        QSettings("KeyLabGrandOrgue", "SheetMusic").setValue("pedal_pages", "true" if on else "false")
+        parent = self.parentWidget()
+        if isinstance(parent, BridgeWindow):
+            parent.bridge.sustain_sheet_nav = bool(on)
 
     def _publish_zone(self, closed=False):
         """Tell the bridge which list the jog drives, so every LCD (keyboard, window, floating) shows it."""
@@ -647,6 +660,7 @@ class SheetMusicWindow(QDialog):
         if isinstance(parent, BridgeWindow):
             parent.bridge.sheet_music_navigation_enabled.set()
         self._publish_zone()
+        self._pedal_pages_changed()
         super().showEvent(event)
 
     def hideEvent(self, event):
@@ -2676,7 +2690,8 @@ class BridgeWindow(QMainWindow):
 
     def _navigate_sheet_music(self, direction):
         if self.sheet_music_window is not None:
-            self.sheet_music_window.navigate_score(direction)
+            for _ in range(max(1, abs(int(direction)))):          # the pedal's double tap sends -2: undo the forward step and go one back
+                self.sheet_music_window.navigate_score(1 if direction > 0 else -1)
 
     def _volume_field(self, key, slider):
         """The slider with a small status light beside it: bright green when the division this volume belongs to
