@@ -11,6 +11,15 @@ class TempoSession:
         self._undo = []
         self._redo = []
         self._listeners = []
+        self.keep_on_load = True      # opening a file keeps the BPM you set (universal tempo); False = adopt each file's own tempo
+        self.user_set = False         # true once the BPM was changed by hand: until then the first files opened set it
+        self.file_bpm = None          # written (average) tempo of the file last opened, for display
+
+    def adopt_file_tempo(self, file_bpm):
+        """A file was opened: remember its written tempo; follow it unless the BPM is a universal setting you chose."""
+        self.file_bpm = float(file_bpm)
+        if not self.keep_on_load or not self.user_set:
+            self.set_bpm(file_bpm, origin="load", record=False)
 
     @staticmethod
     def _clamp(bpm):
@@ -28,6 +37,8 @@ class TempoSession:
         bpm = self._clamp(bpm)
         if bpm == self.bpm:
             return False
+        if origin == "user":
+            self.user_set = True
         if record:
             self._undo.append(self.bpm)
             self._undo = self._undo[-100:]

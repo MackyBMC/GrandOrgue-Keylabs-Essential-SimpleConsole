@@ -2091,7 +2091,7 @@ class Stave(QMainWindow):
     def _adopt_file_tempo(self):
         """A newly opened file sets the session BPM to its own average tempo (no undo step): playback then starts as written."""
         try:
-            self.tempo_controller.set_bpm(self.barmap.average_bpm(), origin="load", record=False)
+            self.tempo_controller.adopt_file_tempo(self.barmap.average_bpm())
         except Exception:
             pass
 

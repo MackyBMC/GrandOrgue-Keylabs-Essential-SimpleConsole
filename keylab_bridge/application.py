@@ -79,7 +79,7 @@ from .console_ui import ConsoleUI
 from .midi_ports import MidiPorts
 from .organ_layout import BANKS, ITEMS, configure_layout
 from .midi_protocol import (
-    Bridge, CMD, CMD_CH, CC_JOG, CC_SUSTAIN, N_FORWARD, N_JOG_PRESS, N_LOOP, N_METRO,
+    Bridge, CMD, CMD_CH, CC_JOG, CC_SUSTAIN, TEXT_WIDTH, N_FORWARD, N_JOG_PRESS, N_LOOP, N_METRO,
     MENU_PAGES, N_CAT_CHAR, N_NAV_LEFT, N_NAV_RIGHT, N_NEXT_BANK, N_PLAY, N_PRESET, N_PREV_BANK, N_REWIND,
     N_SAVE, N_STOP, STOP_CH, VOLS, pad_rgb, screen_rgb, split_lines,
     pad_screen_color, UNASSIGNED_PAD_COLOR,
@@ -321,6 +321,9 @@ class BridgeApp:
             out += br._press("load")
             for _ in range(position):
                 later += br._press("next_step")
+        self.log(f"ACTIVATE #{index} {target['filename']} step {target['internal_id']}: from #{current} "
+                 f"{combos[current]['filename']} step {combos[current]['internal_id']}; files {'->' if position == 0 else '+'} "
+                 f"steps after load: {position}", notify=False, level="TRACE")
         self.emit(out)
         if later:
             self._steps_item = (now + self.LOAD_SETTLE_S, later)
@@ -1290,7 +1293,7 @@ class BridgeApp:
                 self.take_length = mido.MidiFile(path).length
                 from .take_recorder import midi_average_bpm
                 if not os.path.basename(path).startswith("_preview"):         # the stave editor's preview keeps the chosen BPM
-                    self.tempo.set_bpm(midi_average_bpm(path), origin="load", record=False)      # a newly chosen file plays as written
+                    self.tempo.adopt_file_tempo(midi_average_bpm(path))
                 from .take_recorder import stave_module
                 sm = stave_module("sessionmeta")
                 voices = sm.file_voices(path)
@@ -1681,6 +1684,10 @@ class BridgeApp:
             self._last_confirmed_identity = current_identity
             index = self._combination_index_from_feedback()
             if index is not None:
+                if self.loaded_combination_index is not None and index != self.loaded_combination_index:
+                    self.log(f"ORGAN SHOWS #{index} ({self.combinations[index]['filename']} step "
+                             f"{self.combinations[index]['internal_id']}) but #{self.loaded_combination_index} was loaded",
+                             notify=False, level="TRACE")
                 self.selected_combination_index = index
         self._last_feedback_cued = br.cued
         self._sync_loaded_combination_from_feedback(load_confirmed=load_confirmed)
@@ -1728,6 +1735,8 @@ class BridgeApp:
             "sheet_zone": self.br.sheet_zone,
             "transport": self._transport_state(),
             "cue_diff": cue_diff, "manual_diff": manual_diff,
+            "lcd_full": self._lcd_full(lcd_lines),
+            "file_bpm": self.tempo.file_bpm,
             "volume_labels": {key: VOLS[key][2] for key in VOLS},
             "active_stop_items": [(item.division, item.name) for item in ITEMS
                                   if item.kind == "stop" and self.br.state.get(item.cc)],
@@ -1813,6 +1822,15 @@ class BridgeApp:
                 message = self.backend.Message("sysex", data=output["data"])
             if self.ports.send(port_key, message) and target == "kl":
                 self.debug_log(f"TX KL  SysEx {len(output['data'])} bytes")
+
+    def _lcd_full(self, lcd_lines):
+        """LCD lines without the 16-character cut, for the floating LCD (it scrolls what does not fit)."""
+        br = self.br
+        text = " ".join(str(br.text or "").split())
+        if br.detail_pending or br.menu_shows or len(text) <= TEXT_WIDTH * 2:
+            return tuple(lcd_lines)
+        code = BANKS[br.bank]["code"]
+        return (f"{code:<2} {text}", f"{lcd_lines[1][:2]} step {br.pos.strip()}")
 
     def _registration_diff(self):
         """For the floating LCD: what the cued setter would change (cue) and what was changed by hand since the loaded

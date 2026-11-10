@@ -4,6 +4,8 @@ volume knobs and the swell fader (they turn and slide as the real ones move; dra
 spectrum / oscilloscope of the sound going to the output (audio_tap.py). Drag the panel anywhere; right-click for options.
 
 CHANGELOG
+2026-11-10  Long LCD text (setter names, messages) scrolls instead of being cut at 16 characters; the bridge sends the full text
+            ("lcd_full"). Cue preview and manual-change marks.
 2026-11-10  Cue preview: with a setter cued (not yet loaded) a "NEXT" line shows its name and +/- counts, stops it will add flash with "+",
             stops it will take away are struck through. Stops drawn / taken off by hand since the loaded setter flash with a pencil /
             are struck through too.
@@ -129,7 +131,7 @@ class LcdFloat(QWidget):
             moving = True
         t = self.snap.get("transport") or {}
         if moving or t.get("recording") or t.get("metro_on") or t.get("take_playing") or self.show_["transport"] \
-                or self.snap.get("cue_diff") or self.snap.get("manual_diff"):
+                or self.snap.get("cue_diff") or self.snap.get("manual_diff") or getattr(self, "_marquee_on", False):
             self.update()
 
     def _analyse(self):
@@ -146,6 +148,22 @@ class LcdFloat(QWidget):
             self.peaks = np.maximum(self.bands, self.peaks - 0.012)     # peak hold, slow fall
         else:
             self.trace = scope_trace(samples, 512)
+
+    def _marquee(self, i, text, now):
+        """16 characters of `text`: a longer text holds, scrolls left, holds at its end, then starts over (like a real LCD)."""
+        key, state = ("mq%d" % i), getattr(self, "_mq", {})
+        self._mq = state
+        if state.get(key, (None,))[0] != text:
+            state[key] = (text, now)
+        if len(text) <= 16:
+            return text
+        extra = len(text) - 16
+        t = now - state[key][1]
+        hold, rate = 1.5, 4.0                                  # seconds at each end, characters per second
+        cycle = hold * 2 + extra / rate
+        t %= cycle
+        offset = 0 if t < hold else min(extra, int((t - hold) * rate))
+        return text[offset:offset + 16]
 
     # ---------------------------------------------------------------- drawing helpers
     def _font(self, pt, bold=True):
@@ -260,7 +278,9 @@ class LcdFloat(QWidget):
         p.setFont(lcd_font)
         fm = p.fontMetrics()
         cell_w, line_h = fm.horizontalAdvance("M"), fm.height() + 2
-        lines = [str(s) for s in (snap.get("lcd") or ("", ""))[:2]] + ["", ""]
+        lines = [str(s) for s in (snap.get("lcd_full") or snap.get("lcd") or ("", ""))[:2]] + ["", ""]
+        self._marquee_on = any(len(l) > 16 for l in lines[:2])
+        lines = [self._marquee(i, l, now) for i, l in enumerate(lines[:2])] + ["", ""]
         for i in range(2):
             for col in range(16):
                 p.fillRect(QRectF(x + col * cell_w + 0.5, y + i * line_h + 1, cell_w - 1.5, line_h - 3), ghost)
