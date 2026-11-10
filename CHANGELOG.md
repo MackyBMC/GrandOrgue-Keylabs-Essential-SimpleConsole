@@ -1,13 +1,20 @@
 # Changelog
 
-## 2.0.4 (in development)
+## 2.0.8
 
-### New (2.0.5 work)
+### New
 - LCD float v2: transport, recording and metronome icons with clocks; live volume knobs and swell fader (drag or wheel to set); spectrum or oscilloscope of the output sound (needs PyAudioWPatch); colour schemes plus custom colours; jog-list badge.
 - Cat/Char in the sheet music window is shown on every LCD (message plus an F / S marker).
 - LCD float: always-on-top vintage-style LCD panel (toolbar "LCD float") with the setter, step, and drawn stops by division; drag, right-click for size / opacity / compact.
+- Sheet-music cue and file navigation can be controlled by the sustain pedal, with a clearer LCD cue preview.
+- Long LCD messages scroll so the full text can be read.
+- Session-wide BPM target with synchronized, graded faders and shared undo / redo in the Bridge, Stave, and Piano Roll windows.
+- Playback scales each file's tempo map to the selected BPM; GrandOrgue metronome tempo feedback and tempo-step controls follow the same target.
+- MIDI, karaoke MIDI, and MusicXML exports save the selected tempo; changing the session tempo alone does not rewrite files.
+- Opening a file sets the BPM to the file's own average tempo; the stave editor's play preview keeps the chosen BPM.
+- Organ dialog, track list and stave rows show the organ's own manual names (Great / Swell / Choir, German, French, custom); the saved mapping is unchanged.
 
-### Fixed (2.0.5 work)
+### Fixed
 - Dev deployment preserves target venvs; `-Pip` installs requirements into the deployed `.venv-build`, and `-Run` launches with that interpreter.
 - MIDI file playback no longer drifts slow or catches up in bursts: absolute schedule, stalls absorbed, output queue wakes at once. The playback log now reports the worst lateness.
 - Stave editor score follow keeps the playing bar in view and restarts cleanly after Stop.
@@ -16,15 +23,6 @@
 - Textual console: type the Rich escape wrapper and key bindings for Pylance without changing footer visibility or shortcuts.
 - Jog / LCD sync: setters sharing a name and step are resolved to the one nearest the last position, not always the first.
 - Personal files (`last_dirs.json`, `preset_activation.txt`) are ignored by git.
-
-### New
-- Session-wide BPM target with synchronized, graded faders and shared undo / redo in the Bridge, Stave, and Piano Roll windows.
-- Playback scales each file's tempo map to the selected BPM; GrandOrgue metronome tempo feedback and tempo-step controls follow the same target.
-- MIDI, karaoke MIDI, and MusicXML exports save the selected tempo; changing the session tempo alone does not rewrite files.
-- Opening a file sets the BPM to the file's own average tempo; the stave editor's play preview keeps the chosen BPM.
-- Organ dialog, track list and stave rows show the organ's own manual names (Great / Swell / Choir, German, French, custom); the saved mapping is unchanged.
-
-### Fixed
 - ODF scanning types missing switch/stop references as optional integers, clearing the two Pylance argument-type diagnostics.
 - Choosing German / French / Custom manual names (or changing the manual count / pedal) now updates the stave and track list; before, only a hint changed.
 - Playhead, timeline and step-sequence length follow the playback BPM.

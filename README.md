@@ -16,8 +16,8 @@ registration resources are tested.
 
 | Platform | Release | Status |
 |---|---|---|
-| Windows | [v2.0.3 stable release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.3) | Supported; tested on the maintainer's Windows 11 setup |
-| Linux | [v2.0.3 experimental package](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.3) | Build is available for evaluation; MIDI routing and hardware have not been validated on a real Linux system |
+| Windows | [v2.0.8 release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.8) | Supported; see the release notes for validation status |
+| Linux | [v2.0.8 experimental package](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.8) | Build is available for evaluation; MIDI routing and hardware have not been validated on a real Linux system |
 | macOS | None yet | Deferred until a later release and testing |
 
 The Linux archive is experimental and is included alongside the stable Windows
@@ -32,7 +32,10 @@ Windows `loopMIDI` port names and sample configuration are not Linux defaults. S
 - Uses eight faders as banked stop, coupler, and tremulant controls.
 - Controls master and division volume with the master fader and encoders.
 - Controls MIDI playback, looping, stopping, panic, saving, and the metronome.
-- Shows the active file, step, stop state, and volume feedback on the KeyLab LCD.
+- Shows the active file, step, stop state, volume, and cue/navigation context on the KeyLab LCD; long messages scroll.
+- Provides a floating LCD for transport, recording, metronome, clocks, setter/stop state, file progress, draggable volume controls, and an optional output spectrum or oscilloscope (Windows capture requires NumPy and PyAudioWPatch).
+- Shares one session tempo across the bridge, Stave Station, and Piano Roll. Playback follows the file tempo map at that tempo, and exports retain the selected tempo.
+- Follows playback through the score. In the optional sheet-music “Pedal turns pages” mode, a pedal tap advances and a double tap goes back; jog press remains the setter-load action.
 - Displays playback state and bank/stop state with KeyLab LEDs and pad colors.
 - Supports pad controls when the MIDI input can be shared or split. By default,
   GrandOrgue retains the KeyLab MAIN input.
@@ -121,7 +124,7 @@ between keyboard models or firmware versions; see
 
 ## Windows installation and setup
 
-Download the Windows installer from the [v2.0.3 stable release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.3)
+Download the Windows installer from the [v2.0.8 release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.8)
 and verify it with that release's `SHA256SUMS.txt`. The installer offers:
 
 1. **Standard:** program files are installed separately; settings and takes live in
@@ -162,7 +165,7 @@ For a controller walkthrough, see the [KeyLab first-run tutorial](docs/KEYLAB_FI
 
 ## Linux evaluation notes
 
-The [v2.0.3 release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.3)
+The [v2.0.8 release](https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole/releases/tag/v2.0.8)
 includes an experimental Linux standalone build, but it is not a tested Linux installation guide.
 GrandOrgue should be installed and working first. The bridge's `--list` option can
 show the MIDI port names visible to it; configure the port-name fragments in
@@ -229,6 +232,10 @@ Run `python keylab_go_bridge.py` from the repository. Useful options:
 If the LCD stays blank, try the other KeyLab output port with `--kl-out`. If pad
 presses do nothing, check that MAIN input sharing or splitting is configured.
 
+## What's new in 2.0.8
+
+See [What's New in 2.0.8](docs/WHATS_NEW.md) for a detailed summary of the floating LCD, playback/tempo, score-follow, pedal-navigation, and maintenance changes. The new MIDI/organ behavior still requires validation in the real application and on the target organ; see the release notes for verification status.
+
 ## What's new in Version 2
 
 Version 2 turns the bridge into a standalone desktop application:
@@ -257,7 +264,7 @@ Version 2 turns the bridge into a standalone desktop application:
 - Include Matplotlib in the Nuitka standalone build and derive installer version
   from the application's version metadata.
 
-The current `v2.0.3` release includes the new MIDI editing features and an
+The current `v2.0.8` release includes the new MIDI editing features and an
 experimental Linux package. Earlier Linux prereleases remain available in the
 release history. See [CHANGELOG.md](CHANGELOG.md) for details.
 
@@ -289,6 +296,10 @@ powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
 The Windows build uses Nuitka and Inno Setup 6. Release steps are documented in
 [docs/RELEASING.md](docs/RELEASING.md). Linux and macOS packaging status is described
 above; macOS is not currently released.
+
+In VS Code, task **10. GitHub: build release artifacts (manual; no publish)** uses
+GitHub CLI to queue a build for a pushed branch/ref. It uploads workflow artifacts
+but does not create a GitHub Release; pushing a new `v*` tag triggers publication.
 
 Bug reports, feature requests, and contributions are welcome. Include the operating
 system, GrandOrgue version, KeyLab model/firmware, MIDI port names, and steps to
