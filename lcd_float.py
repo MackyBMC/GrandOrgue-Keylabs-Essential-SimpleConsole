@@ -4,6 +4,10 @@ volume knobs and the swell fader (they turn and slide as the real ones move; dra
 spectrum / oscilloscope of the sound going to the output (audio_tap.py). Drag the panel anywhere; right-click for options.
 
 CHANGELOG
+2026-11-10  LCD grows with the window: as many columns as fit (not fixed 16), 2 / 3 / 4 lines (right-click "LCD lines": line 3 = loaded setter + step, line 4 = file / cue),
+            "Auto" text size scales with the window. Nothing is cut at a fixed length any more: file names, stop names, division names and the
+            NEXT line are only shortened (with ...) when the space really runs out; stop columns size to their longest name.
+2026-11-10  No longer sits on top of modal popups: while a dialog blocks the app the float drops its always-on-top flag so the popup (and what it hides) can be reached; restored when the dialog closes.
 2026-11-10  Long LCD text (setter names, messages) scrolls instead of being cut at 16 characters; the bridge sends the full text
             ("lcd_full"). Cue preview and manual-change marks.
 2026-11-10  Cue preview: with a setter cued (not yet loaded) a "NEXT" line shows its name and +/- counts, stops it will add flash with "+",
@@ -15,10 +19,11 @@ CHANGELOG
 2026-11-09  New (first version): LCD lines, setter name / step / cued state, drawn stops by division.
 """
 import math
+import os
 import re
 import time
 
-from PySide6.QtCore import QPoint, QPointF, QRectF, QSettings, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSettings, Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QColorDialog, QMenu, QSizeGrip, QWidget
 
@@ -55,6 +60,8 @@ class LcdFloat(QWidget):
         self.scheme = str(S("scheme", "Amber (Casio)"))
         self.custom = (str(S("custom_ink", "#ffb84d")), str(S("custom_back", "#16130c")))
         self.size_pt = int(S("font", 15))
+        self.auto_size = str(S("auto_size", "false")) == "true"
+        self.lcd_lines = int(S("lcd_lines", 3))
         self.show_ = {k: str(S("show_" + k, "true")) == "true" for k in ("transport", "stops", "volumes", "scope")}
         self.scope_mode = str(S("scope_mode", "spectrum"))
         self.audio_device = str(S("audio_device", ""))
@@ -149,21 +156,21 @@ class LcdFloat(QWidget):
         else:
             self.trace = scope_trace(samples, 512)
 
-    def _marquee(self, i, text, now):
+    def _marquee(self, i, text, now, cols=16):
         """16 characters of `text`: a longer text holds, scrolls left, holds at its end, then starts over (like a real LCD)."""
         key, state = ("mq%d" % i), getattr(self, "_mq", {})
         self._mq = state
         if state.get(key, (None,))[0] != text:
             state[key] = (text, now)
-        if len(text) <= 16:
+        if len(text) <= cols:
             return text
-        extra = len(text) - 16
+        extra = len(text) - cols
         t = now - state[key][1]
         hold, rate = 1.5, 4.0                                  # seconds at each end, characters per second
         cycle = hold * 2 + extra / rate
         t %= cycle
         offset = 0 if t < hold else min(extra, int((t - hold) * rate))
-        return text[offset:offset + 16]
+        return text[offset:offset + cols]
 
     # ---------------------------------------------------------------- drawing helpers
     def _font(self, pt, bold=True):
@@ -205,6 +212,8 @@ class LcdFloat(QWidget):
         p.drawLine(base, tip)
 
     def _text(self, p, x, y, w, h, text, align=Qt.AlignmentFlag.AlignLeft):
+        if w > 0 and p.fontMetrics().horizontalAdvance(text) > w:          # shorten only when the space really runs out
+            text = p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, int(w))
         p.drawText(QRectF(x, y, w, h), int(align | Qt.AlignmentFlag.AlignVCenter), text)
 
     # ---------------------------------------------------------------- paint
@@ -224,7 +233,7 @@ class LcdFloat(QWidget):
         now = t.get("now") or time.time()
         inner = screen.adjusted(10, 6, -10, -6)
         x, w, y = inner.left(), inner.width(), inner.top()
-        pt = self.size_pt
+        pt = max(12, min(40, int(self.width() / 40))) if self.auto_size else self.size_pt
         small = max(8, pt - 6)
 
         # --- status row: transport icons + clocks
@@ -278,18 +287,29 @@ class LcdFloat(QWidget):
         p.setFont(lcd_font)
         fm = p.fontMetrics()
         cell_w, line_h = fm.horizontalAdvance("M"), fm.height() + 2
-        lines = [str(s) for s in (snap.get("lcd_full") or snap.get("lcd") or ("", ""))[:2]] + ["", ""]
-        self._marquee_on = any(len(l) > 16 for l in lines[:2])
-        lines = [self._marquee(i, l, now) for i, l in enumerate(lines[:2])] + ["", ""]
-        for i in range(2):
-            for col in range(16):
+        zone = snap.get("sheet_zone") or ""
+        badge_w = small * 9.5 if zone else 0
+        cols = max(16, int((w - badge_w - 12) // cell_w))
+        nlines = max(2, min(4, self.lcd_lines))
+        base = [str(s) for s in (snap.get("lcd_full") or snap.get("lcd") or ("", ""))[:2]] + ["", ""]
+        combos0 = snap.get("combinations", [])
+        i0, c0 = snap.get("active_combination_index"), snap.get("combination_index")
+        loaded0 = combos0[i0]["name"] if isinstance(i0, int) and 0 <= i0 < len(combos0) else ""
+        cue0 = combos0[c0]["name"] if isinstance(c0, int) and 0 <= c0 < len(combos0) and c0 != i0 else ""
+        step0 = snap.get("internal_position", "")
+        extra = [("Setter " + loaded0 + (f"  step {step0}" if step0 else "")) if loaded0 else "",
+                 ("Next " + cue0) if cue0 else ((("File " + os.path.basename(str(t.get("take_file")))) if t.get("take_file") else ""))]
+        lines = (base[:2] + extra)[:nlines]
+        self._marquee_on = any(len(l) > cols for l in lines)
+        lines = [self._marquee(i, l, now, cols) for i, l in enumerate(lines)]
+        for i in range(nlines):
+            for col in range(cols):
                 p.fillRect(QRectF(x + col * cell_w + 0.5, y + i * line_h + 1, cell_w - 1.5, line_h - 3), ghost)
             p.setPen(QPen(ink))
-            for col, ch in enumerate(lines[i][:16].ljust(16)):
+            for col, ch in enumerate(lines[i][:cols].ljust(cols)):
                 if ch != " ":
                     p.drawText(QRectF(x + col * cell_w, y + i * line_h, cell_w, line_h), int(Qt.AlignmentFlag.AlignCenter), ch)
-        zone = snap.get("sheet_zone") or ""
-        bx = x + 16 * cell_w + 12
+        bx = x + cols * cell_w + 12
         if zone:
             p.setFont(self._font(small))
             p.setPen(QPen(ink)); p.setBrush(QBrush(ink))
@@ -298,7 +318,7 @@ class LcdFloat(QWidget):
             self._text(p, bx, y + 2, min(x + w - bx, small * 7.5), small * 1.9, "JOG:" + zone[:5], Qt.AlignmentFlag.AlignHCenter)
             p.setPen(QPen(dim)); p.setBrush(Qt.BrushStyle.NoBrush)
             self._text(p, bx, y + 2 + small * 2.0, small * 9, small * 1.8, "Cat/Char ⇅", Qt.AlignmentFlag.AlignLeft)
-        y += 2 * line_h + 6
+        y += nlines * line_h + 6
 
         # --- setter / file progress rows
         p.setFont(self._font(small))
@@ -308,16 +328,19 @@ class LcdFloat(QWidget):
         cue = combos[cued_i]["name"] if isinstance(cued_i, int) and 0 <= cued_i < len(combos) and cued_i != idx else ""
         step = snap.get("internal_position", "")
         row = small * 1.9
-        p.setPen(QPen(ink)); self._text(p, x, y, w, row, (loaded or "-") + (f"   step {step}" if step else ""))
-        y += row
-        if cue:
+        if nlines < 3:
+            p.setPen(QPen(ink)); self._text(p, x, y, w, row, (loaded or "-") + (f"   step {step}" if step else ""))
+            y += row
+        if cue and nlines < 4:
             p.setPen(QPen(mix(ink, QColor("#ffffff"), 0.4))); self._text(p, x, y, w, row, "cued: " + cue); y += row
         if self.show_["transport"] and t.get("take_file"):
             speed = max(0.05, t.get("speed") or 1.0)
             pos = (t.get("take_pos") or 0.0) / speed
             length = (t.get("take_len") or 0.0) / speed
-            p.setPen(QPen(dim)); self._text(p, x, y, w * 0.62, row, "♫ " + t["take_file"][:34])
-            p.setPen(QPen(ink)); self._text(p, x + w * 0.62, y, w * 0.38, row, f"{fmt_clock(pos)} / {fmt_clock(length)}", Qt.AlignmentFlag.AlignRight)
+            clock = f"{fmt_clock(pos)} / {fmt_clock(length)}"
+            cw = p.fontMetrics().horizontalAdvance(clock) + 12
+            p.setPen(QPen(dim)); self._text(p, x, y, w - cw, row, "♫ " + t["take_file"])
+            p.setPen(QPen(ink)); self._text(p, x + w - cw, y, cw, row, clock, Qt.AlignmentFlag.AlignRight)
             y += row
             bar = QRectF(x, y, w, 4)
             p.setPen(Qt.PenStyle.NoPen); p.setBrush(ghost); p.drawRect(bar)
@@ -375,39 +398,46 @@ class LcdFloat(QWidget):
         if cue:                                                     # the intention: what pressing Jog / the pedal will do
             p.setPen(QPen(ink if flash else dim))
             self._text(p, area.left(), area.top(), area.width(), line_h,
-                       f"\u25b6 NEXT: {cue.get('name', '')[:24]}  (+{len(cue['add'])} / -{len(cue['remove'])})")
+                       f"\u25b6 NEXT: {cue.get('name', '')}  (+{len(cue['add'])} / -{len(cue['remove'])})")
             area = QRectF(area.left(), area.top() + line_h * 1.1, area.width(), area.height() - line_h * 1.1)
         grouped = self._stop_rows()
         if not grouped:
             p.setPen(QPen(dim)); self._text(p, area.left(), area.top(), area.width(), line_h, "no stops drawn")
             return
-        col_w = p.fontMetrics().horizontalAdvance("M") * 16
-        fit = max(1, int(area.width() // col_w))
+        fm = p.fontMetrics()
+        gap = fm.horizontalAdvance("M") * 2
         items = list(grouped.items())
+        widths = [min(area.width(), max([fm.horizontalAdvance(d.upper())] + [fm.horizontalAdvance("\u2611 " + n) for n, _s in st])) for d, st in items]
         row_y, i = area.top(), 0
         while i < len(items) and row_y + line_h * 2 <= area.bottom() + 1:      # divisions flow into columns, then on to the next row
-            row = items[i:i + fit]
-            row_h = 0.0
+            n, used = 0, 0.0
+            while i + n < len(items) and (n == 0 or used + widths[i + n] <= area.width()):
+                used += widths[i + n] + gap
+                n += 1
+            row = items[i:i + n]
+            row_h, cx0 = 0.0, area.left()
             for c, (division, stops) in enumerate(row):
-                cx, cy = area.left() + c * col_w, row_y
-                p.setPen(QPen(dim)); self._text(p, cx, cy, col_w, line_h, division.upper()[:15]); cy += line_h
+                col_w = widths[i + c]
+                cx, cy = cx0, row_y
+                p.setPen(QPen(dim)); self._text(p, cx, cy, col_w, line_h, division.upper()); cy += line_h
                 for name, state in stops:
                     if cy + line_h > area.bottom() + 1:
                         p.setPen(QPen(ink)); self._text(p, cx, cy, col_w, line_h, "..."); break
                     if state == "on":
-                        p.setPen(QPen(ink)); self._text(p, cx, cy, col_w, line_h, "\u2611 " + name[:13])
+                        p.setPen(QPen(ink)); self._text(p, cx, cy, col_w, line_h, "\u2611 " + name)
                     elif state in ("remove", "mremove"):                  # struck through: going away / taken off by hand
-                        p.setPen(QPen(dim)); label = ("\u2612 " if state == "remove" else "\u2610 ") + name[:13]
+                        p.setPen(QPen(dim)); label = ("\u2612 " if state == "remove" else "\u2610 ") + name
                         self._text(p, cx, cy, col_w, line_h, label)
-                        w = p.fontMetrics().horizontalAdvance(label)
-                        p.setPen(QPen(ink if flash else dim, 1.5)); p.drawLine(QPointF(cx, cy + line_h / 2), QPointF(cx + w, cy + line_h / 2))
+                        lw = min(col_w, fm.horizontalAdvance(label))
+                        p.setPen(QPen(ink if flash else dim, 1.5)); p.drawLine(QPointF(cx, cy + line_h / 2), QPointF(cx + lw, cy + line_h / 2))
                     else:                                                  # "add" (cued) / "madd" (drawn by hand): flashing
                         p.setPen(QPen(ink if flash else dim))
-                        self._text(p, cx, cy, col_w, line_h, ("+ " if state == "add" else "\u270e ") + name[:13])
+                        self._text(p, cx, cy, col_w, line_h, ("+ " if state == "add" else "\u270e ") + name)
                     cy += line_h
                 row_h = max(row_h, cy - row_y)
+                cx0 += col_w + gap
             row_y += row_h + line_h * 0.3
-            i += fit
+            i += n
         if i < len(items):
             p.setPen(QPen(dim)); self._text(p, area.right() - 70, area.bottom() - line_h, 70, line_h, f"+{len(items) - i} more", Qt.AlignmentFlag.AlignRight)
 
@@ -540,6 +570,17 @@ class LcdFloat(QWidget):
             self.volume_cb(key, int(round(value)))
 
     # ---------------------------------------------------------------- options
+    def event(self, event):
+        t = event.type()
+        if t in (QEvent.Type.WindowBlocked, QEvent.Type.WindowUnblocked):
+            top = t == QEvent.Type.WindowUnblocked
+            if self.isVisible() and bool(self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint) != top:
+                geo = self.geometry()
+                self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, top)
+                self.show()
+                self.setGeometry(geo)
+        return super().event(event)
+
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         show = menu.addMenu("Show")
@@ -568,7 +609,13 @@ class LcdFloat(QWidget):
         colours.addSeparator()
         colours.addAction("Custom text colour...").triggered.connect(lambda: self._pick(0))
         colours.addAction("Custom background...").triggered.connect(lambda: self._pick(1))
+        lines_menu = menu.addMenu("LCD lines")
+        for n in (2, 3, 4):
+            a = lines_menu.addAction(f"{n} lines"); a.setCheckable(True); a.setChecked(self.lcd_lines == n)
+            a.triggered.connect(lambda _=False, v=n: self._set_lines(v))
         sizes = menu.addMenu("Text size")
+        a = sizes.addAction("Auto (scales with window)"); a.setCheckable(True); a.setChecked(self.auto_size)
+        a.triggered.connect(lambda on: self._set_auto(on))
         for pt in (12, 15, 18, 22, 28):
             a = sizes.addAction(f"{pt} pt"); a.triggered.connect(lambda _=False, v=pt: self._set_size(v))
         ops = menu.addMenu("Opacity")
@@ -615,7 +662,19 @@ class LcdFloat(QWidget):
 
     def _set_size(self, pt):
         self.size_pt = pt
+        self.auto_size = False
+        self.settings.setValue("auto_size", "false")
         self.settings.setValue("font", pt)
+        self.update()
+
+    def _set_lines(self, n):
+        self.lcd_lines = n
+        self.settings.setValue("lcd_lines", n)
+        self.update()
+
+    def _set_auto(self, on):
+        self.auto_size = bool(on)
+        self.settings.setValue("auto_size", "true" if on else "false")
         self.update()
 
     def _set_opacity(self, value):

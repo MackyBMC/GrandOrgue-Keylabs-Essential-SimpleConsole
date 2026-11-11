@@ -208,6 +208,7 @@ class TakePlayer:
         the per-file remap sidecar. on_marker(text): called from the player thread at each MIDI marker (setter change)."""
         self.send, self.channel, self.on_marker = send, channel, on_marker
         self.chmap = {}
+        self.low_notes, self.low_chans, self.low_sounding, self.pedal_ch = set(), set(), set(), 1
         self.fanout = {}
         self.failed = 0
         import threading
@@ -265,6 +266,15 @@ class TakePlayer:
         except Exception:
             self.chmap = {}
         try:
+            sm = stave_module('sessionmeta')
+            chans = sm.pedal_low(path)
+            self.low_notes = sm.lowest_notes(path, chans) if chans else set()
+            self.low_chans = chans
+            self.pedal_ch = [c - 1 for n, _p, c in sm.manual_channels() if n == "Pedal"][0]
+        except Exception:
+            self.low_notes, self.low_chans = set(), set()
+        self.low_sounding = set()
+        try:
             self.fanout = {n: ch - 1 for n, _p, ch in stave_module('sessionmeta').manual_channels()}
         except Exception:
             self.fanout = {}
@@ -305,7 +315,19 @@ class TakePlayer:
             return self.pos_file + max(0.0, min(self.next_file - self.pos_file,
                                                 (time.perf_counter() - self.pos_wall) * self._speed))
 
-    def _targets(self, msg):
+    def _targets(self, msg, when=None):
+        if when is not None and self.low_chans and msg.type in ("note_on", "note_off") and msg.channel in self.low_chans:
+            key = (msg.channel, msg.note)
+            if msg.type == "note_on" and msg.velocity > 0:
+                if (round(when, 4), msg.channel, msg.note) in self.low_notes:
+                    self.low_sounding.add(key)
+                    return [self.pedal_ch]
+            elif key in self.low_sounding:
+                self.low_sounding.discard(key)
+                return [self.pedal_ch]
+        return self._targets_plain(msg)
+
+    def _targets_plain(self, msg):
         """Channels a message is sent on. A plain channel-1 keyboard recording is fanned out the way the KeyLab's own
         key ranges do it (pedal 36-53, solo 54-96, Hauptwerk + Schwellwerk everything), onto the manual channels
         GrandOrgue listens to for files; otherwise the file's own channel, after the per-file remap."""
@@ -398,7 +420,7 @@ class TakePlayer:
                     if self.on_marker:
                         self.on_marker(msg.text)
                 elif msg.type in ("note_on", "note_off", "control_change"):
-                    for target in self._targets(msg):
+                    for target in self._targets(msg, cumulative):
                         out = msg.copy(channel=target)
                         used.add(target)
                         if out.type == "note_on" and out.velocity > 0:

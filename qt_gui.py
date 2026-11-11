@@ -1,6 +1,8 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-10  Channels dialog: per channel "Lowest note of each chord on Pedal" (the channel keeps its chosen manual registration; its bass notes go to the Pedal channel).
+2026-11-10  Channels dialog: mini piano roll, note range and name per channel; "Save with file" option (off = this run only); overwrite warning.
 2026-11-10  Sheet music: option "Pedal turns pages" (tap = forward, double tap = back; only the Jog press then loads a setter).
 2026-11-10  LCD float v2: transport / recording / metronome icons + clocks, live volume knobs and swell fader (drag / wheel), spectrum / oscilloscope
             of the output sound (audio_tap.py, optional PyAudioWPatch), colour schemes. Sheet music Cat/Char (jog list switch) is shown on every LCD: transient "Jog: FILES / Cat/Char: SETTERS" and a F / S marker in the LCD's last column.
@@ -1324,6 +1326,28 @@ class ActiveTickDelegate(QStyledItemDelegate):
         painter.restore()
 
 
+class _MiniRoll(QWidget):
+    """Tiny piano roll: notes of one MIDI channel, time across, pitch up."""
+
+    def __init__(self, notes, lo, hi, parent=None):
+        super().__init__(parent)
+        self.notes, self.lo, self.hi = notes, lo, hi
+        self.setMinimumSize(260, 48)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        p.fillRect(self.rect(), self.palette().base())
+        span = max(1, self.hi - self.lo)
+        h, w = self.height() - 4, self.width() - 4
+        p.setPen(QPen(self.palette().highlight().color(), 2))
+        for frac, note in self.notes:
+            x = 2 + int(frac * (w - 1))
+            y = 2 + int((1 - (note - self.lo) / span) * (h - 1))
+            p.drawPoint(x, y)
+        p.end()
+
+
 class BridgeWindow(QMainWindow):
     sheet_music_navigation_requested = Signal(int)
     sheet_jog_requested = Signal(int)
@@ -2415,28 +2439,66 @@ class BridgeWindow(QMainWindow):
         if not channels:
             QMessageBox.information(self, "Channels", "The file has no notes.")
             return
+        info = sessionmeta.channel_notes(path)
         current = sessionmeta.channel_map(path)
+        low_now = sessionmeta.pedal_low(path)
+        sidecar = path + ".chmap.json"
         dialog = QDialog(self)
         dialog.setWindowTitle("Channels - " + os.path.basename(path))
-        form = QFormLayout(dialog)
-        spins = {}
-        from PySide6.QtWidgets import QComboBox
+        outer = QVBoxLayout(dialog)
         manuals = sessionmeta.manual_channels()
-        for ch in channels:
+        note_name = lambda n: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][n % 12] + str(n // 12 - 1)
+        boxes, lows = {}, {}
+        grid = QGridLayout()
+        for row, ch in enumerate(channels):
+            d = info.get(ch, {"notes": [], "lo": 0, "hi": 0, "count": 0, "name": ""})
+            roll = _MiniRoll(d["notes"], d["lo"], d["hi"])
+            text = QLabel(f"<b>Channel {ch + 1}</b> {d['name']}<br>{note_name(d['lo'])} - {note_name(d['hi'])}, {d['count']} notes")
             box = QComboBox()
             box.addItem("as in the file", ch)
-            for name, _path, mch in manuals:
+            for name, _p, mch in manuals:
                 box.addItem(f"{name} (channel {mch})", mch - 1)
             index = box.findData(current.get(ch, ch))
             box.setCurrentIndex(index if index >= 0 else 0)
-            spins[ch] = box
-            form.addRow(f"File channel {ch + 1} plays on", box)
+            boxes[ch] = box
+            low = QCheckBox("Lowest note of each chord on Pedal")
+            low.setChecked(ch in low_now)
+            lows[ch] = low
+            grid.addWidget(low, row, 3)
+            grid.addWidget(text, row, 0)
+            grid.addWidget(roll, row, 1)
+            grid.addWidget(box, row, 2)
+        grid.setColumnStretch(1, 1)
+        outer.addLayout(grid)
+        save_box = QCheckBox("Save with file (writes " + os.path.basename(sidecar) + ")")
+        try:
+            save_box.setChecked(QSettings("KeyLabGrandOrgue", "Channels").value("save_with_file", True, type=bool))
+        except Exception:
+            save_box.setChecked(True)
+        outer.addWidget(save_box)
+        outer.addWidget(QLabel("Off: the mapping applies to this run only; the file's saved mapping is left alone."))
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
-        form.addRow(buttons)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            sessionmeta.save_channel_map(path, {ch: box.currentData() for ch, box in spins.items()})
+        outer.addWidget(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        mapping = {ch: box.currentData() for ch, box in boxes.items()}
+        low_set = {ch for ch, c in lows.items() if c.isChecked()}
+        try:
+            QSettings("KeyLabGrandOrgue", "Channels").setValue("save_with_file", save_box.isChecked())
+        except Exception:
+            pass
+        if save_box.isChecked():
+            if os.path.isfile(sidecar) and (sessionmeta.sidecar_map(path) != {k: v for k, v in mapping.items() if k != v} or sessionmeta.sidecar_pedal_low(path) != low_set):
+                if QMessageBox.question(self, "Overwrite mapping", "This file already has a saved channel mapping. Overwrite it?") != QMessageBox.StandardButton.Yes:
+                    return
+            sessionmeta.set_session_map(path, None)
+            sessionmeta.set_session_pedal(path, None)
+            sessionmeta.save_channel_map(path, mapping, low_set)
+        else:
+            sessionmeta.set_session_map(path, mapping)
+            sessionmeta.set_session_pedal(path, low_set)
 
     def _save_midi_as(self):
         current = getattr(self.bridge, "take_to_play", None)

@@ -104,23 +104,107 @@ def load_combos(scripts_dir=None):
         return []
 
 
+SESSION_PEDAL = {}
+SESSION_MAPS = {}   # {file path: {src 0-15: target 0-15}} applied this run without touching the file's sidecar
+
+
+def set_session_map(path, mapping):
+    """Use a channel map for this run only (None clears it)."""
+    if mapping is None:
+        SESSION_MAPS.pop(path, None)
+    else:
+        SESSION_MAPS[path] = {k: v for k, v in mapping.items() if k != v}
+
+
 def channel_map(path):
+    if path in SESSION_MAPS:
+        return dict(SESSION_MAPS[path])
+    return sidecar_map(path)
+
+
+def _sidecar(path):
     try:
         with open(path + ".chmap.json", encoding="utf-8") as handle:
-            return {int(k) - 1: int(v) - 1 for k, v in json.load(handle).items()}
+            return json.load(handle)
     except (OSError, ValueError):
         return {}
 
 
-def save_channel_map(path, mapping):
-    """mapping: {source 0-15: target 0-15}; identity entries are dropped."""
+def sidecar_map(path):
+    try:
+        return {int(k) - 1: int(v) - 1 for k, v in _sidecar(path).items() if k != "pedal_low"}
+    except (TypeError, ValueError):
+        return {}
+
+
+def sidecar_pedal_low(path):
+    try:
+        return {int(c) - 1 for c in _sidecar(path).get("pedal_low", [])}
+    except (TypeError, ValueError):
+        return set()
+
+
+def pedal_low(path):
+    """Source channels (0-15) whose lowest note of each chord is played on the Pedal channel instead."""
+    if path in SESSION_PEDAL:
+        return set(SESSION_PEDAL[path])
+    return sidecar_pedal_low(path)
+
+
+def set_session_pedal(path, channels):
+    if channels is None:
+        SESSION_PEDAL.pop(path, None)
+    else:
+        SESSION_PEDAL[path] = set(channels)
+
+
+def lowest_notes(path, channels):
+    """{(time rounded to 4 dp, channel, note)} - the lowest note of every simultaneous onset on the given channels."""
+    import mido
+    chords, t = {}, 0.0
+    try:
+        for m in mido.MidiFile(path):
+            t += m.time
+            if m.type == "note_on" and m.velocity > 0 and m.channel in channels:
+                chords.setdefault((round(t, 4), m.channel), []).append(m.note)
+    except Exception:
+        return set()
+    return {(k[0], k[1], min(v)) for k, v in chords.items()}
+
+
+def save_channel_map(path, mapping, low=()):
+    """mapping: {source 0-15: target 0-15}; identity entries are dropped. low: source channels whose lowest notes go to Pedal."""
     data = {str(k + 1): v + 1 for k, v in mapping.items() if k != v}
+    if low:
+        data["pedal_low"] = sorted(c + 1 for c in low)
     sidecar = path + ".chmap.json"
     if data:
         with open(sidecar, "w", encoding="utf-8") as handle:
             json.dump(data, handle)
     elif os.path.isfile(sidecar):
         os.remove(sidecar)
+
+
+def channel_notes(path):
+    """{channel 0-15: {"notes": [(fraction 0-1 of file, note)], "lo", "hi", "count", "name"}} for the mini piano roll."""
+    import mido
+    raw, names, total = {}, {}, 0.0
+    try:
+        mid = mido.MidiFile(path)
+        for track in mid.tracks:
+            tname = next((m.name for m in track if m.type == "track_name"), "")
+            t = 0
+            for m in track:
+                t += m.time
+                if m.type == "note_on" and m.velocity > 0:
+                    raw.setdefault(m.channel, []).append((t, m.note))
+                    names.setdefault(m.channel, tname)
+            total = max(total, t)
+    except Exception:
+        return {}
+    total = total or 1
+    return {ch: {"notes": [(t / total, n) for t, n in v], "lo": min(n for _t, n in v), "hi": max(n for _t, n in v),
+                 "count": len(v), "name": names.get(ch, "")} for ch, v in raw.items()}
 
 
 def channels_in(path):
