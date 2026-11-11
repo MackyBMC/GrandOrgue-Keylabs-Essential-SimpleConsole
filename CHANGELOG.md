@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Stave builder follows engraving practice (Gould, "Behind Bars"): notes are split into tied pieces so none crosses the middle of the bar (4/4 half note on beat 2 is two tied quarters) or a beat it may not cross; 6/8 and 12/8 keep their dotted beats; rests follow the same boundaries (no dotted rests in simple time, none across the half bar).
+- Chromatic notes are spelled by direction (C C# D D# E, then E Eb D Db) instead of one fixed sharp/flat table.
+- Slurs no longer run over chords or notes longer than two beats, cover at most 8 beats, and end on the last piece of a tied note.
+- Not changed: spacing, accidental stacking, stems, beams, voice collisions and system justification are Verovio's own and already follow these rules.
+
 ## 2.0.8
 
 ### New

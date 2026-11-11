@@ -3,6 +3,10 @@
 The key idea is the BAR MAP: a list of bar-start times in seconds. Everything inside a bar is placed by where it
 falls between the two bar lines, so a bar played slowly or in a rush still comes out as a tidy bar. Move a bar line and
 only the notes around it change. A bar may have its own length (pick-up bars, 3/4 -> 4/4 changes) and its own grid.
+
+CHANGELOG
+2026-11-11  slur_phrases: no slur starts on or runs through a chord or a note over two beats, and none covers more than 8 beats
+            (held organ notes are ties; bar-long slurs over sustained chords were unreadable).
 """
 
 import bisect
@@ -593,11 +597,16 @@ def melodic_line(stave_notes, legato_gap=Fraction(1, 2)):
     return line
 
 
-def slur_phrases(line, threshold=0.9, min_events=3, max_events=8):
-    """Runs of joined-up notes -> lists of event indexes to slur."""
+def slur_phrases(line, threshold=0.9, min_events=3, max_events=8, max_beats=8):
+    """Runs of joined-up notes -> lists of event indexes to slur. A slur is for a moving line: it never starts on or runs
+    through a chord or a note longer than two beats (held organ notes are joined by ties, not slurs), may end on a long
+    note, and covers at most `max_beats` quarters."""
+    def short_single(ev):
+        return len(ev[2]) == 1 and ev[1] - ev[0] <= 2
     phrases, run = [], [0] if line else []
     for i in range(len(line) - 1):
-        joined = line[i][4] >= threshold and line[i + 1][0] - line[i][1] <= 0
+        joined = (line[i][4] >= threshold and line[i + 1][0] - line[i][1] <= 0 and short_single(line[i]) and len(line[i + 1][2]) == 1
+                  and line[i + 1][1] - line[run[0]][0] <= max_beats)
         if joined and len(run) < max_events:
             run.append(i + 1)
         else:

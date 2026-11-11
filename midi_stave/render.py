@@ -1,4 +1,12 @@
-"""Quantised notes -> MusicXML (music21) -> pages of SVG (Verovio) -> PDF (Qt, done by the GUI)."""
+"""Quantised notes -> MusicXML (music21) -> pages of SVG (Verovio) -> PDF (Qt, done by the GUI).
+
+CHANGELOG
+2026-11-11  Engraving rules (Gould, "Behind Bars"): notes are split into tied pieces so no note crosses the middle of the bar
+            or a beat it may not cross (4/4 half note on beat 2 -> two tied quarters; 6/8 shows its two dotted-quarter beats);
+            rests follow the same boundaries (no dotted rests in simple time, none across the half bar); chromatic notes are
+            spelled by direction (sharps rising, flats falling) instead of one fixed table; slurs end on the last tied piece.
+            adv keys "meter_split" and "ctx_spelling" (both default on) switch the two note-level rules off.
+"""
 
 from fractions import Fraction
 
@@ -38,10 +46,112 @@ def detect_key(qnotes, transpose=0):
     return s.analyze("key")
 
 
-def fill_rests(container, length, hidden=False):
+NOTATABLE = {Fraction(n, d) for n, d in ((6, 1), (4, 1), (3, 1), (2, 1), (3, 2), (1, 1), (3, 4), (1, 2), (3, 8), (1, 4),
+                                          (3, 16), (1, 8), (1, 16))}          # lengths one note head can show (plain or dotted), in quarters
+
+
+def meter_info(label, bar_len):
+    """(beat, mid, compound) for a time-signature label such as "4/4" or "6/8": beat length in quarters, the half-bar point
+    (None when the bar has no half: 3/4, 6/8, 5/4 ...) and whether the metre is compound (dotted beats)."""
+    bar_len = Fraction(bar_len).limit_denominator(96)
+    try:
+        num, den = (int(x) for x in str(label).split("/"))
+    except Exception:
+        num, den = max(1, int(bar_len)), 4
+    compound = den >= 8 and num % 3 == 0 and num >= 6
+    beat = Fraction(12, den) if compound else Fraction(4, den)
+    beats = bar_len / beat if beat else 0
+    mid = bar_len / 2 if (beats >= 4 and beats % 2 == 0) else None
+    return beat, mid, compound
+
+
+def _bounds(bar_len, beat):
+    out, k = [], 1
+    while k * beat < bar_len:
+        out.append(k * beat)
+        k += 1
+    return out
+
+
+def _cut_point(a, b, beat, mid, compound, bounds):
+    """Where the note a..b (quarters from the bar line) must be cut so the metre stays readable, or None if it can stand."""
+    inside = [p for p in bounds if a < p < b]
+    length = b - a
+
+    def prefix():                                       # the longest single note value from a that ends on a boundary
+        return next((p for p in sorted(inside, reverse=True) if (p - a) in NOTATABLE), None)
+    if compound:                                        # 6/8, 9/8, 12/8: dotted beats stay visible
+        if not inside:
+            return None
+        if mid is not None and a < mid < b and a != 0:
+            return mid
+        if a % beat == 0 and length % beat == 0 and length in NOTATABLE:
+            return None
+        return inside[0]
+    if a == 0 or (mid is not None and a == mid):        # a note that starts the bar (or its second half) may run on from there
+        if length in NOTATABLE:
+            return None
+        if mid is not None and a < mid < b and (mid - a) in NOTATABLE:
+            return mid
+        return prefix() or (inside[0] if inside else None)
+    if mid is not None and a < mid < b:                 # the imaginary barline in the middle of the bar
+        return mid
+    if a % beat == 0:
+        return None if length in NOTATABLE else (prefix() or (inside[0] if inside else None))
+    if not inside:
+        return None
+    if length <= beat and length in NOTATABLE:          # a short syncopated note may cross one beat
+        return None
+    return inside[0]
+
+
+def split_for_meter(a, b, bar_len, beat, mid, compound):
+    """Note a..b inside one bar (quarters from the bar line) -> [(a, b), ...] tied pieces that obey the metre."""
+    a, b = Fraction(a).limit_denominator(96), Fraction(b).limit_denominator(96)
+    if a >= b or a.denominator % 3 == 0 or b.denominator % 3 == 0:      # tuplets: left to the notation library
+        return [(a, b)]
+    bounds = _bounds(Fraction(bar_len).limit_denominator(96), beat)
+    pieces = []
+    while a < b:
+        cut = _cut_point(a, b, beat, mid, compound, bounds)
+        if cut is None or not a < cut < b:
+            pieces.append((a, b))
+            break
+        pieces.append((a, cut))
+        a = cut
+    return pieces
+
+
+SHARP_NAMES = {1: "C#", 3: "D#", 6: "F#", 8: "G#", 10: "A#"}
+FLAT_NAMES = {1: "D-", 3: "E-", 6: "G-", 8: "A-", 10: "B-"}
+
+
+def contextual_spellings(line, diatonic, transpose=0):
+    """{(event index, midi note): pitch name} for the chromatic notes of one melodic line: a note that moves on by a semitone
+    up is a sharp, one that moves on down is a flat (a note with no semitone neighbour keeps the key's own spelling)."""
+    tops = [max(ev[2]) + transpose for ev in line]
+    out = {}
+    for i, ev in enumerate(line):
+        cur = tops[i]
+        if len(ev[2]) != 1 or cur % 12 in diatonic or cur % 12 not in (1, 3, 6, 8, 10):
+            continue
+        if i + 1 < len(tops) and abs(tops[i + 1] - cur) == 1:
+            up = tops[i + 1] > cur
+        elif i > 0 and abs(cur - tops[i - 1]) == 1:
+            up = tops[i - 1] < cur
+        else:
+            continue
+        out[(i, ev[2][0])] = (SHARP_NAMES if up else FLAT_NAMES)[cur % 12]
+    return out
+
+
+def fill_rests(container, length, hidden=False, meter=None):
     """Beat-aligned rests for every gap (engraver's rule): a rest never straddles a beat it does not start on, half rests only
-    on beats 1 and 3, an empty bar is one whole-bar rest. hidden=True for a secondary voice (rests not printed)."""
+    on beats 1 and 3, none crosses the middle of the bar, dotted rests only in compound time (6/8 ...), an empty bar is one
+    whole-bar rest. hidden=True for a secondary voice (rests not printed). meter = meter_info(...) of the bar."""
     from music21 import note as m21note
+    beat, mid, compound = meter or meter_info(None, length)
+    limits = ([mid] if mid is not None else []) + (_bounds(Fraction(length).limit_denominator(96), beat) if compound else [])
     occupied = sorted((Fraction(float(x.offset)).limit_denominator(96),
                        Fraction(float(x.offset + x.quarterLength)).limit_denominator(96))
                       for x in container if isinstance(x, (m21note.Note, m21note.Rest)) or hasattr(x, "pitches"))
@@ -54,7 +164,10 @@ def fill_rests(container, length, hidden=False):
     if pos < total:
         gaps.append((pos, total))
     sizes = [Fraction(4), Fraction(2), Fraction(1), Fraction(1, 2), Fraction(1, 4), Fraction(1, 8), Fraction(1, 16)]
-    dotted = {Fraction(3): Fraction(1), Fraction(3, 2): Fraction(1), Fraction(3, 4): Fraction(1, 2)}
+    dotted = [Fraction(3), Fraction(3, 2), Fraction(3, 4)] if compound else []
+
+    def fits(o, d):                                      # aligned to its own size and not across the half bar / a compound beat
+        return o % d == 0 and (o == 0 and d == total or not any(o < p < o + d for p in limits))
     for a, b in gaps:
         if hidden is False and a == 0 and b == total and not occupied:
             r = m21note.Rest(quarterLength=float(total))
@@ -64,9 +177,9 @@ def fill_rests(container, length, hidden=False):
         o = a
         while o < b:
             left = b - o
-            pick = next((d for d, al in dotted.items() if d == left and o % al == 0), None)
+            pick = next((d for d in dotted if d <= left and fits(o, d)), None)
             if pick is None:
-                pick = next((d for d in sizes if d <= left and o % d == 0), None)
+                pick = next((d for d in sizes if d <= left and fits(o, d)), None)
             if pick is None:
                 pick = left
             r = m21note.Rest(quarterLength=float(pick))
@@ -92,6 +205,7 @@ def build_score(qnotes, barmap, staves, key_name="auto", title="", composer="", 
     adv = adv or {}                       # advanced organ notation: {"multirest": N bars (0 = off), "clef_switch", "rehearsal"}
     key_obj = detect_key(qnotes, transpose) if key_name in ("auto", "", None) else key.Key(key_name)
     spell = _spell_map(key_obj)
+    diatonic = {p.pitchClass for p in key_obj.pitches[:7]}
     cum = barmap.cumulative()
     per_stave = assign(qnotes, staves)
     score = stream.Score()
@@ -114,8 +228,10 @@ def build_score(qnotes, barmap, staves, key_name="auto", title="", composer="", 
         line = lines[0]
         last_level = None
         previous_ts = None
+        cur_label = None
         phrases = slur_phrases(line) if slurs else []
-        element_of = {}
+        element_of, last_of = {}, {}                       # event -> its first / last (tied) piece
+        spelled = [contextual_spellings(ln_, diatonic, transpose) if adv.get("ctx_spelling", True) else {} for ln_ in lines]
         for bar in range(barmap.bar_count):
             b0, b1 = cum[bar], cum[bar + 1]
             measure = stream.Measure(number=bar + 1)
@@ -154,7 +270,9 @@ def build_score(qnotes, barmap, staves, key_name="auto", title="", composer="", 
                 label = f"{int(num)}/4" if float(num).is_integer() else f"{int(round(num * 2))}/8"
             if label and (bar == 0 or length != previous_ts or bar in time_sigs):
                 measure.insert(0, meter.TimeSignature(label))
+                cur_label = label
             previous_ts = length
+            minfo = meter_info(cur_label, b1 - b0)
             bar_vels = []
             for vi, vline in enumerate(lines):
                 target = measure if len(lines) == 1 else stream.Voice()
@@ -162,44 +280,46 @@ def build_score(qnotes, barmap, staves, key_name="auto", title="", composer="", 
                     if e <= b0 or s >= b1:
                         continue
                     seg_s, seg_e = max(s, b0), min(e, b1)
-                    pitch_objs = []
-                    for midi in pitches:
-                        midi = midi + transpose
-                        p_obj = pitch.Pitch(spell[midi % 12])
-                        alter = int(p_obj.accidental.alter) if p_obj.accidental is not None else 0
-                        p_obj.octave = (midi - alter) // 12 - 1          # B#3 = MIDI 60, Cb5 = MIDI 71
-                        pitch_objs.append(p_obj)
-                    el = note.Note(pitch_objs[0]) if len(pitch_objs) == 1 else chord.Chord(pitch_objs)
-                    el.quarterLength = float(seg_e - seg_s)
-                    if len(lines) > 1:                          # voice 1 / 3 stems up, voice 2 / 4 stems down
-                        el.stemDirection = "up" if vi % 2 == 0 else "down"
-                    kind = None
-                    if s < b0 and e > b1:
-                        kind = "continue"
-                    elif s < b0:
-                        kind = "stop"
-                    elif e > b1:
-                        kind = "start"
-                    if kind:
-                        for n in (el.notes if hasattr(el, "notes") else [el]):
-                            n.tie = tie.Tie(kind)
-                    if s >= b0:
-                        sign = next((signs.get((int(m_), round(float(s), 3))) for m_ in pitches
-                                     if signs and signs.get((int(m_), round(float(s), 3)))), None) if signs else None
-                        if sign:                                  # Verovio draws no organ toe/heel articulation: print the sign as text
-                            from music21 import expressions
-                            mark = expressions.TextExpression(sign[2:] if sign.startswith("f:") else {"toe": "^", "heel": "U", "slide": "<"}.get(sign, "U"))
-                            mark.placement = "above"
-                            measure.insert(float(seg_s - b0), mark)
+                    if adv.get("meter_split", True):            # tied pieces that keep the metre visible (no note across the half bar)
+                        pieces = split_for_meter(seg_s - b0, seg_e - b0, b1 - b0, *minfo)
+                    else:
+                        pieces = [(seg_s - b0, seg_e - b0)]
+                    for pi, (pa, pb) in enumerate(pieces):
+                        pitch_objs = []
+                        for midi0 in pitches:
+                            midi = midi0 + transpose
+                            p_obj = pitch.Pitch(spelled[vi].get((ei, midi0)) or spell[midi % 12])
+                            alter = int(p_obj.accidental.alter) if p_obj.accidental is not None else 0
+                            p_obj.octave = (midi - alter) // 12 - 1          # B#3 = MIDI 60, Cb5 = MIDI 71
+                            pitch_objs.append(p_obj)
+                        el = note.Note(pitch_objs[0]) if len(pitch_objs) == 1 else chord.Chord(pitch_objs)
+                        el.quarterLength = float(pb - pa)
+                        if len(lines) > 1:                          # voice 1 / 3 stems up, voice 2 / 4 stems down
+                            el.stemDirection = "up" if vi % 2 == 0 else "down"
+                        before = s < b0 or pi > 0
+                        after = e > b1 or pi < len(pieces) - 1
+                        kind = "continue" if before and after else "stop" if before else "start" if after else None
+                        if kind:
+                            for n in (el.notes if hasattr(el, "notes") else [el]):
+                                n.tie = tie.Tie(kind)
                         if vi == 0:
-                            bar_vels.append(vel)
-                        if vi == 0:
-                            element_of[ei] = el
-                        if staccato and legato < 0.5 and (e - s) <= 1 and ei + 1 < len(vline):
-                            el.articulations.append(articulations.Staccato())
-                    target.insert(float(seg_s - b0), el)
+                            last_of[ei] = el
+                        if s >= b0 and pi == 0:
+                            sign = next((signs.get((int(m_), round(float(s), 3))) for m_ in pitches
+                                         if signs and signs.get((int(m_), round(float(s), 3)))), None) if signs else None
+                            if sign:                                  # Verovio draws no organ toe/heel articulation: print the sign as text
+                                from music21 import expressions
+                                mark = expressions.TextExpression(sign[2:] if sign.startswith("f:") else {"toe": "^", "heel": "U", "slide": "<"}.get(sign, "U"))
+                                mark.placement = "above"
+                                measure.insert(float(pa), mark)
+                            if vi == 0:
+                                bar_vels.append(vel)
+                                element_of[ei] = el
+                            if staccato and legato < 0.5 and (e - s) <= 1 and ei + 1 < len(vline):
+                                el.articulations.append(articulations.Staccato())
+                        target.insert(float(pa), el)
                 if adv.get("tidy_rests", True):
-                    fill_rests(target, float(length), hidden=vi > 0)
+                    fill_rests(target, float(length), hidden=vi > 0, meter=minfo)
                 if len(lines) > 1 and any(isinstance(x, (note.Note, chord.Chord)) for x in target):   # a silent 2nd voice is left out of the bar
                     target.id = str(vi + 1)
                     measure.insert(0, target)
@@ -213,7 +333,7 @@ def build_score(qnotes, barmap, staves, key_name="auto", title="", composer="", 
             if not adv.get("tidy_rests", True):
                 measure.makeRests(fillGaps=True, timeRangeFromBarDuration=True, inPlace=True)
             elif len(lines) > 1 and not any(isinstance(x, stream.Voice) for x in measure):
-                fill_rests(measure, float(length))             # only the main voice has notes here: ordinary rests
+                fill_rests(measure, float(length), meter=minfo)             # only the main voice has notes here: ordinary rests
             if final_bar and bar == barmap.bar_count - 1:
                 measure.rightBarline = bar_module.Barline("final")
             part.append(measure)
@@ -232,6 +352,8 @@ def build_score(qnotes, barmap, staves, key_name="auto", title="", composer="", 
         part.empty_set = set(empty_bars)
         for run in phrases:
             members = [element_of[i] for i in run if i in element_of]
+            if len(members) >= 2 and run[-1] in last_of and members[-1] is element_of.get(run[-1]):
+                members[-1] = last_of[run[-1]]                     # the slur ends on the last piece of a tied note
             if len(members) >= 2:
                 part.insert(0, spanner.Slur(members))
         if lyrics:
