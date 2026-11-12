@@ -1,0 +1,4 @@
+v2.0.9-tab-menus - notes (replaces the first version)
+Done: ONE merged menu bar, always complete: File / Edit / Select / View / Zoom / Layout / Window / Help. Stave Station and Piano Roll items are merged into the same menus (Windows style) and dimmed unless their tab is showing. Bridge items (Open MIDI, project, Appearance...) always work because the MIDI is app-wide. Piano Roll saved layouts are filled when Layout opens.
+Not done: bridge-specific items are not dimmed on the other tabs (they are app-wide); setter loading is not a menu item yet; font scaling; remove stave Play on organ/Stop; pop-out of tabs.
+Q1: add setter items to the Bridge menus (File > Load setter file..., Edit > Previous/Next step)? default y, next patch

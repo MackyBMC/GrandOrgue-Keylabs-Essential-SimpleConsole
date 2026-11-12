@@ -1,6 +1,19 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-12  Scaling: control sizes follow the text size (LCD, pad buttons, lists, buttons are set from the font height and re-set when the Appearance text size
+            changes), the window may shrink to 560 x 420, panels share the space; one scroll bar on the Live page only when even the smallest layout does not fit.
+2026-11-12  "Mixer" sub tab (mixer_panel.py / audio_mixer.py): Windows volume + mute of each program playing sound (GrandOrgue, the orchestral
+            player ...) and the master, with named scenes (Interlude / Service). Needs pycaw (Windows); elsewhere the tab says so.
+2026-11-12  One merged menu bar (File / Edit / Select / View / Zoom / Layout / Window / Help), always complete: the Stave Station and Piano Roll menu items are merged
+            into the same menus (their own bars are hidden) and are dimmed unless their tab is showing. Bridge items (Open MIDI, projects, Appearance...) always work.
+2026-11-12  KeyLab controller toggle is dim ("not detected") when no KeyLab port is found; the bridge starts disengaged then.
+2026-11-12  Top-level tabs: Bridge (the old Live / Main ... Organ Selection tabs are now its sub tabs) / Stave Station / Piano Roll. Stave editor and piano roll
+            live in their tabs (opened on first visit) instead of docks. The KeyLab LCD panel collapses (tick box in its title); collapsed = the floating LCD pops up.
+2026-11-12  Menu bar (File / Edit / View / Window / Help) and docking: the stave editor and the piano roll open as docks inside the main window
+            (tabbed at the bottom; drag or Window > Float to pull them out again; the choice is remembered). View menu toggles each one.
+2026-11-12  One shared MIDI transport (transport_widget.py): the same Play / Stop / Loop / Metronome / Save / position bar in the main window, the stave
+            editor and the piano roll, all driving the one MIDI take. The right-hand column and the docked LCD scroll when the window is small.
 2026-11-12  Transport split in two framed groups: "Setter / registration" (blue; KeyLab Rewind / Forward / Jog turn / Jog press, each button names its key)
             and "MIDI file player" (orange; Play, Stop, Loop, Metronome, Save, Open MIDI, tempo, channels, position). The KeyLab keys are tagged in the same colours.
 2026-11-12  One MIDI everywhere: the file loaded in the main window (Open MIDI, jog, Previous / Next) is opened in the stave editor / piano roll too
@@ -59,6 +72,7 @@ CHANGELOG
 import importlib
 import lastdir
 import polish
+from transport_widget import TransportBar
 import json
 import os
 import shutil
@@ -93,6 +107,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QFrame,
     QScrollArea,
     QSlider,
     QSizePolicy,
@@ -134,7 +149,6 @@ SETTER_KEYS = {"previous_step": "Rewind", "next_step": "Forward", "previous_file
 MIDI_KEYS = {"save": "Save", "play": "Play", "loop": "Loop", "metro": "Metronome", "stop": "Stop"}
 SETTER_COLOUR, MIDI_COLOUR = "#2f6fb5", "#d58b2a"
 SETTER_ACTIONS = tuple(a for a in TRANSPORT_ACTIONS if a[1] in SETTER_KEYS)
-MIDI_ACTIONS = tuple(a for a in TRANSPORT_ACTIONS if a[1] in MIDI_KEYS)
 COMMAND_OPTIONS = (
     "help", "status", "debug on", "debug off", "reconnect", "recover", "resync", "restart",
     "panic", "clear", "language en", "language de", "language fr", "language es",
@@ -1386,8 +1400,8 @@ class BridgeWindow(QMainWindow):
         self._volume_labels = {}
         self._transport_buttons = {}
         self._text_labels = {}
-        self._metro_pressed = False
         self._metro_active = False
+        self.transport_bars = []
         self._active_stop_snapshot = None
         self._last_preset_event_index = None
         self._combination_tree_signature = None
@@ -1428,12 +1442,26 @@ class BridgeWindow(QMainWindow):
         self.bridge.stop_grid_pad_handler = self.stop_grid_pad_requested.emit
 
         self.resize(1120, 760)
-        self.setMinimumSize(840, 600)
+        self.setMinimumSize(560, 420)
         root = QWidget()
         layout = QVBoxLayout(root)
-        self.setCentralWidget(root)
+        self._docks = {}
+        self.top_tabs = QTabWidget()
+        self.top_tabs.setObjectName("topTabs")
+        self.top_tabs.addTab(root, "Bridge")
+        self._tab_pages = {}
+        for index, (key, title) in enumerate((("stave", "Stave Station"), ("roll", "Piano Roll")), start=1):
+            page = QWidget()
+            page_layout = QVBoxLayout(page)
+            page_layout.setContentsMargins(0, 0, 0, 0)
+            self._tab_pages[key] = (page, page_layout)
+            self.top_tabs.addTab(page, title)
+        self.top_tabs.currentChanged.connect(self._on_top_tab)
+        self.setCentralWidget(self.top_tabs)
+        self._build_menus()
 
-        toolbar = QHBoxLayout()
+        from flow_layout import FlowLayout
+        toolbar = FlowLayout()                              # wraps onto a second row in a narrow window instead of clipping the buttons
         self._text_labels["title"] = QLabel()
         self._text_labels["title"].setObjectName("windowTitle")
         toolbar.addWidget(self._text_labels["title"])
@@ -1478,7 +1506,7 @@ class BridgeWindow(QMainWindow):
         self.sheet_music_button.clicked.connect(self.show_sheet_music)
         toolbar.addWidget(self.sheet_music_button)
         self.stave_button = QPushButton("Stave editor")
-        self.stave_button.clicked.connect(self.show_stave_editor)
+        self.stave_button.clicked.connect(lambda: self.top_tabs.setCurrentIndex(1))
         toolbar.addWidget(self.stave_button)
         self.stop_grid_button = QPushButton("Stop grid")
         self.stop_grid_button.setCheckable(True)
@@ -1487,10 +1515,11 @@ class BridgeWindow(QMainWindow):
         layout.addLayout(toolbar)
 
         self.lcd_box = QGroupBox()
+        self.lcd_box.setCheckable(True)
+        self.lcd_box.setToolTip("Untick to collapse this panel; the floating LCD pops up instead.")
         lcd_layout = QVBoxLayout(self.lcd_box)
         self.lcd_text = QLabel()
         self.lcd_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lcd_text.setFixedHeight(105)
         self.lcd_text.setObjectName("lcdText")
         lcd_layout.addWidget(self.lcd_text)
         layout.addWidget(self.lcd_box)
@@ -1502,12 +1531,20 @@ class BridgeWindow(QMainWindow):
         self.lcd_float = None
         if str(QSettings("KeyLabGrandOrgue", "LcdFloat").value("docked", "false")) == "true":
             self._dock_lcd(True)                                  # it was docked when the app was closed
+        self._lcd_popped = False
+        self.lcd_box.toggled.connect(self._lcd_expanded)
+        if str(QSettings("KeyLabGrandOrgue", "LcdFloat").value("collapsed", "false")) == "true":
+            self.lcd_box.setChecked(False)
 
         self.main_tabs = QTabWidget()
         layout.addWidget(self.main_tabs, 1)
         live_page = QWidget()
         live_grid = QGridLayout(live_page)
-        self.main_tabs.addTab(live_page, "Live / Main")
+        live_scroll = QScrollArea()                         # fluid first: panels share the window; scroll only below the smallest layout
+        live_scroll.setWidgetResizable(True)
+        live_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        live_scroll.setWidget(live_page)
+        self.main_tabs.addTab(live_scroll, "Live / Main")
 
         self.setter_box = QGroupBox()
         setter_layout = QVBoxLayout(self.setter_box)
@@ -1524,7 +1561,6 @@ class BridgeWindow(QMainWindow):
         self.combination_list.setRootIsDecorated(True)
         self.combination_list.setItemDelegateForColumn(2, ActiveTickDelegate(self.combination_list))
         self.combination_list.setUniformRowHeights(True)
-        self.combination_list.setMinimumHeight(260)
         self.combination_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.combination_list.itemSelectionChanged.connect(self._combination_selected)
         setter_layout.addWidget(self.combination_list, 1)
@@ -1550,7 +1586,6 @@ class BridgeWindow(QMainWindow):
         pads.setSpacing(8)
         for index in range(8):
             button = QPushButton()
-            button.setMinimumHeight(58)
             button.setObjectName("padButton")
             button.clicked.connect(lambda checked=False, pad=index: self.bridge.post_ui_event("pad", pad))
             self._pad_buttons.append(button)
@@ -1567,21 +1602,18 @@ class BridgeWindow(QMainWindow):
         self.transport_box.setStyleSheet(f"QGroupBox#midiPlayer {{ border: 2px solid {MIDI_COLOUR}; border-radius: 6px; margin-top: 10px; }}"
                                          f"QGroupBox#midiPlayer::title {{ color: {MIDI_COLOUR}; font-weight: 600; subcontrol-origin: margin; left: 8px; }}")
         transport_layout = QGridLayout(self.transport_box)
-        for group, layout in ((SETTER_ACTIONS, setter_keys_layout), (MIDI_ACTIONS, transport_layout)):
-            for index, (label_key, action) in enumerate(group):
-                button = QPushButton()
-                if action == "metro":
-                    button.pressed.connect(self._metro_down)
-                    button.released.connect(self._metro_up)
-                    button.setCheckable(True)
-                    button.setAutoDefault(False)
-                else:
-                    button.clicked.connect(lambda checked=False, name=action: self._transport_action(name))
-                self._transport_buttons[label_key] = button
-                layout.addWidget(button, index // 2, index % 2)
+        for index, (label_key, action) in enumerate(SETTER_ACTIONS):
+            button = QPushButton()
+            button.clicked.connect(lambda checked=False, name=action: self._transport_action(name))
+            self._transport_buttons[label_key] = button
+            setter_keys_layout.addWidget(button, index // 2, index % 2)
+        self.transport_bar = TransportBar(self.bridge, vertical=True, save_cb=self._save_midi_as)
+        self.transport_bars = [self.transport_bar]
+        self._transport_buttons.update(self.transport_bar.buttons)
+        transport_layout.addWidget(self.transport_bar, 0, 0, 1, 2)
         self.open_midi_button = QPushButton("Open MIDI...")
         self.open_midi_button.clicked.connect(self._open_midi_file)
-        rows = (len(MIDI_ACTIONS) + 1) // 2
+        rows = 1
         transport_layout.addWidget(self.open_midi_button, rows, 0, 1, 2)
         self.tempo_control = TempoControl(self.bridge.tempo)
         transport_layout.addWidget(self.tempo_control, rows + 1, 0, 1, 2)
@@ -1593,27 +1625,13 @@ class BridgeWindow(QMainWindow):
         self.go_setup_button.setToolTip("Create / check the MIDI settings file that GrandOrgue must import")
         self.go_setup_button.clicked.connect(self._go_setup)
         transport_layout.addWidget(self.go_setup_button, rows + 4, 0, 1, 2)
-        self.time_slider = polish.make_seek_slider()
-        self.time_slider.setToolTip("Click or drag to move to a position in the MIDI file")
-        self.time_slider.seek.connect(self._seek_file)
-        self.time_slider.moved.connect(self._seek_preview)
-        self.time_label = QLabel("0:00 / 0:00")
-        transport_layout.addWidget(self.time_slider, rows + 5, 0, 1, 2)
-        transport_layout.addWidget(self.time_label, rows + 6, 0, 1, 2)
-        self.active_file_label = QLabel("MIDI: none")
-        self.active_file_label.setWordWrap(True)
-        transport_layout.addWidget(self.active_file_label, rows + 3, 0, 1, 2)
-        self._file_timer = QTimer(self)
-        self._file_timer.timeout.connect(self._refresh_active_file)
-        self._file_timer.start(200)
-        for box in (self.setter_keys_box, self.transport_box):
-            for child in box.findChildren(QPushButton):
-                child.setMinimumHeight(28)
-        right_column = QVBoxLayout()
+        right_widget = QWidget()
+        right_column = QVBoxLayout(right_widget)
+        right_column.setContentsMargins(0, 0, 0, 0)
         right_column.addWidget(self.setter_keys_box)
         right_column.addWidget(self.transport_box)
         right_column.addStretch(1)
-        live_grid.addLayout(right_column, 0, 2)
+        live_grid.addWidget(right_widget, 0, 2)
 
         self.volumes_box = QGroupBox()
         volumes_layout = QFormLayout(self.volumes_box)
@@ -1756,8 +1774,14 @@ class BridgeWindow(QMainWindow):
         organ_layout.addWidget(self.organ_settings_label)
         organ_layout.addStretch(1)
         self.main_tabs.addTab(organ_page, "Organ Selection")
+        from mixer_panel import MixerPanel
+        self.mixer_panel = MixerPanel(self.bridge.cfg_path)
+        self.main_tabs.addTab(self.mixer_panel, "Mixer")
 
         self.main_tabs.currentChanged.connect(self._on_main_tab_changed)
+        self._apply_scale()
+        import themes
+        themes.bus.changed.connect(self._apply_scale)
 
         self.status_label = QLabel()
         self.status_label.setObjectName("statusLabel")
@@ -1962,14 +1986,16 @@ class BridgeWindow(QMainWindow):
             keyname = SETTER_KEYS.get(action) or MIDI_KEYS.get(action)
             tag = "SETTER" if action in SETTER_KEYS else "MIDI"
             button = self._transport_buttons[label_key]
-            button.setText(f"{self._t(label_key)}\n[{keyname}]" if action in SETTER_KEYS else self._t(label_key))
+            if action in SETTER_KEYS:
+                button.setText(f"{self._t(label_key)}\n[{keyname}]")
             button.setToolTip(f"KeyLab: {keyname} key  ({tag} function)")
+        for bar in self.transport_bars:
+            bar.retranslate(self._t)
         for key, label in self._volume_labels.items():
             label.setText(self._t(f"volume_{key}") if key in ("master", "pedal", "hw", "sw", "sl", "noises", "swell")
                           else VOLS[key][2])
         self.mark_legend.setText(self._t("gui_marks_legend"))
-        metro_button = self._transport_buttons["gui_metro"]
-        metro_button.setToolTip(self._t("gui_metro_tempo"))
+        self._transport_buttons["gui_metro"].setToolTip(self._t("gui_metro_tempo"))
         for index, theme in enumerate(THEME_PALETTES):
             self.theme_box.setItemText(index, self._t(f"theme_{theme}"))
 
@@ -2378,46 +2404,12 @@ class BridgeWindow(QMainWindow):
             QStatusBar, QMenu, QSpinBox, QDoubleSpinBox, QListWidget {{ background: {palette['input']}; color: {palette['text']}; }}
         """) + polish.extra_css(palette)
 
-    def _metro_down(self):
-        self._metro_pressed = True
-        self.bridge.post_ui_event("metro_down")
-
-    def _metro_up(self):
-        self._metro_pressed = False
-        self.bridge.post_ui_event("metro_up")
-
-    def _seek_file(self, value):
-        length = getattr(self.bridge, "take_length", 0.0) or 0.0
-        if length > 0 and getattr(self.bridge, "take_to_play", None):
-            self.bridge.post_ui_event("take_seek", value / 1000.0 * length)
-
-    def _seek_preview(self, value):
-        length = getattr(self.bridge, "take_length", 0.0) or 0.0
-        t = value / 1000.0 * length
-        self.time_label.setText(f"{int(t) // 60}:{int(t) % 60:02d} / {int(length) // 60}:{int(length) % 60:02d}")
-
     def _space_play(self):
         from PySide6.QtWidgets import QApplication, QLineEdit, QPlainTextEdit, QTextEdit, QAbstractSpinBox
         focus = QApplication.focusWidget()
         if isinstance(focus, (QLineEdit, QPlainTextEdit, QTextEdit, QAbstractSpinBox)):
             return
         self.bridge.post_ui_event("take_toggle")
-
-    def _refresh_active_file(self):
-        path = getattr(self.bridge, "take_to_play", None)
-        playing = getattr(getattr(self.bridge, "take_player", None), "active", False)
-        recording = getattr(self.bridge, "midi_rec", None) is not None
-        text = "Recording..." if recording else ("Loaded: " + os.path.basename(path) if path else "MIDI: nothing loaded")
-        self.active_file_label.setText(text + ("  [PLAYING]" if playing else ""))
-        self.active_file_label.setToolTip((path or "") + "\n" + getattr(self.bridge, "take_info", ""))
-        length = getattr(self.bridge, "take_length", 0.0) or 0.0
-        pos = getattr(getattr(self.bridge, "take_player", None), "position", lambda: None)() if playing else None
-        if pos is None:
-            pos = 0.0 if not playing else 0.0
-        if length > 0 and not self.time_slider.dragging:
-            self.time_slider.setValue(int(min(1.0, pos / length) * 1000))
-        fmt = lambda t: f"{int(t) // 60}:{int(t) % 60:02d}"
-        self.time_label.setText(f"{fmt(pos)} / {fmt(length)}")
 
     def _open_midi_file(self):
         folder = lastdir.get("midi", getattr(self.bridge, "midi_dir", "") or "")
@@ -2561,6 +2553,10 @@ class BridgeWindow(QMainWindow):
         if path:
             lastdir.put("midi_save", path)
             self.bridge.post_ui_event("take_saveas", path)
+
+    @property
+    def _metro_pressed(self):
+        return any(bar.metro_pressed for bar in self.transport_bars)
 
     def _transport_action(self, name):
         if name in ("previous_file", "next_file") and self._metro_pressed:
@@ -2752,6 +2748,180 @@ class BridgeWindow(QMainWindow):
     def show_licenses(self):
         QMessageBox.information(self, self._t("gui_licenses"), self._t("gui_license_notice"))
 
+    def _new_transport_bar(self):
+        """Another copy of the one MIDI transport (stave editor, piano roll)."""
+        bar = TransportBar(self.bridge, vertical=False, save_cb=self._save_midi_as)
+        bar.retranslate(self._t)
+        self.transport_bars.append(bar)
+        bar.destroyed.connect(lambda *_: self.transport_bars.remove(bar) if bar in self.transport_bars else None)
+        return bar
+
+    def _apply_scale(self):
+        """Minimum sizes from the font height, so a smaller / larger text size resizes the controls with it."""
+        h = self.fontMetrics().height()
+        self.lcd_text.setMinimumHeight(round(h * 3.2))
+        self.lcd_text.setMaximumHeight(round(h * 6))
+        for button in self._pad_buttons:
+            button.setMinimumHeight(round(h * 2.4))
+        self.combination_list.setMinimumHeight(round(h * 6))
+        for box in (self.setter_keys_box, self.transport_box):
+            for child in box.findChildren(QPushButton):
+                child.setMinimumHeight(round(h * 1.7))
+
+    # ------------------------------------------------------------------ menu bar and docks
+    def _dock_widget(self, key, widget, title):
+        """Show a stave-editor window as the page of its top-level tab (Stave Station / Piano Roll)."""
+        page, page_layout = self._tab_pages[key]
+        if page_layout.indexOf(widget) < 0:
+            for placeholder in page.findChildren(QLabel, "tabPlaceholder"):
+                placeholder.deleteLater()
+            widget.setWindowFlags(Qt.WindowType.Widget)
+            page_layout.addWidget(widget)
+        widget.show()
+        self.top_tabs.blockSignals(True)
+        self.top_tabs.setCurrentWidget(page)
+        self.top_tabs.blockSignals(False)
+        self._apply_menus()
+        return page
+
+    def _merge_menus(self, key):
+        """Move the menus of an embedded editor window (stave / roll) into the main menu bar's menus of the same name."""
+        if self._merged[key]:
+            return
+        window = getattr(self, "stave_window", None) if key == "stave" else getattr(getattr(self, "stave_window", None), "roll_window", None)
+        if window is None:
+            return
+        bar = window.menuBar()
+        for entry in [a for a in bar.actions() if a.menu() is not None]:
+            name = entry.text().replace("&", "")
+            target = self._menus.get(name)
+            if target is None:
+                continue
+            placeholder = self._placeholders.pop(target, None)
+            if placeholder is not None:
+                target.removeAction(placeholder)
+            if not entry.menu().actions():                  # filled when shown (saved layouts): refill the merged menu the same way
+                self._dynamic_menu(key, target, entry.menu())
+                continue
+            if target.actions():
+                target.addSeparator()
+            for item in entry.menu().actions():
+                target.addAction(item)
+                self._merged[key].append([item, item.isEnabled()])
+        bar.setVisible(False)
+
+    def _dynamic_menu(self, key, target, source):
+        added, info = [], []
+        def refill():
+            for item in info:
+                target.removeAction(item)
+            info.clear()
+            for item in added:
+                target.removeAction(item)
+            added.clear()
+            source.aboutToShow.emit()                         # the editor fills its own menu
+            on = self.top_tabs.currentIndex() == (1 if key == "stave" else 2)
+            for item in source.actions():
+                target.addAction(item)
+                added.append(item)
+                if not on:
+                    item.setEnabled(False)
+        target.aboutToShow.connect(refill)
+        placeholder = self._placeholders.pop(target, None)
+        if placeholder is not None:
+            target.removeAction(placeholder)
+        if not target.actions():
+            info.append(target.addAction("(saved layouts of the Piano Roll)"))
+            info[0].setEnabled(False)
+
+    def _apply_menus(self):
+        """Merge the embedded menus in once they exist; dim every item whose tab is not the one showing."""
+        if not hasattr(self, "_merged"):
+            return
+        index = self.top_tabs.currentIndex()
+        for key, tab in (("stave", 1), ("roll", 2)):
+            self._merge_menus(key)
+            for entry in self._merged[key]:
+                item = entry[0]
+                if tab == index:
+                    item.setEnabled(entry[1])
+                else:
+                    if item.isEnabled():
+                        entry[1] = True
+                    item.setEnabled(False)
+
+    def _on_top_tab(self, index):
+        """First visit to Stave Station / Piano Roll loads the editor."""
+        if index == 1 or index == 2:
+            if getattr(self, "stave_window", None) is None:
+                self.show_stave_editor()
+            if index == 2 and getattr(self, "stave_window", None) is not None:
+                self.stave_window.show_roll()
+            self.top_tabs.blockSignals(True)
+            self.top_tabs.setCurrentIndex(index)
+            self.top_tabs.blockSignals(False)
+        self._apply_menus()
+
+    def _build_menus(self):
+        bar = self.menuBar()
+        self._placeholders = {}
+        def add(menu, text, slot, shortcut=None):
+            action = menu.addAction(text)
+            action.triggered.connect(lambda checked=False: slot())
+            if shortcut:
+                action.setShortcut(shortcut)
+            return action
+        stave = lambda: getattr(self, "stave_window", None)
+        def with_stave(name):
+            def run():
+                self.show_stave_editor()
+                if stave() is not None:
+                    getattr(stave(), name)()
+            return run
+        file_menu = bar.addMenu("&File")
+        add(file_menu, "&Open MIDI...", self._open_midi_file, "Ctrl+O")
+        add(file_menu, "Open &project (.ss)...", with_stave("open_project_dialog"))
+        file_menu.addSeparator()
+        add(file_menu, "&Save MIDI as...", self._save_midi_as, "Ctrl+S")
+        add(file_menu, "Save pro&ject", lambda: stave() is not None and stave().flush_project())
+        add(file_menu, "Save project &as...", with_stave("save_project_as"))
+        file_menu.addSeparator()
+        add(file_menu, "&Quit", self.close, "Ctrl+Q")
+        edit_menu = bar.addMenu("&Edit")
+        select_menu = bar.addMenu("&Select")
+        add(edit_menu, "&Undo (stave / roll)", lambda: stave() is not None and stave().undo(), "Ctrl+Z")
+        add(edit_menu, "&Redo (stave / roll)", lambda: stave() is not None and stave().redo(), "Ctrl+Y")
+        edit_menu.addSeparator()
+        add(edit_menu, "&Appearance...", self.show_appearance)
+        view_menu = bar.addMenu("&View")
+        add(view_menu, "&Stave Station", lambda: self.top_tabs.setCurrentIndex(1))
+        add(view_menu, "&Piano Roll", lambda: self.top_tabs.setCurrentIndex(2))
+        add(view_menu, "S&heet music", self.show_sheet_music)
+        add(view_menu, "&LCD float / dock", self.toggle_lcd_float)
+        zoom_menu = bar.addMenu("&Zoom")
+        layout_menu = bar.addMenu("&Layout")
+        for menu in (select_menu, zoom_menu, layout_menu):
+            placeholder = menu.addAction("(open the Stave Station / Piano Roll tab)")
+            placeholder.setEnabled(False)
+            self._placeholders[menu] = placeholder
+        window_menu = bar.addMenu("&Window")
+        for index, name in enumerate(("&Bridge", "&Stave Station", "&Piano Roll")):
+            add(window_menu, name, lambda i=index: self.top_tabs.setCurrentIndex(i), f"Alt+{index + 1}")
+        window_menu.addSeparator()
+        add(window_menu, "&KeyLab LCD panel: collapse / expand", lambda: self.lcd_box.setChecked(not self.lcd_box.isChecked()))
+        help_menu = bar.addMenu("&Help")
+        add(help_menu, "&Licenses", self.show_licenses)
+        def about():
+            try:
+                from version import __version__
+            except Exception:
+                __version__ = "?"
+            QMessageBox.about(self, "About", f"GrandOrgue KeyLab bridge {__version__}\nStave Station: MIDI to sheet music for organ.")
+        add(help_menu, "&About", about)
+        self._menus = {"File": file_menu, "Edit": edit_menu, "Select": select_menu, "View": view_menu, "Zoom": zoom_menu,
+                       "Layout": layout_menu, "Window": window_menu, "Help": help_menu}
+        self._merged = {"stave": [], "roll": []}          # [(action, enabled before it was dimmed)] merged from the embedded windows
+
     def show_stave_editor(self):
         """MIDI to Stave editor (midi_stave folder next to this file), opened like the sheet music viewer."""
         try:
@@ -2773,13 +2943,14 @@ class BridgeWindow(QMainWindow):
                 self.stave_window.gate_hook = lambda on, items: self.bridge.post_ui_event("gate", (on, items))
                 self.bridge.stave_step_hook = self.stave_window.hw_step
                 self.stave_window.loaded_hook = self._stave_loaded
+                self.stave_window.roll_host = lambda roll: self._dock_widget("roll", roll, "Piano roll")
+                self.stave_window.transport_factory = self._new_transport_bar
+                self.stave_window.install_transport(self._new_transport_bar())
                 midi_dir = getattr(self.bridge, "midi_dir", "")
                 if midi_dir and hasattr(self.stave_window, "default_dir"):
                     self.stave_window.default_dir = midi_dir
             self._theme_children()
-            self.stave_window.show()
-            self.stave_window.raise_()
-            self.stave_window.activateWindow()
+            self._dock_widget("stave", self.stave_window, "Stave editor")
             self._follow_take()                                       # the editor opens on the main window's file
         except Exception as exc:
             QMessageBox.warning(self, "Stave editor", f"Could not open the stave editor: {exc}\n"
@@ -2815,6 +2986,25 @@ class BridgeWindow(QMainWindow):
             self.lcd_float = LcdFloat(volume_cb=lambda key, value: self.bridge.post_ui_event("volume", (key, value)),
                                       dock_cb=self._dock_lcd)
         return self.lcd_float
+
+    def _lcd_expanded(self, expanded):
+        """Collapse / expand the KeyLab LCD panel; collapsed, the floating LCD pops up (and goes away again on expand)."""
+        QSettings("KeyLabGrandOrgue", "LcdFloat").setValue("collapsed", "false" if expanded else "true")
+        if not expanded and getattr(self, "lcd_float", None) is not None and self.lcd_float.docked:
+            self._dock_lcd(False)
+        for child in self.lcd_box.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly):
+            child.setVisible(expanded and (child is not self.lcd_text or getattr(self, "lcd_float", None) is None or not self.lcd_float.docked))
+        self.lcd_box.setMaximumHeight(16777215 if expanded else self.lcd_box.fontMetrics().height() + 16)
+        if not expanded:
+            lcd = self._ensure_lcd()
+            if not lcd.isVisible():
+                lcd.update_state(self.bridge.get_snapshot())
+                lcd.show()
+                self._lcd_popped = True
+        elif self._lcd_popped:
+            self._lcd_popped = False
+            if self.lcd_float is not None and not self.lcd_float.docked:
+                self.lcd_float.hide()
 
     def _dock_lcd(self, dock):
         """Dock the LCD into the main window's LCD panel (the fixed 2-line LCD hides), or float it again."""
@@ -2993,7 +3183,9 @@ class BridgeWindow(QMainWindow):
             self.controller_button.blockSignals(True)
             self.controller_button.setChecked(engaged)
             self.controller_button.blockSignals(False)
-        self.controller_button.setText("KeyLab controller: " + ("engaged" if engaged else "OFF"))
+        detected = snapshot.get("controller_detected", True)
+        self.controller_button.setEnabled(bool(detected))
+        self.controller_button.setText("KeyLab controller: " + ("engaged" if engaged else "OFF" if detected else "not detected"))
         self.preset_direct_checkbox.blockSignals(True)
         self.preset_direct_checkbox.setChecked(snapshot["preset_activation"] == "direct")
         self.preset_direct_checkbox.blockSignals(False)
@@ -3010,13 +3202,8 @@ class BridgeWindow(QMainWindow):
             self.theme_box.blockSignals(False)
             self._apply_theme(snapshot["theme"])
         self._metro_active = snapshot["metro_lit"]
-        metro_button = self._transport_buttons["gui_metro"]
-        if not self._metro_pressed and metro_button.isChecked() != self._metro_active:
-            metro_button.blockSignals(True)
-            metro_button.setChecked(self._metro_active)
-            metro_button.blockSignals(False)
-        if snapshot["metro_bpm"]:
-            metro_button.setText(f"{self._t('gui_metro')}  {snapshot['metro_bpm']}")
+        for bar in self.transport_bars:
+            bar.set_metro(self._metro_active, snapshot["metro_bpm"], self._t("gui_metro"))
 
         self.lcd_text.setText(f"{snapshot['lcd'][0][:16].ljust(16)}\n{snapshot['lcd'][1][:16].ljust(16)}")
         take = (snapshot.get("transport") or {}).get("take_path", "")
@@ -3116,8 +3303,10 @@ class BridgeWindow(QMainWindow):
                 slider.blockSignals(False)
             self.combination_list.setEnabled(snapshot.get("organ_routes_ready", True))
             self.preset_direct_checkbox.setEnabled(snapshot.get("organ_routes_ready", True))
-            for button in self._transport_buttons.values():
-                button.setEnabled(snapshot.get("organ_routes_ready", True))
+            for bar in self.transport_bars:
+                bar.set_ready(snapshot.get("organ_routes_ready", True))
+            for label_key, action in SETTER_ACTIONS:
+                self._transport_buttons[label_key].setEnabled(snapshot.get("organ_routes_ready", True))
         diagnostics = snapshot["debug_text"]
         if diagnostics != getattr(self, "_last_diagnostics", None):
             scroll = self.diagnostics_text.verticalScrollBar()
@@ -3133,6 +3322,11 @@ class BridgeWindow(QMainWindow):
             self.close()
 
     def closeEvent(self, event):
+        try:
+            if getattr(self, "stave_window", None) is not None:
+                self.stave_window.flush_project()          # docked: the stave window never gets its own close event
+        except Exception:
+            pass
         self.timer.stop()                      # no more snapshot refreshes while the bridge shuts down
         self.modal_timer.stop()
         self.bridge.modal_open.clear()

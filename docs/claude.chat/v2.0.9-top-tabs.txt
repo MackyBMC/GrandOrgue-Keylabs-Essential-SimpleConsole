@@ -1,0 +1,5 @@
+v2.0.9-top-tabs - notes
+Done: top tabs Bridge (old tabs = sub tabs) / Stave Station / Piano Roll (opened on first visit; Alt+1/2/3). LCD panel collapses via the tick in its title; collapsed = floating LCD pops up, expanded = it goes away again. Remembered.
+Replaces the dock idea of v2.0.9-dock-menus (the menu bar stays; its Window menu now switches tabs).
+Not done: font scaling (min font, scroll only below it) - next; remove stave's Play on organ/Stop buttons (default y).
+Q1: pop-out of Stave Station / Piano Roll to their own window still wanted (second monitor)? default y, next patch

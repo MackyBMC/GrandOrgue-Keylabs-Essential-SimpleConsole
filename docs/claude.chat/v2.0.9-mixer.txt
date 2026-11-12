@@ -1,0 +1,7 @@
+v2.0.9-mixer - notes
+Done: Bridge > "Mixer" sub tab. One slider + Mute per program that plays sound on Windows (GrandOrgue, the orchestral player, ...) plus the master of the default output. Scenes: set levels once, "Save levels as..." (e.g. Interlude, Service), "Apply" recalls them by program name. Stored in mixer_scenes.json next to config.yaml.
+Needs: pip install pycaw (added to requirements.txt, Windows only). Without it the tab explains that.
+NOT verified: pycaw on your PC (written to its documented API, tested only with a fake backend). A program only shows while Windows lists an audio session for it (usually after it first plays sound).
+Not done: peak meters; KeyLab faders for the mixer; mixing the bridge's own MIDI file playback (that is MIDI into GrandOrgue: use the existing volume sliders).
+Q1: map KeyLab faders 1-4 to the mixer strips when the Mixer tab is open? default n
+Q2: GrandOrgue's own audio level is its Windows volume here; is a master "organ vs orchestra balance" single slider wanted instead? default n

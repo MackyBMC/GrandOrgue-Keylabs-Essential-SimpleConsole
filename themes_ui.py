@@ -93,7 +93,7 @@ class AppearanceDialog(QDialog):
         self.density.setCurrentIndex(max(0, self.density.findData(st["density"])))
         form.addRow("Density", self.density)
         self.font = QSlider(Qt.Orientation.Horizontal)
-        self.font.setRange(80, 160)
+        self.font.setRange(60, 160)
         self.font.setValue(st["font"])
         form.addRow("Text size %", self.font)
         tabs.addTab(page, "Theme")

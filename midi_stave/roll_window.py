@@ -2,6 +2,8 @@
 strip, a keyboard and a velocity lane that all share two scroll bars (one horizontal, one vertical).
 
 CHANGELOG
+2026-11-12  Fix: RollWindow uses the module its Stave came from (inside the bridge `import midi_stave` found the midi_stave folder: "no attribute PianoKeys").
+2026-11-12  install_transport(): the shared MIDI transport bar on top of the roll (main app only).
 2026-10-25  New: the roll moved out of the main window into this pop-up.
 2026-10-26  Keys taller / shorter = Ctrl+Up / Ctrl+Down, wheel zoom reversible and centred, grid fills the window, saved layouts (Layout menu).
 2026-10-26  Edit > Shape MIDI timing.
@@ -111,9 +113,17 @@ class Overview(QWidget):
 
 
 class RollWindow(QMainWindow):
+    def install_transport(self, widget):
+        from PySide6.QtWidgets import QToolBar
+        bar = QToolBar("MIDI transport")
+        bar.setMovable(False)
+        bar.addWidget(widget)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
+
     def __init__(self, stave):
         super().__init__(stave)
-        import midi_stave as M
+        import sys
+        M = sys.modules[type(stave).__module__]          # the module the Stave class came from (a bare `import midi_stave` finds the folder when run from the bridge)
         self.M, self.stave = M, stave
         self.setWindowFlag(Qt.WindowType.Window, True)
         self.setWindowTitle("MIDI Track / Piano Roll Editor")

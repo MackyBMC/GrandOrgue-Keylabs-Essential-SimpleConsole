@@ -1,0 +1,4 @@
+v2.0.9-detect-controller - notes
+Done: at start the bridge connects to the KeyLab only if one of its ports is found; otherwise it runs without it and the "KeyLab controller" toggle is dim ("not detected"). A saved "off" still wins. Detection is re-checked every 2 s, so plugging it in later lights the toggle; click it to engage.
+Not done: no automatic engage on plug-in (manual click). Not tested on Windows with a real KeyLab.
+Q1: engage automatically when it is plugged in later (unless you switched it off yourself)? default n

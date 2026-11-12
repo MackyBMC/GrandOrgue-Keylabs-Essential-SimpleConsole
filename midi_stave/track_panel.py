@@ -5,6 +5,7 @@ channel (re-channels the voice's notes), instrument and note count. Tracks can b
 Everything edited here goes through the stave editor, so the engraved score follows.
 
 CHANGELOG
+2026-11-12  Fix: OrganDialog uses the module its Stave came from (same "no attribute" error as the piano roll inside the bridge).
 2026-10-26  New.
 2026-10-27  Manuals shown by the organ's own names (Great / Swell / Choir, German, French, custom) in the Organ dialog,
             the Organ column and the stave rows; the saved mapping still uses the fixed manual slots.
@@ -22,7 +23,8 @@ class OrganDialog(QDialog):
 
     def __init__(self, stave, key, name):
         super().__init__(stave)
-        import midi_stave as M
+        import sys
+        M = sys.modules[type(stave).__module__]          # the module the Stave came from (see roll_window.py)
         self.M, self.stave, self.key = M, stave, key
         current = stave.track_map.get(key, {})
         self.reg = [dict(e) for e in current.get("reg", [])]

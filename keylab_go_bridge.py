@@ -51,6 +51,9 @@ solution on awkward driver setups - use --kl-main (no relay) whenever direct sha
   python keylab_go_bridge.py --go "LoopBe" --kl-in "DAW" --kl-out "KeyLab" ^
       --relay-main "KL2GO" --relay-main-in "Ess Midi In"
   (then point GrandOrgue's MIDI input at "KL2GO" instead of the KeyLab MAIN device)
+
+CHANGELOG
+2026-11-12  Only one bridge per config folder: a second launch says so and exits (keylab_bridge/instance.py).
 """
 
 import argparse
@@ -137,6 +140,18 @@ def main():
         with mido.open_output(find_port(mido.get_output_names(), a.go_out or a.go)) as port:  # type: ignore[attr-defined]
             port.send(mido.Message("control_change", channel=STOP_CH, control=it.cc, value=0 if a.test_off else 127))
         print(f"sent {'off' if a.test_off else 'on'} to {it.division} '{it.name}' ({it.path}), CC {it.cc} on channel {STOP_CH + 1}")
+        return 0
+
+    from keylab_bridge.instance import acquire_lock
+    if not acquire_lock(cfg_path):
+        text = "The KeyLab GrandOrgue bridge is already running (look for its window or the task bar). Only one copy can run."
+        print(text, file=sys.stderr)
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(None, text, "KeyLab GrandOrgue bridge", 0x40)
+            except Exception:
+                pass
         return 0
 
     ui_mode = "none" if a.no_ui else (a.ui or "textual")

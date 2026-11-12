@@ -1,5 +1,7 @@
 """
 CHANGELOG
+2026-11-12  roll_host hook: inside the main app the piano roll is shown as a dock of the main window (show_roll calls it); standalone it is still its own window.
+2026-11-12  Shared MIDI transport tool bar (Play / Stop / Loop / Metronome / Save / position) on top when the editor runs inside the main app (install_transport); same bar in the piano roll.
 2026-11-12  One MIDI everywhere: loaded_hook(path) tells the main window which MIDI / project media this editor just opened, so the main
             window (and the piano roll, which is part of this editor) stay on the same file; the main window does the same the other way.
 2026-11-12  Project file (.ss, see project.py): every setting, the bar lines and per-bar grids, track / manual mapping, setters,
@@ -1737,6 +1739,8 @@ class Stave(QMainWindow):
         self.roll.barSelected.connect(self.select_bar)
         self.roll.insertRequested.connect(self.insert_bar_line)
         self.roll.deleteRequested.connect(self.delete_bar_line)
+        self.transport_factory = None
+        self.roll_host = None                            # set by the bridge window: show the piano roll as a dock
         self.roll_window = None                          # the piano roll lives in its own window (roll_window.py), opened on demand
         self.preview = QScrollArea()
         self.preview.setWidgetResizable(True)
@@ -1923,12 +1927,25 @@ class Stave(QMainWindow):
         self.div_list.setText("Division / coupler labels: " + (", ".join(f"bar {b + 1}: {t}" for b, t in sorted(self.divisions.items())) or "none"))
         self.changed(delay=100)
 
+    def install_transport(self, widget):
+        """Dock the app-wide MIDI transport bar on top of this window (main app only; standalone has none)."""
+        from PySide6.QtWidgets import QToolBar
+        bar = QToolBar("MIDI transport")
+        bar.setMovable(False)
+        bar.addWidget(widget)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
+
     def show_roll(self, *_):
         if self.roll_window is None:
             import roll_window
             self.roll_window = roll_window.RollWindow(self)
+            if getattr(self, "transport_factory", None):
+                self.roll_window.install_transport(self.transport_factory())
             self.refresh_roll()
             QTimer.singleShot(50, self.roll_window.center_on_notes)
+        if getattr(self, "roll_host", None):                 # the bridge window docks it
+            self.roll_host(self.roll_window)
+            return
         self.roll_window.show()
         self.roll_window.raise_()
         self.roll_window.activateWindow()

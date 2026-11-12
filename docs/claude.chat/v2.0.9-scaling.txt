@@ -1,0 +1,5 @@
+v2.0.9-scaling - notes
+Your 3 observations -> done: (1) Text size 60-160 % now scales spacing/handles/scroll bars/tabs/menus too, not only text. (2) Control heights come from the font height and update when you change the size in Appearance. (3) Fluid first: panels share the window; the main window may shrink to 560x420; top bar wraps to a 2nd row (flow_layout.py); the old inner scroll in the right column is gone; ONE scroll bar on the Live page only when even the smallest layout does not fit.
+Not done: other sub tabs (Setter Editing, Combination Files, Config, System Console, Mixer) were not audited for fixed sizes; Stave Station / Piano Roll internals keep their own sizes; the Live page minimum width is still ~880 px at 70 % (three columns).
+Not verified on your screen / DPI: checked only with offscreen renders at 70 / 100 / 140 %.
+Q1: use a 2-row layout for the Live page (setters on top, controls below) below ~900 px width? default y, next patch

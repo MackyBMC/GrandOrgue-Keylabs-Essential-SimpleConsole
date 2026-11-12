@@ -1,6 +1,7 @@
 """MIDI port lifecycle and optional KeyLab MAIN-port relay.
 
 CHANGELOG
+2026-11-12  controller_detected(): is a KeyLab port present now (used to engage the controller only when it is found).
 2026-11-12  Controller toggle: set_controller_enabled() closes / opens the KeyLab ports (DAW in / out, MAIN) at any time. While
             it is off they are not required, not reopened by the automatic reconnect, and do not count as degraded.
 2026-11-10  Output worker blocks on the queue instead of polling with a lost-wakeup window (notes could be delayed 10-15 ms).
@@ -226,6 +227,18 @@ class MidiPorts:
         wanted = set(self.required())
         for key in CONTROLLER_KEYS:
             self.workers[key].request_action("open" if key in wanted else "close")
+
+    def controller_detected(self):
+        """Is a KeyLab port present right now? (any of its configured ports shows up in the system's port lists)"""
+        try:
+            ins, outs = self.backend.get_input_names(), self.backend.get_output_names()
+            for key in CONTROLLER_KEYS:
+                wanted = self.wanted(key)
+                if wanted and find_matching_port(ins if key != "kl_out" else outs, wanted):
+                    return True
+        except Exception:
+            pass
+        return False
 
     def find_input_port(self, wanted):
         return find_matching_port(self.backend.get_input_names(), wanted)

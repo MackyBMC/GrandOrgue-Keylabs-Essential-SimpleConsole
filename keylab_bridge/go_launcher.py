@@ -1,9 +1,15 @@
-"""Locate and start GrandOrgue for the graphical bridge."""
+"""Locate and start GrandOrgue for the graphical bridge.
+
+CHANGELOG
+2026-11-12  Does not start a second GrandOrgue when one is already running.
+"""
 
 import os
 import shutil
 import subprocess
 import sys
+
+from keylab_bridge.instance import grandorgue_running
 
 
 def find_grandorgue():
@@ -37,6 +43,8 @@ def find_grandorgue():
 
 
 def start_grandorgue(organ_path=""):
+    if grandorgue_running():                      # GrandOrgue is already up (the bridge was not): do not start a second one
+        return "GrandOrgue is already running, so it was not started again (load the organ in that window)."
     executable = find_grandorgue()
     if not executable:
         raise FileNotFoundError("GrandOrgue executable was not found")

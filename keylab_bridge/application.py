@@ -1,6 +1,8 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-12  The KeyLab controller is only engaged at start when it is detected (saved "off" still wins); not detected = the bridge runs without it and
+            the toggle stays dim. Snapshot carries "controller_detected" (checked every 2 s).
 2026-11-12  Transport state carries "take_path" (full path of the MIDI file in play), so the main window can keep the stave editor on the same file.
 2026-11-12  KeyLab controller toggle: "controller" event / set_controller_engaged() closes or opens the KeyLab ports at any time
             (the bridge keeps running for GrandOrgue). Remembered in controller_engaged.txt next to config.yaml; snapshot carries
@@ -159,6 +161,8 @@ class BridgeApp:
         self.recent_times = {}
         self.stop_grid_pad_handler = None
         self.ports = MidiPorts(backend, args, self.stats, self.recent_times, br_settings.get("pad_ccs"))
+        self._controller_detected, self._detect_at = self.ports.controller_detected(), time.perf_counter()
+        self.controller_engaged = self.controller_engaged and self._controller_detected        # no KeyLab found: do not try to connect
         self.ports.controller_enabled = self.controller_engaged
         self.br = self.make_bridge()
         self.tempo.add_listener(self._tempo_changed)
@@ -238,6 +242,13 @@ class BridgeApp:
             self.message = self.t("theme_save_error")
             return False
         return True
+
+    def _controller_seen(self):
+        now = time.perf_counter()
+        if now - self._detect_at > 2.0:
+            self._detect_at = now
+            self._controller_detected = self.ports.controller_detected()
+        return self._controller_detected or self.controller_engaged
 
     def set_controller_engaged(self, engaged):
         """Engage / disengage the KeyLab at any time and remember it. GrandOrgue playback and the bridge keep running."""
@@ -1760,6 +1771,7 @@ class BridgeApp:
             "internal_position": br.pos.strip(),
             "preset_activation": self.preset_activation,
             "controller_engaged": self.controller_engaged,
+            "controller_detected": self._controller_seen(),
             "tempo_bpm": self.tempo.bpm,
             "sheet_zone": self.br.sheet_zone,
             "transport": self._transport_state(),

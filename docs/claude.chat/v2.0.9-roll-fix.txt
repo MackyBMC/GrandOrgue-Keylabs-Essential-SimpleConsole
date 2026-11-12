@@ -1,0 +1,3 @@
+v2.0.9-roll-fix - notes
+Fixed: Piano Roll tab "module 'midi_stave' has no attribute 'PianoKeys'" (reproduced here with the bridge's import order, then fixed). Same pattern fixed in the track Organ dialog (track_panel.py).
+Scaling: your 3 observations accepted. Plan for the scaling patch: ONE scale setting that drives font AND control sizes (padding, button height, icons) together, and remove fixed heights so panels stretch/shrink with the window; font options then act on the whole layout, not just text.

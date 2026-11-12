@@ -1,0 +1,5 @@
+v2.0.9-dock-menus - notes
+Done: menu bar File / Edit / View / Window / Help. Stave editor and piano roll open as docks in the main window (tabbed at the bottom, float/dock by drag or Window menu, remembered).
+Not done (next): font scaling (shrink fonts to a minimum, scroll only below it) for main tabs + docked LCD; remove stave's own Play on organ / Stop buttons; menu texts are English only; drag-dock layout is not saved between runs (only docked/floating).
+NOTE: on a small screen the main tabs get squeezed while a dock is open - the font scaling patch is what fixes that.
+Q1: Remove stave's "Play on organ"/"Stop" now? (y/n) default y

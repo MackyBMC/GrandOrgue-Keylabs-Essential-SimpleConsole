@@ -1,0 +1,5 @@
+v2.0.9-launch-checks - notes
+Done: (1) one bridge per config folder: a second launch shows "already running" (message box on Windows) and exits; the lock is released by the OS if the bridge crashes. (2) GrandOrgue already running but bridge not: the bridge no longer starts a second GrandOrgue; it prints a notice (load the organ in the running window).
+Not done: GrandOrgue is not asked to load the organ when it was already running; the notice is stderr/console only (not in the GUI log yet). Windows detection uses tasklist: untested on your PC.
+Q1: when GrandOrgue is NOT running, keep auto-starting it? default y (unchanged)
+Q2: show the "GrandOrgue already running" notice in the GUI status line? default y, next patch

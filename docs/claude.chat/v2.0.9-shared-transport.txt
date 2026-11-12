@@ -1,0 +1,6 @@
+v2.0.9-shared-transport - notes
+Done: transport_widget.py = one MIDI transport bar (Play/Pause, Stop/Panic, Loop, Metronome, Save, slider, time, file). Same bar in main (orange box), stave editor (top tool bar) and piano roll (top tool bar). All post bridge events; one MIDI take for the whole app (no context-aware playback).
+Done: main right-hand column scrolls when small; long file names elide instead of pushing the layout.
+Not done: stave's own "Play on organ / Stop / Play selection" buttons still exist (they use the preview file); remove once you agree. Docked LCD scrolling; docking stave/roll into main + File/Edit/View/Window/Help menu; font scaling audit of other tabs.
+Q1: remove the stave's own "Play on organ"/"Stop" buttons now that the shared bar exists? (y/n) default y, next patch
+Q2: Save in the bar: keep? (single MIDI save) default y
