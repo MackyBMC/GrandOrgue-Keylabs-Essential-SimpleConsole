@@ -21,3 +21,4 @@ midi/
 # personal / per-machine state
 last_dirs.json
 preset_activation.txt
+controller_engaged.txt

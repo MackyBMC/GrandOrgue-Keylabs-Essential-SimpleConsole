@@ -1,0 +1,18 @@
+claude.chat  -  v2.0.9-lcd-dock.patch   (2026-11-12)
+Apply after: stave-engraving-rules, v2.0.9-stave-project-file, v2.0.9-controller-toggle
+
+WHAT IT DOES
+- Float LCD: right-click > "Dock into the main window". It moves into the main window's LCD panel and replaces the fixed
+  2-line LCD (which hides). Right-click > "Undock (float)", or the "LCD float" button, pops it out again.
+- Remembered between runs (docked or floating). The floating size / position / opacity are kept untouched while docked.
+- Docked it has no drag handle, resize grip or opacity menu; the knobs, fader and all other options still work.
+- Docked size: about 300 px tall (never under 260), full width of the panel.
+- Also fixed: closing the LCD raised a TypeError (closeEvent called hideEvent with a close event).
+
+TESTED: dock / undock / flags / menus / remembered size in an offscreen Qt test of the LCD widget.
+NOT TESTED: inside the real main window and with the real KeyLab on Windows.
+
+QUESTIONS (reply letters only)
+ 1. Docked LCD height: (a) about right  (b) taller  (c) shorter.  Default: a.
+ (Controller toggle question 2, "also a KeyLab pad?", is still open: default n.)
+NEXT: v2.0.9-one-project.patch (main window, stave and roll all follow the same loaded MIDI / project).

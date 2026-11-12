@@ -83,6 +83,24 @@ def load_theme(config_path, raw):
     return theme if theme in ("light", "dark", "contrast") else "light"
 
 
+def controller_file(config_path):
+    return os.path.join(os.path.dirname(config_path), "controller_engaged.txt") if config_path else ""
+
+
+def load_controller_engaged(config_path, raw):
+    """Is the KeyLab controller engaged? config.yaml `controller_engaged:` is the default (true); controller_engaged.txt (written by
+    the toggle in the main window) wins, so the choice survives a restart."""
+    engaged = str(raw.get("controller_engaged", "true")).strip().lower() not in ("0", "false", "no", "off")
+    path = controller_file(config_path)
+    if path and os.path.isfile(path):
+        try:
+            with open(path, encoding="utf-8") as handle:
+                engaged = handle.read().strip().lower() not in ("0", "false", "no", "off")
+        except OSError:
+            pass
+    return engaged
+
+
 def load_preset_activation(config_path, raw):
     mode = str(raw.get("preset_activation", "staged")).lower()
     mode_path = os.path.join(os.path.dirname(config_path), "preset_activation.txt") if config_path else ""

@@ -4,6 +4,10 @@ volume knobs and the swell fader (they turn and slide as the real ones move; dra
 spectrum / oscilloscope of the sound going to the output (audio_tap.py). Drag the panel anywhere; right-click for options.
 
 CHANGELOG
+2026-11-12  Fixed: closing the LCD raised a TypeError (closeEvent handed its close event to hideEvent).
+2026-11-12  Docking: right-click "Dock into the main window" puts the LCD in the main window's LCD panel (replacing the fixed 2-line LCD);
+            "Undock (float)" or the "LCD float" button pops it out again. Remembered between runs. Docked it has no drag, grip or
+            opacity, and does not touch the floating size / position.
 2026-11-10  LCD grows with the window: as many columns as fit (not fixed 16), 2 / 3 / 4 lines (right-click "LCD lines": line 3 = loaded setter + step, line 4 = file / cue),
             "Auto" text size scales with the window. Nothing is cut at a fixed length any more: file names, stop names, division names and the
             NEXT line are only shortened (with ...) when the space really runs out; stop columns size to their longest name.
@@ -23,7 +27,7 @@ import os
 import re
 import time
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSettings, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QColorDialog, QMenu, QSizeGrip, QWidget
 
@@ -50,11 +54,16 @@ def fmt_clock(seconds):
 
 
 class LcdFloat(QWidget):
-    def __init__(self, parent=None, volume_cb=None):
-        super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+    FLOAT_FLAGS = Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
+    docked = False                                  # class default: Qt calls event() while the base class is still being built
+
+    def __init__(self, parent=None, volume_cb=None, dock_cb=None):
+        super().__init__(parent, self.FLOAT_FLAGS)
         self.setWindowTitle("LCD")
         self.setMouseTracking(True)
         self.volume_cb = volume_cb                      # (key, 0..127) -> sets the real volume
+        self.dock_cb = dock_cb                          # (True = dock / False = float) asks the main window to move this panel
+        self.docked = False
         self.settings = QSettings("KeyLabGrandOrgue", "LcdFloat")
         S = self.settings.value
         self.scheme = str(S("scheme", "Amber (Casio)"))
@@ -81,6 +90,38 @@ class LcdFloat(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
 
+    # ---------------------------------------------------------------- docking
+    def sizeHint(self):
+        return QSize(600, 300) if self.docked else super().sizeHint()
+
+    def dock_into(self, layout, parent):
+        """Become an ordinary child of `parent`, placed in `layout` (the main window's LCD panel)."""
+        self.hide()
+        self.setParent(parent, Qt.WindowType.Widget)
+        self.docked = True
+        self.grip.hide()
+        self.setMinimumSize(380, 260)
+        layout.addWidget(self, 1)
+        self.settings.setValue("docked", "true")
+        self.show()
+
+    def undock(self, layout):
+        """Back to the floating, always-on-top panel at its remembered size and place."""
+        layout.removeWidget(self)
+        self.hide()
+        self.setParent(None, self.FLOAT_FLAGS)
+        self.docked = False
+        self.grip.show()
+        self.setMinimumSize(380, 140)
+        S = self.settings.value
+        self.resize(int(S("w", 600)), int(S("h", 500)))
+        pos = S("pos")
+        if isinstance(pos, QPoint):
+            self.move(pos)
+        self.setWindowOpacity(float(S("opacity", 0.96)))
+        self.settings.setValue("docked", "false")
+        self.show()
+
     # ---------------------------------------------------------------- colours
     def colours(self):
         ink, back = self.custom if self.scheme == "Custom" else SCHEMES.get(self.scheme, SCHEMES["Amber (Casio)"])
@@ -104,11 +145,16 @@ class LcdFloat(QWidget):
         self.timer.stop()
         if self.tap is not None:
             self.tap.stop()
-        self.settings.setValue("pos", self.pos())
+        if not self.docked:
+            self.settings.setValue("pos", self.pos())
         super().hideEvent(event)
 
     def closeEvent(self, event):
-        self.hideEvent(event)
+        self.timer.stop()                               # (was hideEvent(event): Qt rejects a close event there)
+        if self.tap is not None:
+            self.tap.stop()
+        if not self.docked:
+            self.settings.setValue("pos", self.pos())
         super().closeEvent(event)
 
     def _scope_live(self):
@@ -530,7 +576,8 @@ class LcdFloat(QWidget):
             if hit[1] == "fader":
                 self._fader_to(hit[0], event.position().y())
             return
-        self._drag = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+        if not self.docked:
+            self._drag = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
 
     def mouseMoveEvent(self, event):
         if self._drag_knob and event.buttons() & Qt.MouseButton.LeftButton:
@@ -547,7 +594,8 @@ class LcdFloat(QWidget):
             key = self._drag_knob[0]
             self._set_volume(key, self.vol_goal.get(key, 0.0), force=True)
         self._drag, self._drag_knob = None, None
-        self.settings.setValue("pos", self.pos())
+        if not self.docked:
+            self.settings.setValue("pos", self.pos())
 
     def wheelEvent(self, event):
         hit = self._knob_at(event.position())
@@ -572,7 +620,7 @@ class LcdFloat(QWidget):
     # ---------------------------------------------------------------- options
     def event(self, event):
         t = event.type()
-        if t in (QEvent.Type.WindowBlocked, QEvent.Type.WindowUnblocked):
+        if not self.docked and t in (QEvent.Type.WindowBlocked, QEvent.Type.WindowUnblocked):
             top = t == QEvent.Type.WindowUnblocked
             if self.isVisible() and bool(self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint) != top:
                 geo = self.geometry()
@@ -618,11 +666,16 @@ class LcdFloat(QWidget):
         a.triggered.connect(lambda on: self._set_auto(on))
         for pt in (12, 15, 18, 22, 28):
             a = sizes.addAction(f"{pt} pt"); a.triggered.connect(lambda _=False, v=pt: self._set_size(v))
-        ops = menu.addMenu("Opacity")
-        for pct in (100, 92, 80, 60):
-            a = ops.addAction(f"{pct} %"); a.triggered.connect(lambda _=False, v=pct: self._set_opacity(v / 100))
+        if not self.docked:
+            ops = menu.addMenu("Opacity")
+            for pct in (100, 92, 80, 60):
+                a = ops.addAction(f"{pct} %"); a.triggered.connect(lambda _=False, v=pct: self._set_opacity(v / 100))
         menu.addSeparator()
-        menu.addAction("Hide").triggered.connect(self.hide)
+        if self.dock_cb:
+            menu.addAction("Undock (float)" if self.docked else "Dock into the main window").triggered.connect(
+                lambda _=False: self.dock_cb(not self.docked))
+        if not self.docked:
+            menu.addAction("Hide").triggered.connect(self.hide)
         menu.exec(event.globalPos())
 
     def _set_show(self, key, on):
@@ -683,5 +736,6 @@ class LcdFloat(QWidget):
 
     def resizeEvent(self, event):
         self.grip.move(self.width() - 16, self.height() - 16)
-        self.settings.setValue("w", self.width()); self.settings.setValue("h", self.height())
+        if not self.docked:
+            self.settings.setValue("w", self.width()); self.settings.setValue("h", self.height())
         super().resizeEvent(event)

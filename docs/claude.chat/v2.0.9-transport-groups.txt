@@ -1,0 +1,6 @@
+v2.0.9-transport-groups - notes
+Done: main window Transport box split into blue "Setter / registration (KeyLab keys)" and orange "MIDI file player". Setter buttons show their key.
+Not done (next patches): shared device-agnostic transport on main/stave/roll; docking stave + roll into main as tabs.
+NOTE (your caveat): docking needs a proper menu bar (File / Edit / View / Window / Help). Planned with the docking patch.
+Q1: colours blue / orange OK? (default: yes)
+Q2: Save button: keep in the MIDI group (default: yes)

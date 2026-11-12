@@ -1,6 +1,8 @@
 """MIDI port lifecycle and optional KeyLab MAIN-port relay.
 
 CHANGELOG
+2026-11-12  Controller toggle: set_controller_enabled() closes / opens the KeyLab ports (DAW in / out, MAIN) at any time. While
+            it is off they are not required, not reopened by the automatic reconnect, and do not count as degraded.
 2026-11-10  Output worker blocks on the queue instead of polling with a lost-wakeup window (notes could be delayed 10-15 ms).
 """
 
@@ -15,6 +17,7 @@ RELAY_QUEUE_LIMIT = 4096
 RELAY_DRAIN_BATCH = 256
 PORT_QUEUE_LIMIT = 4096
 INPUT_QUEUE_LIMIT = 4096
+CONTROLLER_KEYS = ("kl_in", "kl_out", "main_in")      # the KeyLab side; GrandOrgue and the relay output are not
 PORT_POLL_INTERVAL_S = 0.01
 
 
@@ -186,6 +189,7 @@ class MidiPorts:
         self.error_events = queue.Queue(maxsize=64)
         self.relay_queue = queue.Queue(maxsize=RELAY_QUEUE_LIMIT)
         self.relay_overflows = 0
+        self.controller_enabled = True
         self.workers = {key: _PortWorker(self, key) for key in
                 ("go_in", "go_out", "kl_in", "kl_out", "main_in", "relay_out")}
 
@@ -207,13 +211,21 @@ class MidiPorts:
     def open_all(self):
         with self.lock:
             self.errors.clear()
-        keys = ["go_in", "go_out", "kl_in", "kl_out"]
-        if self.args.relay_main:
-            keys += ["relay_out", "main_in"]
-        elif self.args.kl_main:
-            keys += ["main_in"]
-        for key in keys:
+        for key in self.required():
             self.workers[key].request_action("open")
+        if not self.controller_enabled:
+            for key in CONTROLLER_KEYS:
+                self.workers[key].request_action("close")
+
+    def set_controller_enabled(self, enabled):
+        """Engage / disengage the KeyLab: close its ports now, or open them again. GrandOrgue's ports are left alone."""
+        self.controller_enabled = bool(enabled)
+        with self.lock:
+            for key in CONTROLLER_KEYS:
+                self.errors.pop(key, None)
+        wanted = set(self.required())
+        for key in CONTROLLER_KEYS:
+            self.workers[key].request_action("open" if key in wanted else "close")
 
     def find_input_port(self, wanted):
         return find_matching_port(self.backend.get_input_names(), wanted)
@@ -324,6 +336,8 @@ class MidiPorts:
             keys += ["relay_out", "main_in"]
         elif self.args.kl_main:
             keys.append("main_in")
+        if not self.controller_enabled:
+            keys = [k for k in keys if k not in CONTROLLER_KEYS]
         return keys
 
     def degraded(self):

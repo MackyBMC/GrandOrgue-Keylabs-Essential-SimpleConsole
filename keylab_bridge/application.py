@@ -1,6 +1,10 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-12  Transport state carries "take_path" (full path of the MIDI file in play), so the main window can keep the stave editor on the same file.
+2026-11-12  KeyLab controller toggle: "controller" event / set_controller_engaged() closes or opens the KeyLab ports at any time
+            (the bridge keeps running for GrandOrgue). Remembered in controller_engaged.txt next to config.yaml; snapshot carries
+            "controller_engaged"; the connection list shows OFF for the KeyLab links while it is disengaged.
 2026-11-10  Snapshot carries the cue diff (what the cued setter would add / remove) and the manual diff (changes by hand since
             the loaded setter) for the floating LCD. Option: the sustain pedal turns sheet music pages (tap = forward, double
             tap = back) instead of activating the cued setter (Jog press still activates).
@@ -76,7 +80,7 @@ from typing import Any, cast
 
 from . import __version__
 from .console_ui import ConsoleUI
-from .midi_ports import MidiPorts
+from .midi_ports import CONTROLLER_KEYS, MidiPorts
 from .organ_layout import BANKS, ITEMS, configure_layout
 from .midi_protocol import (
     Bridge, CMD, CMD_CH, CC_JOG, CC_SUSTAIN, TEXT_WIDTH, N_FORWARD, N_JOG_PRESS, N_LOOP, N_METRO,
@@ -93,7 +97,7 @@ from .organ_layout import ACTIVE_LAYOUT, STOP_CHANNELS
 from .tempo import TempoSession
 from .preset_store import (
     _normalized_mapping_key, _write_managed_switches, combination_root, load_combinations, project_root, set_config_key,
-    load_language, load_preset_activation, load_theme, bridge_settings,
+    controller_file, load_controller_engaged, load_language, load_preset_activation, load_theme, bridge_settings,
 )
 from translations import LANGUAGE_NAMES, translate
 
@@ -140,6 +144,9 @@ class BridgeApp:
         self.theme = load_theme(cfg_path, raw)
         self.theme_path = os.path.join(os.path.dirname(cfg_path), "theme.txt") if cfg_path else ""
         self.preset_activation = load_preset_activation(cfg_path, raw)
+        self.controller_engaged = load_controller_engaged(cfg_path, raw)
+        self.controller_path = controller_file(cfg_path)
+        self._engage_resync_until = 0.0
         self.preset_activation_path = os.path.join(os.path.dirname(cfg_path), "preset_activation.txt") if cfg_path else ""
         self._baseline_settle_at = None
         self._last_confirmed_identity = None
@@ -152,6 +159,7 @@ class BridgeApp:
         self.recent_times = {}
         self.stop_grid_pad_handler = None
         self.ports = MidiPorts(backend, args, self.stats, self.recent_times, br_settings.get("pad_ccs"))
+        self.ports.controller_enabled = self.controller_engaged
         self.br = self.make_bridge()
         self.tempo.add_listener(self._tempo_changed)
         self.debug = bool(args.verbose)
@@ -229,6 +237,24 @@ class BridgeApp:
         except OSError:
             self.message = self.t("theme_save_error")
             return False
+        return True
+
+    def set_controller_engaged(self, engaged):
+        """Engage / disengage the KeyLab at any time and remember it. GrandOrgue playback and the bridge keep running."""
+        engaged = bool(engaged)
+        self.controller_engaged = engaged
+        try:
+            if self.controller_path:
+                with open(self.controller_path, "w", encoding="utf-8") as handle:
+                    handle.write(("true" if engaged else "false") + "\n")
+        except OSError:
+            self.log("Could not remember the controller setting (controller_engaged.txt is not writable).", level="WARN")
+        self.ports.set_controller_enabled(engaged)
+        self.reconnect_delay = 3.0
+        self.last_reconnect_attempt = time.perf_counter()
+        if engaged:
+            self._engage_resync_until = time.perf_counter() + 6.0          # push LCD / LEDs again as soon as the KeyLab answers
+        self.log("KeyLab controller engaged" if engaged else "KeyLab controller disengaged (its MIDI ports are closed)", level="INFO")
         return True
 
     def set_preset_activation(self, mode):
@@ -1061,6 +1087,8 @@ class BridgeApp:
             self.set_theme(str(value))
         elif event == "preset_activation":
             self.set_preset_activation(str(value))
+        elif event == "controller":
+            self.set_controller_engaged(bool(value))
         elif event == "save_combination":
             self.save_combination_editor(value)
         elif event == "menu_focus":
@@ -1731,6 +1759,7 @@ class BridgeApp:
             "active_combination_index": active_combination_index,
             "internal_position": br.pos.strip(),
             "preset_activation": self.preset_activation,
+            "controller_engaged": self.controller_engaged,
             "tempo_bpm": self.tempo.bpm,
             "sheet_zone": self.br.sheet_zone,
             "transport": self._transport_state(),
@@ -1864,6 +1893,7 @@ class BridgeApp:
         started = getattr(rec, "started", None) if rec is not None else None
         return {
             "take_file": os.path.basename(self.take_to_play) if self.take_to_play else "",
+            "take_path": self.take_to_play or "",
             "take_playing": bool(player.active),
             "take_pos": position,                       # seconds into the file at its own tempo
             "take_len": float(self.take_length or 0.0),
@@ -2183,7 +2213,7 @@ class BridgeApp:
         rows = [f"{self.t('engine')}  {self.t('running') if not self.ports.degraded() else self.t('degraded')}  up {ConsoleUI.uptime(time.perf_counter() - self.started)}  "
                 f"restarts {self.restarts}  reconnects {self.reconnects}"]
         for label_key, key in roles:
-            state = self.t("link_ok") if self.ports.connected(key) else self.t("link_error")
+            state = "OFF" if key in CONTROLLER_KEYS and not self.controller_engaged else (self.t("link_ok") if self.ports.connected(key) else self.t("link_error"))
             label = self.t(label_key)
             name = self.ports.actual.get(key, self.ports.wanted(key) or "not configured")
             age = self.recent_times.get(key)
@@ -2306,6 +2336,12 @@ class BridgeApp:
                     self.reconnect_delay = min(30.0, self.reconnect_delay * 2.0)
                 elif not self.ports.needs_reconnect():
                     self.reconnect_delay = 3.0
+                if self._engage_resync_until:
+                    if self.ports.connected("kl_out"):
+                        self._engage_resync_until = 0.0
+                        self.resync()
+                    elif time.perf_counter() > self._engage_resync_until:
+                        self._engage_resync_until = 0.0
                 self.publish_snapshot()
                 time.sleep(0.005)
         except KeyboardInterrupt:

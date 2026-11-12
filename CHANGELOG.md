@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### New
+- Stave Station project file (`.ss`, plain YAML) saved next to the MIDI as you work: every setting, bar lines and per-bar grids, track / manual mapping, setters, division labels, pedal marks, words and (only if you edited them) the piano-roll notes. Reopening the MIDI or the `.ss` brings it all back. The MIDI is linked (relative path, absolute path, size, SHA-1), never changed. Open project... / Save project as... in the Recording box. Words moved from `<file>.lyrics.json` into the project (old files are still read).
+
+- KeyLab controller toggle in the main window tool bar: disengage the controller from the bridge at any time (its MIDI ports close, nothing waits for it, GrandOrgue keeps playing) and engage it again. Remembered across restarts in `controller_engaged.txt` (default engaged; `controller_engaged:` in config.yaml sets the first-run default).
+- LCD dock: right-click the floating LCD > "Dock into the main window" puts it in the main window's LCD panel, replacing the fixed 2-line LCD; "LCD float" or right-click > Undock pops it out again. Remembered between runs. Also fixes a TypeError when the LCD was closed.
+- One MIDI everywhere: the file loaded in the main window (Open MIDI, jog, Previous / Next) is opened in the stave editor and piano roll too, and a file or `.ss` project opened in the stave editor becomes the main window's file. The editor follows after 0.9 s of stillness and only while it is open.
+- Transport split into two framed groups: "Setter / registration (KeyLab keys)" in blue (Rewind, Forward, Jog turn, Jog press) and "MIDI file player" in orange (Play, Stop, Loop, Metronome, Save, Open MIDI, tempo, channels, position). Each setter button names its KeyLab key.
+
 ### Fixed
 - Stave builder follows engraving practice (Gould, "Behind Bars"): notes are split into tied pieces so none crosses the middle of the bar (4/4 half note on beat 2 is two tied quarters) or a beat it may not cross; 6/8 and 12/8 keep their dotted beats; rests follow the same boundaries (no dotted rests in simple time, none across the half bar).
 - Chromatic notes are spelled by direction (C C# D D# E, then E Eb D Db) instead of one fixed sharp/flat table.

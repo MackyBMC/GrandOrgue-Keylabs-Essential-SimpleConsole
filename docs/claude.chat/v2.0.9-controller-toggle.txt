@@ -1,0 +1,22 @@
+claude.chat  -  v2.0.9-controller-toggle.patch   (2026-11-12)
+Apply after: stave-engraving-rules.patch, v2.0.9-stave-project-file.patch
+
+WHAT IT DOES
+- New tool-bar button "KeyLab controller: engaged / OFF" (main window, next to "LCD float").
+- OFF closes the KeyLab's three MIDI ports (DAW in, DAW out, MAIN) at once. GrandOrgue's ports stay open and playback continues.
+  While OFF the KeyLab links are not "required": the bridge is not shown as degraded and the automatic reconnect does not reopen them.
+- ON reopens them and re-sends the LCD / LEDs as soon as the KeyLab answers (waits up to 6 s).
+- Remembered across restarts in controller_engaged.txt (next to config.yaml, git-ignored). First run: engaged
+  (config.yaml `controller_engaged: false` changes that default).
+- Connection list shows OFF instead of ERR for the KeyLab links.
+
+TESTED: port logic with a fake MIDI backend (engage / disengage / open_all while off / re-engage / file persistence).
+NOT TESTED: a real KeyLab on Windows, and the button in the real window.
+
+THIS IS NOT THE FIX FOR PROBLEM 3 (GUI freezes when the controller is unplugged). It lets you avoid the cable-pull case by
+switching the controller off first. The freeze itself needs a trace from the real machine; when it happens, please add the
+System Console log lines to the next claude.chat reply.
+
+QUESTIONS (reply with just the letters, in a short file named reply.chat or in the next session)
+ 1. Next patch: (a) LCD dock  (b) one project across main / stave / roll windows  (c) .ss double-click installer entry.  Default: a, b, c in that order.
+ 2. Should the toggle also be a KeyLab pad / key (so you can disengage from the keyboard)?  (y/n)  Default: n.

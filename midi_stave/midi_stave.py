@@ -1,5 +1,13 @@
 """
 CHANGELOG
+2026-11-12  One MIDI everywhere: loaded_hook(path) tells the main window which MIDI / project media this editor just opened, so the main
+            window (and the piano roll, which is part of this editor) stay on the same file; the main window does the same the other way.
+2026-11-12  Project file (.ss, see project.py): every setting, the bar lines and per-bar grids, track / manual mapping, setters,
+            division labels, pedal marks, words and (only if edited) the piano-roll notes are saved next to the MIDI as you work
+            (autosave 1.5 s after a change, and on close) and come back when the MIDI or the .ss is opened. The MIDI is linked
+            (relative path, absolute path, size, SHA-1), never copied or changed. Open project... / Save project as... in the
+            Recording box; a changed MIDI asks whether to keep the settings. Words now live in the .ss (old .lyrics.json is
+            still read). Double-click a .ss: `python midi_stave/stave_station.py file.ss`.
 2026-11-10  Score follow: keeps the playing bar in view while it stays on one bar, a new bar always follows, and Play after Stop follows
             from the first bar; scrolling by hand pauses the follow for 3 s.
 2026-10-24  Words: "Words (lyrics)..." - up to six verses under the staves, for all voices or one voice (hyphens split
@@ -76,6 +84,7 @@ from tempo_control import TempoControl
 
 import core
 import render
+import project
 import sessionmeta
 import chrome
 import polish
@@ -1258,6 +1267,12 @@ class Stave(QMainWindow):
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.rebuild)
+        self.loaded_hook = None                                    # set by the main window: loaded_hook(path) after a file is opened here
+        self.project_path, self.notes_edited = None, False         # the .ss this MIDI belongs to; piano-roll notes differ from the MIDI
+        self._restoring, self._project_failed = False, False
+        self.project_timer = QTimer(self)
+        self.project_timer.setSingleShot(True)
+        self.project_timer.timeout.connect(self.save_project)
         self._build_ui()
         geometry = self.settings.value("geometry")
         if geometry:
@@ -1307,6 +1322,17 @@ class Stave(QMainWindow):
         row.addWidget(open_btn)
         row.addWidget(takes_btn)
         f.addLayout(row)
+        prow = QHBoxLayout()
+        open_proj = QPushButton("Open project...")
+        open_proj.setToolTip("A .ss project: the linked MIDI plus every setting, bar line and mapping exactly as you left them")
+        open_proj.clicked.connect(self.open_project_dialog)
+        save_proj = QPushButton("Save project as...")
+        save_proj.setToolTip("The project saves itself next to the MIDI as you work. Use this to keep it somewhere else "
+                             "(the link to the MIDI is stored relative to the project file, so the folder can be moved).")
+        save_proj.clicked.connect(self.save_project_as)
+        prow.addWidget(open_proj)
+        prow.addWidget(save_proj)
+        f.addLayout(prow)
         self.takes_list = QListWidget()
         self.takes_list.setMaximumHeight(130)
         self.takes_list.itemDoubleClicked.connect(lambda item: self.load(item.data(Qt.ItemDataRole.UserRole)))
@@ -1819,7 +1845,7 @@ class Stave(QMainWindow):
 
     def open_dialog(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open MIDI", self.settings.value("last_dir", self.takes_folder()),
-                                              "MIDI and MusicXML (*.mid *.midi *.kar *.musicxml *.xml *.mxl);;MIDI (*.mid *.midi *.kar);;MusicXML (*.musicxml *.xml *.mxl)")
+                                              "MIDI, MusicXML and projects (*.mid *.midi *.kar *.musicxml *.xml *.mxl *.ss);;MIDI (*.mid *.midi *.kar);;MusicXML (*.musicxml *.xml *.mxl);;Stave projects (*.ss)")
         if path:
             self.settings.setValue("last_dir", os.path.dirname(path))
             self.load(path)
@@ -2027,10 +2053,46 @@ class Stave(QMainWindow):
         self.changed(delay=50)
         self.statusBar().showMessage("Blank score: choose the Add tool (A) and click the roll or the stave to write notes.")
 
+    MEDIA_FILTER = "MIDI and MusicXML (*.mid *.midi *.kar *.musicxml *.xml *.mxl)"
+
     def load(self, path):
-        imported = None
+        """Open a MIDI / MusicXML file, or a .ss project (its linked MIDI plus every saved setting)."""
+        self.flush_project()                                  # the file being left behind is saved first
+        imported, state, proj = None, None, None
+        if os.path.splitext(path)[1].lower() == project.EXT:
+            proj = path
+            state = project.load(proj)
+            if state is None:
+                QMessageBox.warning(self, "MIDI to Stave", f"That is not a readable Stave Station project:\n{proj}")
+                return
+            media = project.resolve_media(proj, state.get("midi"))
+            if media is None and not state.get("notes"):
+                media, _ = QFileDialog.getOpenFileName(self, "Where is the MIDI this project was made from?", os.path.dirname(proj),
+                                                       self.MEDIA_FILTER)
+                if not media:
+                    return
+            path = media
+        else:
+            sibling = project.default_path(path)
+            if os.path.isfile(sibling):
+                proj, state = sibling, project.load(sibling)
+        if state and path and project.media_changed(state.get("midi"), path):
+            box = QMessageBox(self)
+            box.setWindowTitle("Project")
+            box.setText(f"{os.path.basename(path)} has changed since this project was saved.")
+            box.setInformativeText("Keep the saved settings (bar lines are found again and edited notes are dropped), "
+                                   "or start fresh from the file? The old project file is kept as .bak.")
+            keep = box.addButton("Keep settings", QMessageBox.ButtonRole.AcceptRole)
+            box.addButton("Start fresh", QMessageBox.ButtonRole.DestructiveRole)
+            box.exec()
+            if box.clickedButton() is keep:
+                state["_stale"] = True
+            else:
+                state = None
         try:
-            if os.path.splitext(path)[1].lower() in (".musicxml", ".xml", ".mxl"):
+            if path is None:                                  # a project made from a blank score: its notes live in the .ss
+                self.notes, self.info = [], {"tracks": [], "voice_names": {}}
+            elif os.path.splitext(path)[1].lower() in (".musicxml", ".xml", ".mxl"):
                 self.notes, self.info = core.load_musicxml(path)
                 imported = self.info
             else:
@@ -2041,23 +2103,32 @@ class Stave(QMainWindow):
         if self.stop_hook:
             self.stop_hook()                                  # loading while playing stops the old playback
         self.path = path
+        if path and self.loaded_hook:
+            try:
+                self.loaded_hook(path)                            # the main window follows this file
+            except Exception:
+                pass
+        self.project_path = proj or (project.default_path(path) if path else None)
+        self.notes_edited, self._project_failed = False, False
         self.hl_bar = None
         self.load_lyrics()
         self.roll.set_playhead(None)
         self._to_top = True
         self.preview.verticalScrollBar().setValue(0)
         self.roll.horizontalScrollBar().setValue(0)
-        self.loaded_label.setText(f"  Loaded: {os.path.basename(path)}  ")
+        name = os.path.basename(path or proj)
+        self.loaded_label.setText(f"  Loaded: {name}" + (f"  (project {os.path.basename(proj)})" if state else "") + "  ")
         self.hidden_tracks = set()
         if self.roll_window is None:
             QTimer.singleShot(0, self.show_roll)
         self.show_tracks()
         self.title.blockSignals(True)
-        self.title.setText((imported or {}).get("title") or os.path.splitext(os.path.basename(path))[0])
+        self.title.setText((imported or {}).get("title") or os.path.splitext(name)[0])
         self.title.blockSignals(False)
-        self.setWindowTitle(f"MIDI to Stave - {os.path.basename(path)}")
+        self.setWindowTitle(f"MIDI to Stave - {name}")
         self.bar_grid = {}
         self.setters = []
+        self.divisions = {}
         self.sel_notes, self.undo_stack, self.redo_stack = set(), [], []
         self.setter_list.clear()
         self.selected_bar = None
@@ -2066,6 +2137,9 @@ class Stave(QMainWindow):
         self.stave_names.blockSignals(True)
         self.stave_names.setText("")
         self.stave_names.blockSignals(False)
+        if state:
+            self.apply_project_state(state, path)
+            return
         if imported:
             self.barmap = imported["barmap"]                 # the bar lines are already exact: nothing to detect
             if len(imported["names"]) > 1:
@@ -2087,6 +2161,152 @@ class Stave(QMainWindow):
             self.detect_bars()
             self._adopt_file_tempo()
             self.import_setters(path)
+
+    # ---- project file (.ss)
+    PROJECT_TEXT = ("meter", "grid", "key", "page", "organ_names_set")                 # combo boxes stored by their text
+    PROJECT_INDEX = ("layout_kind", "source", "organ_pedal")                           # combo boxes stored by position
+    PROJECT_WIDGETS = ("follow", "triplets", "legato", "chord", "split", "split2", "split3", "pedal", "stave_names", "organ_manuals",
+                       "organ_names", "hold", "dynamics", "dyn_bias", "title", "composer", "arranger", "scale", "transpose", "slurs",
+                       "staccato", "final_bar", "sp_staff", "sp_group", "sp_system", "sp_note", "adv_multirest", "adv_multirest_n",
+                       "adv_clef", "adv_rehearsal", "adv_registration", "adv_voices", "adv_nvoices", "adv_tidy")
+
+    @staticmethod
+    def _widget_get(w):
+        if isinstance(w, QCheckBox):
+            return w.isChecked()
+        if isinstance(w, QLineEdit):
+            return w.text()
+        return w.value()                                      # spin boxes and sliders
+
+    @staticmethod
+    def _widget_set(w, value):
+        w.blockSignals(True)
+        try:
+            if isinstance(w, QCheckBox):
+                w.setChecked(bool(value))
+            elif isinstance(w, QLineEdit):
+                w.setText(str(value))
+            else:
+                w.setValue(value)
+        finally:
+            w.blockSignals(False)
+
+    def project_state(self, project_path):
+        """Everything worth keeping, as plain data (see project.py for the file format)."""
+        settings = {n: self._widget_get(getattr(self, n)) for n in self.PROJECT_WIDGETS}
+        settings.update({n: getattr(self, n).currentText() for n in self.PROJECT_TEXT})
+        settings.update({n: getattr(self, n).currentIndex() for n in self.PROJECT_INDEX})
+        settings["layout"] = KINDS[self.layout_kind.currentIndex()]       # readable in the file; the index above is what is restored
+        data = {"midi": project.link_for(self.path, project_path), "settings": settings,
+                "bars": {"anchors": list(self.barmap.anchors), "beats": list(self.barmap.beats),
+                         "grid": {int(b): project.grid_text(v) for b, v in self.bar_grid.items()}},
+                "staves": {"manual_ticks": [{n: c.isChecked() for n, c in row.items() if n != "__reg__"} for row in self.manual_checks],
+                           "registration": self.voice_reg},
+                "tracks": {"hidden": sorted(self.hidden_tracks),
+                           "map": {project.key_text(k): v for k, v in self.track_map.items()}},
+                "setters": self.setters, "divisions": {int(b): t for b, t in self.divisions.items()},
+                "pedal_marks": [[k[0], k[1], k[2], k[3], v] for k, v in self.signs.items()],
+                "lyrics": self.lyrics}
+        if self.notes_edited or not self.path:
+            data["notes"] = [[n.start, n.end, n.pitch, n.vel, n.ch, n.track, n.stave, bool(n.mute)] for n in self.notes]
+        return data
+
+    def apply_project_state(self, state, path):
+        """Put a saved project back: widgets without firing their signals, then one rebuild."""
+        self._restoring = True
+        try:
+            stale = bool(state.get("_stale"))
+            saved = state.get("notes")
+            if saved and not stale:
+                self.notes = [core.Note(*t) for t in saved]
+                self.notes_edited = True
+            st = state.get("settings") or {}
+            for name in self.PROJECT_WIDGETS:
+                if name in st:
+                    self._widget_set(getattr(self, name), st[name])
+            for name in self.PROJECT_TEXT:
+                box = getattr(self, name)
+                if name in st and box.findText(str(st[name])) >= 0:
+                    box.blockSignals(True)
+                    box.setCurrentText(str(st[name]))
+                    box.blockSignals(False)
+            for name in self.PROJECT_INDEX:
+                box = getattr(self, name)
+                if isinstance(st.get(name), int) and 0 <= st[name] < box.count():
+                    box.blockSignals(True)
+                    box.setCurrentIndex(st[name])
+                    box.blockSignals(False)
+            self.organ_names.setEnabled(self.organ_names_set.currentText() == "Custom")
+            self.hidden_tracks = {tuple(h) for h in (state.get("tracks") or {}).get("hidden", [])}
+            self.track_map = {project.key_parse(k): v for k, v in ((state.get("tracks") or {}).get("map") or {}).items()}
+            self.voice_reg = list((state.get("staves") or {}).get("registration") or [])
+            self.signs = {(int(a), int(b), int(c), float(d)): e for a, b, c, d, e in state.get("pedal_marks") or []}
+            if state.get("lyrics"):
+                self.lyrics = {str(k): list(v) for k, v in state["lyrics"].items()}
+            self.update_name_hint()                           # rebuilds the manual rows (keeps voice_reg when the stave count matches)
+            ticks = (state.get("staves") or {}).get("manual_ticks") or []
+            if len(ticks) == len(self.manual_checks):
+                for row, mine in zip(self.manual_checks, ticks):
+                    for name, box in row.items():
+                        if name != "__reg__" and name in mine:
+                            box.setChecked(bool(mine[name]))
+            self.show_tracks()
+            bars = state.get("bars") or {}
+            if bars.get("anchors") and not stale:
+                self.barmap = core.BarMap(bars["anchors"], bars.get("beats"))
+                self.bar_grid = {int(b): project.grid_parse(v) for b, v in (bars.get("grid") or {}).items()}
+            else:
+                self.detect_bars()
+            self.setters = [dict(x) for x in state.get("setters") or []]
+            self.divisions = {int(b): str(t) for b, t in (state.get("divisions") or {}).items()}
+            self.refresh_setters()
+            self._show_divisions()
+            self._adopt_file_tempo()
+            self.refresh_roll()
+        finally:
+            self._restoring = False
+        self.changed(delay=50)
+        self.statusBar().showMessage("Project restored: " + os.path.basename(self.project_path or ""), 5000)
+
+    def save_project(self, path=None):
+        """Write the project file now. Quiet on success; says so once in the status bar when the folder cannot be written."""
+        path = path or self.project_path
+        if not path or not self.notes or self._restoring:
+            return False
+        try:
+            project.save(path, self.project_state(path))
+        except OSError as exc:
+            if not self._project_failed:
+                self.statusBar().showMessage(f"Could not save the project file ({exc}). Use Save project as... for a folder you can write to.")
+            self._project_failed = True
+            return False
+        self._project_failed, self.project_path = False, path
+        return True
+
+    def flush_project(self):
+        if self.project_timer.isActive():
+            self.project_timer.stop()
+            self.save_project()
+
+    def save_project_as(self):
+        if not self.notes:
+            return
+        start = self.project_path or (project.default_path(self.path) if self.path else self._suggest(".ss"))
+        path, _ = QFileDialog.getSaveFileName(self, "Save project", start, "Stave projects (*.ss)")
+        if not path:
+            return
+        if not path.lower().endswith(project.EXT):
+            path += project.EXT
+        self.project_timer.stop()
+        if self.save_project(path):
+            self.statusBar().showMessage(f"Project saved: {path}")
+
+    def open_project_dialog(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Open project", self.settings.value("last_dir", self.takes_folder()),
+                                              "Stave projects (*.ss)")
+        if path:
+            self.settings.setValue("last_dir", os.path.dirname(path))
+            self.load(path)
 
     def _adopt_file_tempo(self):
         """A newly opened file sets the session BPM to its own average tempo (no undo step): playback then starts as written."""
@@ -2511,11 +2731,13 @@ class Stave(QMainWindow):
         return [(n.start, n.end, n.pitch, n.vel, n.ch, n.track, n.stave, n.mute) for n in self.notes]
 
     def _restore(self, snap):
+        self.notes_edited = True
         self.notes[:] = [core.Note(*t) for t in snap]
         self.sel_notes = set()
         self.after_edit()
 
     def push_undo(self):
+        self.notes_edited = True                            # the piano roll differs from the MIDI: the project keeps the notes
         self.undo_stack.append(self._snapshot())
         del self.undo_stack[:-100]
         self.redo_stack.clear()
@@ -3210,17 +3432,8 @@ class Stave(QMainWindow):
         return (self.path + ".lyrics.json") if getattr(self, "path", None) else None
 
     def save_lyrics(self):
-        target = self.lyrics_path()
-        if not target:
-            return
-        try:
-            if self.lyrics:
-                with open(target, "w", encoding="utf-8") as handle:
-                    json.dump(self.lyrics, handle, ensure_ascii=False, indent=1)
-            elif os.path.isfile(target):
-                os.remove(target)
-        except OSError:
-            pass
+        """Words are kept in the project file now (the old <file>.lyrics.json is still read when there is no project)."""
+        self.project_timer.start(300)
 
     def load_lyrics(self):
         self.lyrics = {}
@@ -3462,6 +3675,8 @@ class Stave(QMainWindow):
         if not self.notes:
             return
         self.timer.start(delay if isinstance(delay, int) else 250)
+        if self.project_path and not self._restoring:
+            self.project_timer.start(1500)                  # autosave the project a moment after the last change
 
     def rebuild(self):
         if not self.notes:
@@ -3667,6 +3882,7 @@ class Stave(QMainWindow):
         self.statusBar().showMessage(f"Saved {path}")
 
     def closeEvent(self, event):
+        self.flush_project()
         if self.pool:
             self.pool.shutdown(wait=False, cancel_futures=True)
         self.settings.setValue("geometry", self.saveGeometry())

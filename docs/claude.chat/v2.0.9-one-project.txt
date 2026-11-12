@@ -1,0 +1,23 @@
+claude.chat  -  v2.0.9-one-project.patch   (2026-11-12)
+Apply after: stave-engraving-rules, v2.0.9-stave-project-file, v2.0.9-controller-toggle, v2.0.9-lcd-dock
+
+WHAT IT DOES
+- Main window -> stave editor / piano roll: the MIDI loaded in the main window (Open MIDI, jog, Previous / Next) is opened in the
+  stave editor too. It waits until the file has been still for 0.9 s, and only follows while the editor window is open, so
+  fast jogging does not engrave every file it passes. Opening the editor shows the main window's file.
+- Stave editor -> main window: any MIDI or .ss project opened in the editor (Open MIDI, takes list, Open project...) becomes the main
+  window's file (the .ss's linked MIDI). MusicXML files stay in the editor only (the main window plays MIDI).
+- The piano roll is part of the stave editor, so it follows automatically.
+- The stave's own preview file (_preview.mid) is ignored; no loops between the two sides.
+
+LIMITS (by design, tell me if you want otherwise)
+- The main window plays the MIDI file itself. Notes you edited only in the piano roll live in the .ss project, not in the MIDI, so
+  the main window does not play those edits. "Save edited MIDI" writes them out when you want to play them from the main window.
+- The sheet-music (PDF) window is a different kind of file and is not tied to the MIDI.
+
+TESTED: follow / echo / preview-ignored / project-open logic with a real Stave editor (offscreen) and a stub main window.
+NOT TESTED: in the real main window with a real KeyLab.
+
+QUESTIONS (letters only)
+ 1. Should the main window play the stave's edited notes (via a temporary file) instead of the original MIDI?  (y/n)  Default: n.
+NEXT: v2.0.9-ss-file-association.patch (installer registers .ss; stave editor launches alone on double-click).
