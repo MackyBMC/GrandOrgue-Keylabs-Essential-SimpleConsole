@@ -4,15 +4,25 @@ just reports why it is off; nothing else in the program depends on it. Nothing i
 few thousand samples are kept in memory.
 
 CHANGELOG
+2026-11-13  Type-clean (Pylance / pyright): optional libraries (numpy, PyAudioWPatch, soundcard) are loaded through optional() and typed Any, so a
+            missing library is a runtime message, never an editor error; the buffer is never None.
 2026-11-10  New.
 """
+import importlib
 import threading
 import time
+from typing import Any, List, Optional
 
-try:
-    import numpy as np
-except ImportError:                      # the LCD then shows "numpy missing"
-    np = None
+
+def optional(name: str) -> Any:
+    """Import an optional library by name; None when it is not installed (type checkers then see Any, not a missing import)."""
+    try:
+        return importlib.import_module(name)
+    except ImportError:
+        return None
+
+
+np: Any = optional("numpy")              # None -> the LCD shows "numpy missing"
 
 KEEP = 8192
 
@@ -22,9 +32,9 @@ class AudioTap:
         self.status = "off"                # off | starting | on | message why it is unavailable
         self.rate = 48000
         self.device_name = ""
-        self._buf = np.zeros(KEEP, dtype="float32") if np is not None else None
+        self._buf: Any = np.zeros(KEEP, dtype="float32") if np is not None else None
         self._lock = threading.Lock()
-        self._thread = None
+        self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self.last_data = 0.0
         self.peak = 0.0
@@ -62,12 +72,14 @@ class AudioTap:
             return
         x = x[-KEEP:]
         with self._lock:
+            if self._buf is None:
+                return
             self._buf = np.concatenate((self._buf[x.size:], x))
         self.last_data = time.time()
         self.peak = max(self.peak * 0.9, float(np.abs(x).max()))
 
-    def latest(self, count=2048):
-        if np is None:
+    def latest(self, count: int = 2048) -> Any:
+        if np is None or self._buf is None:
             return None
         with self._lock:
             return self._buf[-count:].copy()
@@ -77,10 +89,12 @@ class AudioTap:
 
     # ---- devices
     @staticmethod
-    def loopback_devices():
+    def loopback_devices() -> List[str]:
         """Names of output devices that can be listened to (PyAudioWPatch)."""
+        pa: Any = optional("pyaudiowpatch")
+        if pa is None:
+            return []
         try:
-            import pyaudiowpatch as pa
             p = pa.PyAudio()
             try:
                 return [d["name"] for d in p.get_loopback_device_info_generator()]
@@ -92,15 +106,10 @@ class AudioTap:
     # ---- capture threads
     def _run(self, device):
         try:
-            try:
-                import pyaudiowpatch  # noqa: F401
+            if optional("pyaudiowpatch") is not None:
                 self._run_pyaudio(device)
                 return
-            except ImportError:
-                pass
-            try:
-                import soundcard  # noqa: F401
-            except ImportError:
+            if optional("soundcard") is None:
                 self.status = "no audio capture library (pip install PyAudioWPatch)"
                 return
             self._run_soundcard(device)
@@ -108,7 +117,7 @@ class AudioTap:
             self.status = f"audio capture failed: {exc}"
 
     def _run_pyaudio(self, device):
-        import pyaudiowpatch as pa
+        pa: Any = optional("pyaudiowpatch")
         p = pa.PyAudio()
         stream = None
         try:
@@ -148,7 +157,7 @@ class AudioTap:
                 p.terminate()
 
     def _run_soundcard(self, device):
-        import soundcard as sc
+        sc: Any = optional("soundcard")
         speaker = next((s for s in sc.all_speakers() if device and device in s.name), None) or sc.default_speaker()
         mic = sc.get_microphone(id=str(speaker.name), include_loopback=True)
         self.rate, self.device_name = 48000, speaker.name

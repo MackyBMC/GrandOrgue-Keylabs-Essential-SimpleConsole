@@ -13,8 +13,10 @@
 - One shared MIDI transport (Play / Pause, Stop / Panic, Loop, Metronome, Save, position, loaded file) in the main window, the stave editor and the piano roll; every copy drives the one MIDI take of the app. The main window's right-hand column scrolls instead of squashing buttons.
 - The bridge only connects to the KeyLab when it is detected at start; otherwise it runs without it and the "KeyLab controller" toggle stays dim until a KeyLab port appears.
 - Launch checks: a second bridge says "already running" and exits; GrandOrgue is not started again when it is already running (a notice instead).
-- Mixer tab: Windows volume and mute of each program that plays sound (GrandOrgue, the orchestral background player) plus the master, with named scenes (Interlude / Service) to match levels at functions. Needs `pycaw` (Windows).
+- Mixer: a floating / dockable frame (View > Mixer, Ctrl+M) with graduated vertical faders (ticks every 5 %, numbers every 10 %, dB readout) for the Windows volume and mute of each program that plays sound (GrandOrgue, the orchestral background player) plus the master, with named scenes (Interlude / Service). Fixed-size strips, never stretched; stays available on every tab. Needs `pycaw` (Windows).
 - Scaling: "Text size %" (60-160 %) now scales paddings, scroll bars, tabs, menus, slider handles and check marks with the text, control heights follow the font, the main window can shrink to 560 x 420, the top bar wraps onto a second row instead of clipping its buttons, and the Live page has one scroll bar that only appears when even the smallest layout does not fit.
+- Piano roll snapping like FL Studio: snap on by default (new option "Note length"), notes follow the snap live while placing, moving and resizing either end; hold Alt for free.
+- `pyrightconfig.json` (Windows platform, basic checking) and type-clean optional-library imports, so Pylance shows no errors for `audio_tap.py`, `audio_mixer.py` and the new files.
 
 ### Fixed
 - Piano Roll tab crashed with `module 'midi_stave' has no attribute 'PianoKeys'` inside the bridge (the bare `import midi_stave` found the folder, not the module); the roll window and the track organ dialog now use the module their Stave came from.

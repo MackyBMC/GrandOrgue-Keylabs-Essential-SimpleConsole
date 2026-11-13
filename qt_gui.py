@@ -1,6 +1,8 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-13  Mixer is now a floating / dockable frame (View > Mixer, Ctrl+M) instead of a sub tab: graduated vertical faders (ticks every 5 %, numbers every 10 %,
+            0 dB at 100 %), fixed strip size, always available on every tab (Bridge / Stave Station / Piano Roll); position and visibility remembered.
 2026-11-12  Scaling: control sizes follow the text size (LCD, pad buttons, lists, buttons are set from the font height and re-set when the Appearance text size
             changes), the window may shrink to 560 x 420, panels share the space; one scroll bar on the Live page only when even the smallest layout does not fit.
 2026-11-12  "Mixer" sub tab (mixer_panel.py / audio_mixer.py): Windows volume + mute of each program playing sound (GrandOrgue, the orchestral
@@ -1446,6 +1448,7 @@ class BridgeWindow(QMainWindow):
         root = QWidget()
         layout = QVBoxLayout(root)
         self._docks = {}
+        self._build_mixer_dock()
         self.top_tabs = QTabWidget()
         self.top_tabs.setObjectName("topTabs")
         self.top_tabs.addTab(root, "Bridge")
@@ -1774,9 +1777,6 @@ class BridgeWindow(QMainWindow):
         organ_layout.addWidget(self.organ_settings_label)
         organ_layout.addStretch(1)
         self.main_tabs.addTab(organ_page, "Organ Selection")
-        from mixer_panel import MixerPanel
-        self.mixer_panel = MixerPanel(self.bridge.cfg_path)
-        self.main_tabs.addTab(self.mixer_panel, "Mixer")
 
         self.main_tabs.currentChanged.connect(self._on_main_tab_changed)
         self._apply_scale()
@@ -2756,6 +2756,26 @@ class BridgeWindow(QMainWindow):
         bar.destroyed.connect(lambda *_: self.transport_bars.remove(bar) if bar in self.transport_bars else None)
         return bar
 
+    def _build_mixer_dock(self):
+        """The mixer lives in a dock of the main window, so it is there on every tab; drag it anywhere or float it."""
+        from PySide6.QtCore import QSettings
+        from PySide6.QtWidgets import QDockWidget
+        from mixer_panel import MixerPanel
+        self.mixer_panel = MixerPanel(self.bridge.cfg_path)
+        self.mixer_dock = QDockWidget("Mixer", self)
+        self.mixer_dock.setObjectName("dock_mixer")
+        self.mixer_dock.setWidget(self.mixer_panel)
+        self.mixer_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.mixer_dock)
+        settings = QSettings("KeyLabGrandOrgue", "Mixer")
+        self.mixer_dock.setFloating(str(settings.value("floating", "false")) == "true")
+        self.mixer_dock.setVisible(str(settings.value("visible", "false")) == "true")
+        self.mixer_dock.topLevelChanged.connect(lambda f: QSettings("KeyLabGrandOrgue", "Mixer").setValue("floating", "true" if f else "false"))
+        self.mixer_dock.visibilityChanged.connect(lambda v: QSettings("KeyLabGrandOrgue", "Mixer").setValue("visible", "true" if v else "false"))
+        toggle = self.mixer_dock.toggleViewAction()
+        toggle.setText("&Mixer")
+        toggle.setShortcut("Ctrl+M")
+
     def _apply_scale(self):
         """Minimum sizes from the font height, so a smaller / larger text size resizes the controls with it."""
         h = self.fontMetrics().height()
@@ -2898,6 +2918,7 @@ class BridgeWindow(QMainWindow):
         add(view_menu, "&Piano Roll", lambda: self.top_tabs.setCurrentIndex(2))
         add(view_menu, "S&heet music", self.show_sheet_music)
         add(view_menu, "&LCD float / dock", self.toggle_lcd_float)
+        view_menu.addAction(self.mixer_dock.toggleViewAction())
         zoom_menu = bar.addMenu("&Zoom")
         layout_menu = bar.addMenu("&Layout")
         for menu in (select_menu, zoom_menu, layout_menu):

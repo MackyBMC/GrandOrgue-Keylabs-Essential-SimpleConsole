@@ -1,0 +1,8 @@
+{
+  "include": ["*.py", "keylab_bridge", "midi_stave", "tools"],
+  "exclude": ["workings", "Takes", "packaging", "**/__pycache__"],
+  "pythonPlatform": "Windows",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "warning",
+  "reportMissingModuleSource": "none"
+}

@@ -1,0 +1,7 @@
+v2.0.9-mixer-snap-typing - notes
+1 Typing (Pylance): audio_tap.py and audio_mixer.py now 0 errors. Cause: optional libraries (numpy, pycaw, PyAudioWPatch, soundcard) were assigned None / imported directly, so the checker saw Optional / unresolved types. Fix: optional(name) loads by name and is typed Any; COM objects typed Any; buffers never None. pyrightconfig.json added (Windows platform, basic; missing optional imports = warning). From now every file I deliver is run through pyright first; none of my new code adds errors.
+   Remaining (pre-existing, not touched here): ~226 errors, mostly midi_stave.py (75), qt_gui.py (37), themes_ui.py (22), lcd_float.py (19), chrome.py (18), render.py (13). Own patch (v2.0.9-typing-baseline) if you want them cleared.
+2 Mixer: now a floating/dockable frame (View > Mixer, Ctrl+M), visible on every tab. Graduated vertical faders: ticks every 5 %, numbers every 10 %, % + dB readout, Mute. Fixed-size strips packed left (not stretched). Wheel 1 %, Shift+wheel 5 %, Ctrl+click = 100 %, arrow/PgUp/PgDn/Home/End. System-sound names cleaned ("System sounds"). Scenes unchanged. The sub tab is removed.
+3 Piano roll snap: on by default; new snap choice "Note length" (follows New note length); placing, moving and resizing either end follow the snap LIVE; hold Alt = free (also when placing with the pencil / double click).
+Not verified: real pycaw / Windows; snap feel with a real mouse (tested by calling the snap functions, not by dragging).
+Q1: should snap default to "Note length" instead of "Score grid"? default n

@@ -2,6 +2,8 @@
 strip, a keyboard and a velocity lane that all share two scroll bars (one horizontal, one vertical).
 
 CHANGELOG
+2026-11-13  FL-style snapping: snap is ON by default and new option "Note length" (snap to the New note length); placing, moving and both ends of a note
+            snap live while you drag; hold Alt for free (unsnapped) placing / moving / resizing. Status line says so.
 2026-11-12  Fix: RollWindow uses the module its Stave came from (inside the bridge `import midi_stave` found the midi_stave folder: "no attribute PianoKeys").
 2026-11-12  install_transport(): the shared MIDI transport bar on top of the roll (main app only).
 2026-10-25  New: the roll moved out of the main window into this pop-up.
@@ -16,7 +18,8 @@ from PySide6.QtWidgets import (QComboBox, QGridLayout, QLabel, QMainWindow, QScr
                                QWidget)
 
 SNAPS = (("Off", 0), ("Bar", -1), ("1 beat", 1.0), ("1/2 beat", 0.5), ("1/4 beat", 0.25), ("1/8 beat", 0.125),
-         ("1/3 beat (triplet)", 1 / 3), ("1/6 beat (triplet)", 1 / 6), ("Score grid (Smallest note)", None))
+         ("1/3 beat (triplet)", 1 / 3), ("1/6 beat (triplet)", 1 / 6), ("Score grid (Smallest note)", None), ("Note length (New note length)", -2))
+SCORE_GRID_INDEX = 8                      # the default snap; "Note length" follows the New note length box
 
 
 class Ruler(QWidget):
@@ -172,7 +175,7 @@ class RollWindow(QMainWindow):
         self.tracks.setMinimumWidth(260)
         self._build_tools()
         self._build_menus()
-        self.statusBar().showMessage("Select a tool above. Wheel = up / down, Shift + wheel = sideways, Ctrl + wheel = zoom time, Alt + wheel = zoom keys.")
+        self.statusBar().showMessage("Select a tool above. Wheel = up / down, Shift + wheel = sideways, Ctrl + wheel = zoom time, Alt + wheel = zoom keys. Notes snap to the grid: hold Alt for free placing / moving / resizing.")
         self.refresh_timer = QTimer(self)
         self.refresh_timer.setInterval(120)
         self.refresh_timer.timeout.connect(self._tick)
@@ -226,11 +229,12 @@ class RollWindow(QMainWindow):
         self.snap_box = QComboBox()
         for label, value in SNAPS:
             self.snap_box.addItem(label, value)
-        self.snap_box.setCurrentIndex(len(SNAPS) - 1)
+        self.snap_box.setCurrentIndex(SCORE_GRID_INDEX)
         self.snap_box.currentIndexChanged.connect(self._snap_changed)
         bar.addWidget(self.snap_box)
         bar.addWidget(QLabel("  Note length "))
         bar.addWidget(self._shared_combo(st.new_len))
+        st.new_len.currentIndexChanged.connect(lambda _i: self._snap_changed() if self.snap_box.currentData() == -2 else None)
         bar.addSeparator()
         bar.addWidget(QLabel(" Time "))
         self.h_zoom = QSlider(Qt.Orientation.Horizontal)
@@ -281,6 +285,8 @@ class RollWindow(QMainWindow):
         st.snap.setChecked(value != 0)
         if value == -1:
             value = st.barmap.beats[0] if st.barmap.bar_count else 4.0
+        elif value == -2:
+            value = dict(st.LENGTHS).get(st.new_len.currentText(), 1.0)
         st.roll_snap = value or None
         st.refresh_roll(keep_view=True)
 
@@ -488,7 +494,7 @@ class RollWindow(QMainWindow):
             for name in sorted(layouts):
                 remove.addAction(name, lambda n=name: self._delete_layout(n))
         menu.addSeparator()
-        menu.addAction("Default layout", lambda: self.apply_layout({"pps": 60, "row": 6, "snap": len(SNAPS) - 1, "grid": "grid",
+        menu.addAction("Default layout", lambda: self.apply_layout({"pps": 60, "row": 6, "snap": SCORE_GRID_INDEX, "grid": "grid",
                                                                      "toggles": {k: True for _t, k in self.TOGGLES if k not in ("scale", "invert")}}))
 
     def save_layout_as(self):

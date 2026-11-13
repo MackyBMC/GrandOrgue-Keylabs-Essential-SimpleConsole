@@ -1,6 +1,7 @@
 """One MIDI file transport for the whole app (main, stave editor, piano roll): the same buttons everywhere.
 
 CHANGELOG
+2026-11-13  Type-clean (player is checked before position()).
 2026-11-12  New. Play / Pause, Stop / Panic, Loop, Metronome (+ Save), position slider, time and loaded-file label. Device agnostic: it only
             posts bridge events ("transport", "take_seek", "metro_down" ...) and reads the bridge's one MIDI take, exactly what any
             controller's transport keys do. The window it sits in does not matter: there is one MIDI source for the whole app.
@@ -110,7 +111,7 @@ class TransportBar(QWidget):
         self.file_label.setText(text + ("  [PLAYING]" if playing else ""))
         self.file_label.setToolTip((path or "") + "\n" + getattr(b, "take_info", ""))
         length = self._length()
-        pos = (player.position() or 0.0) if playing else 0.0
+        pos = (player.position() or 0.0) if (playing and player is not None) else 0.0
         if length > 0 and not self.slider.dragging:
             self.slider.setValue(int(min(1.0, pos / length) * 1000))
         self.time_label.setText(f"{clock(pos)} / {clock(length)}")

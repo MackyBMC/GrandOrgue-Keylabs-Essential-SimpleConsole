@@ -1,5 +1,7 @@
 """
 CHANGELOG
+2026-11-13  Piano roll snapping like FL Studio: the note end / start, the whole note and a new note follow the snap LIVE while dragging (not only on release);
+            hold Alt = free. add_note_at(free=...). Snap stays on by default.
 2026-11-12  roll_host hook: inside the main app the piano roll is shown as a dock of the main window (show_roll calls it); standalone it is still its own window.
 2026-11-12  Shared MIDI transport tool bar (Play / Stop / Loop / Metronome / Save / position) on top when the editor runs inside the main app (install_transport); same bar in the piano roll.
 2026-11-12  One MIDI everywhere: loaded_hook(path) tells the main window which MIDI / project media this editor just opened, so the main
@@ -877,7 +879,7 @@ class RollView(QGraphicsView):
                 self.cursor_sec = max(0.0, self.mapToScene(event.pos()).x() / self.pps)
             if (not isinstance(item, (NoteItem, BarLine)) and self.window_ref.tool == "add"):
                 pos = self.mapToScene(event.pos())
-                self.window_ref.add_note_at(pos.x() / self.pps, self.top - int(pos.y() // ROW))
+                self.window_ref.add_note_at(pos.x() / self.pps, self.top - int(pos.y() // ROW), bool(event.modifiers() & Qt.KeyboardModifier.AltModifier))
                 return
             if isinstance(item, NoteItem):
                 side = self._edge(item, self.mapToScene(event.pos()))
@@ -902,6 +904,13 @@ class RollView(QGraphicsView):
                     self.band = [event.pos(), box, shift]
                     return
         super().mousePressEvent(event)
+
+    def _snapped_dx(self, edge_sec, dx, event):
+        """Horizontal drag distance (scene px) after snapping the dragged edge / note start to the snap step; Alt = free."""
+        if event.modifiers() & Qt.KeyboardModifier.AltModifier:
+            return dx
+        target = self.window_ref.snap_sec(edge_sec + dx / self.pps)
+        return (target - edge_sec) * self.pps
 
     def _edge(self, item, pos):
         """'L' / 'R' when the pointer is on the left / right end of a note bar (the grab zone shrinks on very short notes)."""
@@ -951,6 +960,7 @@ class RollView(QGraphicsView):
             dx = self.mapToScene(event.pos()).x() - st["origin"].x()
             if abs(dx) > 1 or st["moved"]:
                 st["moved"] = True
+                dx = self._snapped_dx(st["note"].end if st["side"] == "R" else st["note"].start, dx, event)
                 for it in self.note_items:
                     if id(it.note) in self.sel_notes:
                         r = QRectF(it.note.start * self.pps, it.rect().y(), max(2.0, (it.note.end - it.note.start) * self.pps), it.rect().height())
@@ -971,6 +981,7 @@ class RollView(QGraphicsView):
             dx, dy = pos.x() - origin.x(), pos.y() - origin.y()
             if abs(dx) > 2 or abs(dy) > 2 or _moved:
                 self.drag = (origin, note, True)
+                dx = self._snapped_dx(note.start, dx, event)
                 dp = -round(dy / ROW)
                 for it in self.note_items:
                     if id(it.note) in self.sel_notes:
@@ -1009,7 +1020,7 @@ class RollView(QGraphicsView):
         item = self.itemAt(event.pos())
         if event.button() == Qt.MouseButton.LeftButton and not isinstance(item, (NoteItem, BarLine)):
             pos = self.mapToScene(event.pos())
-            self.window_ref.add_note_at(pos.x() / self.pps, self.top - int(pos.y() // ROW))
+            self.window_ref.add_note_at(pos.x() / self.pps, self.top - int(pos.y() // ROW), bool(event.modifiers() & Qt.KeyboardModifier.AltModifier))
             return
         super().mouseDoubleClickEvent(event)
 
@@ -3273,11 +3284,15 @@ class Stave(QMainWindow):
         self.after_edit()
         self.preview_pitch(pitch_shown, n)
 
-    def add_note_at(self, t, pitch):
+    def add_note_at(self, t, pitch, free=False):
         if not 0 <= pitch <= 127:
             return
         self.push_undo()
-        start = self.snap_sec(t)
+        self._free = bool(free)
+        try:
+            start = self.snap_sec(t)
+        finally:
+            self._free = False
         beats = dict(self.LENGTHS).get(self.new_len.currentText(), 1.0)
         end = self.barmap.beat_to_sec(self.barmap.sec_to_beat(start) + beats)
         av = getattr(self, "active_voice", None)           # the active track chosen in the Track / Roll editor

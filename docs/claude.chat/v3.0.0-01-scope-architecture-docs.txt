@@ -1,0 +1,18 @@
+v3.0.0-01-scope-architecture-docs.patch  (docs only, no code change; base origin/release-2.0 @ 94fea73)
+Adds: docs/README, VISION, SCOPE, GUARDRAILS, ARCHITECTURE, DOMAIN-MODEL, CONTRACTS, INFRASTRUCTURE, INVENTORY-V2, ROADMAP, RISKS, VERIFICATION, adr/0001-0008, per-area CLAUDE.md (docs, keylab_bridge, midi_stave, packaging). Appends a section to the root CLAUDE.md (may need a hand merge if you edited its end).
+
+Questions (answer inline, one line each is enough):
+1. ADR 0002-0008 are PROPOSED. Accept all, or name the ones to change?
+2. Scope: accept the three rings, the non-goals and the scope gate (docs/SCOPE.md)? Feature freeze between M1 and M5, yes/no?
+3. Borderline items: Mixer tab (keep, limited), audio spectrum (keep optional), Textual console (maintain or retire?), orchestral background player control (keep only as mixer example?).
+4. Version/branch: v3 as 3.0.0 on a new branch release-3.0 (and main later)? Or 2.1?
+5. Plugins in-tree only for v3.0 (ADR 0007), third-party later. OK?
+6. Organ data format: YAML. OK? (JSON is the alternative.)
+7. First second engine: Aeolus standalone (v3.1) before a second controller (v3.2), or the other way round?
+8. Is there a test you can run on the real organ for each milestone (checklist in VERIFICATION.md section 4)? Anything to add?
+9. CHANGELOG.md was not touched (docs only; each doc has its own history table). Want an entry anyway?
+
+Notes
+- Infrastructure channel table: spill list 13,11,9,8,7,6 and channel 11 vs volume channel 12 need a collision check when mapping large organs (UNVERIFIED).
+- midi_protocol.Bridge (line ~249), stop_grid.py, combination_transfer.py not yet classified (INVENTORY-V2 pass 2, M0).
+- The repo has no automated tests; M1 builds the golden-output net before any extraction.
