@@ -1,0 +1,31 @@
+ANSWERS-FOR: v3.0.0-01-scope-architecture-docs.txt
+SAVED: 2026-11-13 12:30
+FORMAT: 1
+
+Q1: ADR 0002-0008 are PROPOSED. Accept all, or name the ones to change?
+A1: (none)
+N1: ADR 0005 - Some features are specific to a midi controllers DAW functions only. other controller logic needs to be investigated for compatibility mapping.(user feedback testing and confrimation on the github contributions framework will have to be introduced).
+
+Q2: Scope: accept the three rings, the non-goals and the scope gate (docs/SCOPE.md)? Feature freeze between M1 and M5, yes/no?
+A2: (none)
+
+Q3: Borderline items: Mixer tab (keep, limited), audio spectrum (keep optional), Textual console (maintain or retire?), orchestral background player control (keep only as mixer example?).
+A3: (none)
+
+Q4: Version/branch: v3 as 3.0.0 on a new branch release-3.0 (and main later)? Or 2.1?
+A4: (none)
+
+Q5: Plugins in-tree only for v3.0 (ADR 0007), third-party later. OK?
+A5: (none)
+
+Q6: Organ data format: YAML. OK? (JSON is the alternative.)
+A6: (none)
+
+Q7: First second engine: Aeolus standalone (v3.1) before a second controller (v3.2), or the other way round?
+A7: (none)
+
+Q8: Is there a test you can run on the real organ for each milestone (checklist in VERIFICATION.md section 4)? Anything to add?
+A8: (none)
+
+Q9: CHANGELOG.md was not touched (docs only; each doc has its own history table). Want an entry anyway?
+A9: (none)
