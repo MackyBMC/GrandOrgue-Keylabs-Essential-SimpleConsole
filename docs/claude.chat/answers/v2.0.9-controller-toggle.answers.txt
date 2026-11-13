@@ -1,0 +1,9 @@
+ANSWERS-FOR: v2.0.9-controller-toggle.txt
+SAVED: 2026-11-13 11:47
+FORMAT: 1
+
+Q1: Next patch: (a) LCD dock  (b) one project across main / stave / roll windows  (c) .ss double-click installer entry.  Default: a, b, c in that order.
+A1: SKIP
+
+Q2: Should the toggle also be a KeyLab pad / key (so you can disengage from the keyboard)?  (y/n)  Default: n.
+A2: NO

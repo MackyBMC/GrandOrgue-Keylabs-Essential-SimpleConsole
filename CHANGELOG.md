@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### New
+- VS Code task "11. Answer Claude chat questions" launches the dev-only Claude question-answering tool with the repository's build virtual environment.
 - Stave Station project file (`.ss`, plain YAML) saved next to the MIDI as you work: every setting, bar lines and per-bar grids, track / manual mapping, setters, division labels, pedal marks, words and (only if you edited them) the piano-roll notes. Reopening the MIDI or the `.ss` brings it all back. The MIDI is linked (relative path, absolute path, size, SHA-1), never changed. Open project... / Save project as... in the Recording box. Words moved from `<file>.lyrics.json` into the project (old files are still read).
 
 - KeyLab controller toggle in the main window tool bar: disengage the controller from the bridge at any time (its MIDI ports close, nothing waits for it, GrandOrgue keeps playing) and engage it again. Remembered across restarts in `controller_engaged.txt` (default engaged; `controller_engaged:` in config.yaml sets the first-run default).

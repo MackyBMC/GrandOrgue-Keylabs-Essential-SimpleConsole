@@ -73,6 +73,13 @@
       "command": "if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI (gh) is not installed.' }; gh auth status; if ($LASTEXITCODE -ne 0) { throw 'Sign in with gh auth login, then retry.' }; gh workflow run release.yml --ref '${input:releaseRef}'; if ($LASTEXITCODE -ne 0) { throw 'Workflow dispatch failed.' }; Write-Host 'Build queued. This manual run uploads artifacts but does not publish a GitHub Release.' -ForegroundColor Green",
       "presentation": { "reveal": "always", "panel": "shared" },
       "problemMatcher": []
+    },
+    {
+      "label": "11. Answer Claude chat questions",
+      "type": "shell",
+      "command": "& \"${workspaceFolder}\\.venv-build\\Scripts\\python.exe\" \"${workspaceFolder}\\tools\\claude_chat_answers.py\"",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
     }
   ]
 }
