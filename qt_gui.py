@@ -1,6 +1,7 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-13  Resolve Pylance errors in configuration, stave-editor, preset-selection and LCD UI code.
 2026-11-13  Mixer is now a floating / dockable frame (View > Mixer, Ctrl+M) instead of a sub tab: graduated vertical faders (ticks every 5 %, numbers every 10 %,
             0 dB at 100 %), fixed strip size, always available on every tab (Bridge / Stave Station / Piano Roll); position and visibility remembered.
 2026-11-12  Scaling: control sizes follow the text size (LCD, pad buttons, lists, buttons are set from the font height and re-set when the Appearance text size
@@ -81,6 +82,10 @@ import shutil
 import sys
 import threading
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from lcd_float import LcdFloat
 
 from PySide6.QtCore import (
     QEvent, QEasingCurve, QObject, QParallelAnimationGroup, QPoint, QPointF, QPropertyAnimation, QRect, QSettings, QSize, Qt, QTimer, Signal,
@@ -769,9 +774,9 @@ class ConfigEditor(QWidget):
         self.path_label = QLabel(bridge.cfg_path)
         self.path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         outer.addWidget(self.path_label)
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        outer.addWidget(self.scroll, 1)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        outer.addWidget(self.scroll_area, 1)
         row = QHBoxLayout()
         self.status = QLabel("")
         row.addWidget(self.status, 1)
@@ -895,7 +900,7 @@ class ConfigEditor(QWidget):
                 form.addRow("", hint)
             self._fields[path] = (widget, original)
         layout.addStretch(1)
-        self.scroll.setWidget(page)
+        self.scroll_area.setWidget(page)
         self.status.setText("* needs a restart (F5); pad settings apply immediately.")
 
     def save(self):
@@ -969,6 +974,8 @@ class StopGridWidget(QWidget):
     def _build_groups(self):
         while self.groups_layout.count():
             child = self.groups_layout.takeAt(0)
+            if child is None:
+                continue
             widget = child.widget()
             if widget is not None:
                 widget.deleteLater()
@@ -1029,6 +1036,8 @@ class StopGridWidget(QWidget):
         self._preview_signature = signature
         while self.preview_grid.count():
             child = self.preview_grid.takeAt(0)
+            if child is None:
+                continue
             widget = child.widget()
             if widget is not None:
                 widget.deleteLater()
@@ -1531,7 +1540,7 @@ class BridgeWindow(QMainWindow):
         self._follow_timer = QTimer(self)
         self._follow_timer.setSingleShot(True)
         self._follow_timer.timeout.connect(self._follow_take)
-        self.lcd_float = None
+        self.lcd_float: LcdFloat | None = None
         if str(QSettings("KeyLabGrandOrgue", "LcdFloat").value("docked", "false")) == "true":
             self._dock_lcd(True)                                  # it was docked when the app was closed
         self._lcd_popped = False
@@ -1809,7 +1818,9 @@ class BridgeWindow(QMainWindow):
         self.refresh_view()
         # F10 is also Windows' "enter system menu" key; handle it ourselves so the window never gets stuck in
         # that mode, and leave through the normal close path.
-        QApplication.instance().installEventFilter(self)
+        application = QApplication.instance()
+        if application is not None:
+            application.installEventFilter(self)
 
     def eventFilter(self, obj, event):
         if (event.type() in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress)
@@ -2017,7 +2028,9 @@ class BridgeWindow(QMainWindow):
         if index is None and item.childCount() > 0:
             # A parent row is the file name itself, not a step -- clicking it
             # should cue that file's first (000) step, not do nothing.
-            index = item.child(0).data(0, Qt.ItemDataRole.UserRole)
+            first_step = item.child(0)
+            if first_step is not None:
+                index = first_step.data(0, Qt.ItemDataRole.UserRole)
         if index is not None and index != self._last_preset_event_index:
             self._last_preset_event_index = index
             self.bridge.post_ui_event("combination", int(index))
@@ -2478,7 +2491,7 @@ class BridgeWindow(QMainWindow):
         folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "midi_stave")
         if folder not in sys.path:
             sys.path.insert(0, folder)
-        import sessionmeta
+        sessionmeta = importlib.import_module("sessionmeta")
         channels = sessionmeta.channels_in(path)
         if not channels:
             QMessageBox.information(self, "Channels", "The file has no notes.")
@@ -2516,7 +2529,8 @@ class BridgeWindow(QMainWindow):
         outer.addLayout(grid)
         save_box = QCheckBox("Save with file (writes " + os.path.basename(sidecar) + ")")
         try:
-            save_box.setChecked(QSettings("KeyLabGrandOrgue", "Channels").value("save_with_file", True, type=bool))
+            save_box.setChecked(bool(QSettings("KeyLabGrandOrgue", "Channels").value(
+                "save_with_file", True, type=bool)))
         except Exception:
             save_box.setChecked(True)
         outer.addWidget(save_box)
@@ -2591,7 +2605,7 @@ class BridgeWindow(QMainWindow):
                 continue
             for child_index in range(parent.childCount()):
                 child = parent.child(child_index)
-                if child.data(0, Qt.ItemDataRole.UserRole) == index:
+                if child is not None and child.data(0, Qt.ItemDataRole.UserRole) == index:
                     self.combination_list.setCurrentItem(child)
                     self.combination_list.scrollToItem(child)
                     return
@@ -2891,26 +2905,27 @@ class BridgeWindow(QMainWindow):
             if shortcut:
                 action.setShortcut(shortcut)
             return action
-        stave = lambda: getattr(self, "stave_window", None)
-        def with_stave(name):
+        def stave_action(name, open_if_missing=False):
             def run():
-                self.show_stave_editor()
-                if stave() is not None:
-                    getattr(stave(), name)()
+                if open_if_missing:
+                    self.show_stave_editor()
+                stave_window = getattr(self, "stave_window", None)
+                if stave_window is not None:
+                    getattr(stave_window, name)()
             return run
         file_menu = bar.addMenu("&File")
         add(file_menu, "&Open MIDI...", self._open_midi_file, "Ctrl+O")
-        add(file_menu, "Open &project (.ss)...", with_stave("open_project_dialog"))
+        add(file_menu, "Open &project (.ss)...", stave_action("open_project_dialog", True))
         file_menu.addSeparator()
         add(file_menu, "&Save MIDI as...", self._save_midi_as, "Ctrl+S")
-        add(file_menu, "Save pro&ject", lambda: stave() is not None and stave().flush_project())
-        add(file_menu, "Save project &as...", with_stave("save_project_as"))
+        add(file_menu, "Save pro&ject", stave_action("flush_project"))
+        add(file_menu, "Save project &as...", stave_action("save_project_as", True))
         file_menu.addSeparator()
         add(file_menu, "&Quit", self.close, "Ctrl+Q")
         edit_menu = bar.addMenu("&Edit")
         select_menu = bar.addMenu("&Select")
-        add(edit_menu, "&Undo (stave / roll)", lambda: stave() is not None and stave().undo(), "Ctrl+Z")
-        add(edit_menu, "&Redo (stave / roll)", lambda: stave() is not None and stave().redo(), "Ctrl+Y")
+        add(edit_menu, "&Undo (stave / roll)", stave_action("undo"), "Ctrl+Z")
+        add(edit_menu, "&Redo (stave / roll)", stave_action("redo"), "Ctrl+Y")
         edit_menu.addSeparator()
         add(edit_menu, "&Appearance...", self.show_appearance)
         view_menu = bar.addMenu("&View")
@@ -2933,11 +2948,8 @@ class BridgeWindow(QMainWindow):
         help_menu = bar.addMenu("&Help")
         add(help_menu, "&Licenses", self.show_licenses)
         def about():
-            try:
-                from version import __version__
-            except Exception:
-                __version__ = "?"
-            QMessageBox.about(self, "About", f"GrandOrgue KeyLab bridge {__version__}\nStave Station: MIDI to sheet music for organ.")
+            from version import APP_VERSION
+            QMessageBox.about(self, "About", f"GrandOrgue KeyLab bridge {APP_VERSION}\nStave Station: MIDI to sheet music for organ.")
         add(help_menu, "&About", about)
         self._menus = {"File": file_menu, "Edit": edit_menu, "Select": select_menu, "View": view_menu, "Zoom": zoom_menu,
                        "Layout": layout_menu, "Window": window_menu, "Help": help_menu}
@@ -2950,11 +2962,11 @@ class BridgeWindow(QMainWindow):
                 folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "midi_stave")
                 if folder not in sys.path:
                     sys.path.insert(0, folder)
-                import midi_stave as stave_module           # midi_stave/midi_stave.py
+                stave_module = importlib.import_module("midi_stave")
                 if not hasattr(stave_module, "Stave"):
                     stave_module = importlib.import_module("midi_stave.midi_stave")
-                stave_module.render.init_verovio()
-                self.stave_window = stave_module.Stave()
+                getattr(importlib.import_module("render"), "init_verovio")()
+                self.stave_window = getattr(stave_module, "Stave")()
                 self.stave_window.set_tempo_controller(self.bridge.tempo)
                 self.stave_window.play_hook = lambda path, offset=0.0: self.bridge.post_ui_event("preview_play", f"{path}|@{offset}")
                 self.stave_window.seek_hook = lambda t: self.bridge.post_ui_event("take_seek", t)
@@ -3003,18 +3015,22 @@ class BridgeWindow(QMainWindow):
 
     def _ensure_lcd(self):
         from lcd_float import LcdFloat
-        if getattr(self, "lcd_float", None) is None:
-            self.lcd_float = LcdFloat(volume_cb=lambda key, value: self.bridge.post_ui_event("volume", (key, value)),
-                                      dock_cb=self._dock_lcd)
-        return self.lcd_float
+        lcd = self.lcd_float
+        if lcd is None:
+            lcd = LcdFloat(volume_cb=lambda key, value: self.bridge.post_ui_event("volume", (key, value)),
+                           dock_cb=self._dock_lcd)
+            self.lcd_float = lcd
+        return lcd
 
     def _lcd_expanded(self, expanded):
         """Collapse / expand the KeyLab LCD panel; collapsed, the floating LCD pops up (and goes away again on expand)."""
         QSettings("KeyLabGrandOrgue", "LcdFloat").setValue("collapsed", "false" if expanded else "true")
-        if not expanded and getattr(self, "lcd_float", None) is not None and self.lcd_float.docked:
+        lcd = self.lcd_float
+        lcd_docked = lcd is not None and lcd.docked
+        if not expanded and lcd_docked:
             self._dock_lcd(False)
         for child in self.lcd_box.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly):
-            child.setVisible(expanded and (child is not self.lcd_text or getattr(self, "lcd_float", None) is None or not self.lcd_float.docked))
+            child.setVisible(expanded and (child is not self.lcd_text or not lcd_docked))
         self.lcd_box.setMaximumHeight(16777215 if expanded else self.lcd_box.fontMetrics().height() + 16)
         if not expanded:
             lcd = self._ensure_lcd()
@@ -3024,8 +3040,8 @@ class BridgeWindow(QMainWindow):
                 self._lcd_popped = True
         elif self._lcd_popped:
             self._lcd_popped = False
-            if self.lcd_float is not None and not self.lcd_float.docked:
-                self.lcd_float.hide()
+            if lcd is not None and not lcd.docked:
+                lcd.hide()
 
     def _dock_lcd(self, dock):
         """Dock the LCD into the main window's LCD panel (the fixed 2-line LCD hides), or float it again."""
@@ -3045,11 +3061,11 @@ class BridgeWindow(QMainWindow):
         if lcd.docked:                                            # the button pops a docked LCD out
             self._dock_lcd(False)
             return
-        if self.lcd_float.isVisible():
-            self.lcd_float.hide()
+        if lcd.isVisible():
+            lcd.hide()
         else:
-            self.lcd_float.update_state(self.bridge.get_snapshot())
-            self.lcd_float.show()
+            lcd.update_state(self.bridge.get_snapshot())
+            lcd.show()
 
     def show_sheet_music(self):
         if self.sheet_music_window is None:
@@ -3128,7 +3144,7 @@ class BridgeWindow(QMainWindow):
             modal.setStyleSheet((modal.styleSheet() or "") +
                                 " /*jogfocus*/ QAbstractButton:focus { border: 2px solid #4fd1c5; }")
         current = modal.focusWidget()
-        index = buttons.index(current) if current in buttons else -1
+        index = buttons.index(current) if isinstance(current, QAbstractButton) and current in buttons else -1
         index = (index + direction) % len(buttons) if index >= 0 else (0 if direction > 0 else len(buttons) - 1)
         buttons[index].setFocus(Qt.FocusReason.OtherFocusReason)
 
@@ -3233,8 +3249,9 @@ class BridgeWindow(QMainWindow):
             stave = getattr(self, "stave_window", None)
             if stave is not None and stave.isVisible():
                 self._follow_timer.start(900)                         # not on every file a fast jog passes
-        if getattr(self, "lcd_float", None) is not None and self.lcd_float.isVisible():
-            self.lcd_float.update_state(snapshot)
+        lcd = self.lcd_float
+        if lcd is not None and lcd.isVisible():
+            lcd.update_state(snapshot)
         self.bank_box_combo.blockSignals(True)
         if self.bank_box_combo.count() != len(snapshot["banks"]):
             self.bank_box_combo.clear()

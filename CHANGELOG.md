@@ -20,6 +20,7 @@
 - `pyrightconfig.json` (Windows platform, basic checking) and type-clean optional-library imports, so Pylance shows no errors for `audio_tap.py`, `audio_mixer.py` and the new files.
 
 ### Fixed
+- Fixed the Pylance-reported attribute, optional-value and type errors in `qt_gui.py` by clarifying dynamic imports, widget types and nullable UI state.
 - Piano Roll tab crashed with `module 'midi_stave' has no attribute 'PianoKeys'` inside the bridge (the bare `import midi_stave` found the folder, not the module); the roll window and the track organ dialog now use the module their Stave came from.
 - Stave builder follows engraving practice (Gould, "Behind Bars"): notes are split into tied pieces so none crosses the middle of the bar (4/4 half note on beat 2 is two tied quarters) or a beat it may not cross; 6/8 and 12/8 keep their dotted beats; rests follow the same boundaries (no dotted rests in simple time, none across the half bar).
 - Chromatic notes are spelled by direction (C C# D D# E, then E Eb D Db) instead of one fixed sharp/flat table.
