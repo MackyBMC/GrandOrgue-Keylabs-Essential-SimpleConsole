@@ -1,0 +1,14 @@
+v3.0.0-05-repo-hygiene.patch  (.gitignore, copilot-instructions merge, ADR 0005 note; base origin/release-2.0 @ 93b37d4)
+
+Run once after applying (index only, files stay on disk; a patch would carry 13 MB of deletions):
+  git rm -r --cached graphify-out window_layout.json.tmp last_dirs.json
+  git commit -m "Stop tracking generated and per-machine files"
+(last_dirs.json was already in .gitignore but had been committed earlier.)
+
+Questions
+1. Mixer dock (Copilot, 2026-11-13) is new feature work and the mixer was a borderline item in docs/SCOPE.md. Keep as is, or hold further mixer work until the scope questions in v3.0.0-01 are answered?
+2. Questions 2-9 in v3.0.0-01-scope-architecture-docs.txt are still unanswered (scope rings and freeze, borderline items, branch/version, plugins in-tree, YAML, second engine, real-organ checklist, CHANGELOG entry). Answer when ready; nothing is treated as decided until then.
+
+Notes
+- Supersedes v3.0.0-04-copilot-instructions.patch (not applied; Copilot's graphify section is kept here).
+- ADR 0005 status remains PROPOSED; your note is recorded in the ADR text.

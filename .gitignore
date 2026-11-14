@@ -22,3 +22,7 @@ midi/
 last_dirs.json
 preset_activation.txt
 controller_engaged.txt
+
+# generated / runtime output
+graphify-out/
+*.json.tmp
