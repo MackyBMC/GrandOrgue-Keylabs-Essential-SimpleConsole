@@ -9,6 +9,7 @@
   "inputs": [
     { "id": "msg", "type": "promptString", "description": "Commit message" },
     { "id": "patch", "type": "promptString", "description": "Patch file name (in this repo folder)", "default": "v2.0.8.patch" },
+    { "id": "relver", "type": "promptString", "description": "Release version (X.Y.Z)", "default": "2.0.9" },
     { "id": "releaseRef", "type": "promptString", "description": "Remote branch/ref to build (artifacts only; does not publish a release)", "default": "release-2.0" }
   ],
   "tasks": [
@@ -71,6 +72,13 @@
       "label": "10. GitHub: build release artifacts (manual; no publish)",
       "type": "shell",
       "command": "if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI (gh) is not installed.' }; gh auth status; if ($LASTEXITCODE -ne 0) { throw 'Sign in with gh auth login, then retry.' }; gh workflow run release.yml --ref '${input:releaseRef}'; if ($LASTEXITCODE -ne 0) { throw 'Workflow dispatch failed.' }; Write-Host 'Build queued. This manual run uploads artifacts but does not publish a GitHub Release.' -ForegroundColor Green",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "12. Release: bump, commit, push, tag (version prompt)",
+      "type": "shell",
+      "command": "& \"${workspaceFolder}\\.venv-build\\Scripts\\python.exe\" \"${workspaceFolder}\\tools\\release.py\" ${input:relver}",
       "presentation": { "reveal": "always", "panel": "shared" },
       "problemMatcher": []
     },
