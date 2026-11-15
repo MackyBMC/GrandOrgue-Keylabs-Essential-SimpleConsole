@@ -1,6 +1,8 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-14  Live page: the walls between the setter list, the stops / registration column and the transport column are now draggable (QSplitter); widths are
+            remembered between runs (double-click a wall = back to the default widths). Setter key buttons keep their second line [key name].
 2026-11-13  Resolve Pylance errors in configuration, stave-editor, preset-selection and LCD UI code.
 2026-11-13  Mixer is now a floating / dockable frame (View > Mixer, Ctrl+M) instead of a sub tab: graduated vertical faders (ticks every 5 %, numbers every 10 %,
             0 dB at 100 %), fixed strip size, always available on every tab (Bridge / Stave Station / Piano Roll); position and visibility remembered.
@@ -1643,7 +1645,6 @@ class BridgeWindow(QMainWindow):
         right_column.addWidget(self.setter_keys_box)
         right_column.addWidget(self.transport_box)
         right_column.addStretch(1)
-        live_grid.addWidget(right_widget, 0, 2)
 
         self.volumes_box = QGroupBox()
         volumes_layout = QFormLayout(self.volumes_box)
@@ -1658,7 +1659,6 @@ class BridgeWindow(QMainWindow):
             self._volume_sliders[key] = slider
             self._volume_labels[key] = name_label
             volumes_layout.addRow(name_label, self._volume_field(key, slider))
-        live_grid.addWidget(self.volumes_box, 1, 2)
 
         self.active_box = QGroupBox()
         active_layout = QVBoxLayout(self.active_box)
@@ -1672,11 +1672,30 @@ class BridgeWindow(QMainWindow):
         self.mark_legend.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         active_layout.addWidget(self.mark_legend)
         stops_controls.addWidget(self.active_box, 1)
-        live_grid.addWidget(self.setter_box, 0, 0, 2, 1)
-        live_grid.addLayout(stops_controls, 0, 1, 2, 1)
-        live_grid.setColumnStretch(0, 4)
-        live_grid.setColumnStretch(1, 3)
-        live_grid.setColumnStretch(2, 3)
+        self.live_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.live_splitter.setChildrenCollapsible(False)
+        self.live_splitter.setHandleWidth(7)
+        middle_widget = QWidget()
+        stops_controls.setContentsMargins(0, 0, 0, 0)
+        middle_widget.setLayout(stops_controls)
+        right_col = QWidget()
+        right_col_layout = QVBoxLayout(right_col)
+        right_col_layout.setContentsMargins(0, 0, 0, 0)
+        right_col_layout.addWidget(right_widget)
+        right_col_layout.addWidget(self.volumes_box, 1)
+        for index, part in enumerate((self.setter_box, middle_widget, right_col)):
+            part.setMinimumWidth(120)
+            self.live_splitter.addWidget(part)
+            self.live_splitter.setStretchFactor(index, (4, 3, 3)[index])
+        saved = QSettings("KeyLabGrandOrgue", "LiveLayout").value("splitter")
+        if saved:
+            self.live_splitter.restoreState(saved)
+        self._live_sized = bool(saved)                      # first run: 4 : 3 : 3 of the real width on its first resize (not the size hints)
+        self.live_splitter.installEventFilter(self)
+        self.live_splitter.splitterMoved.connect(self._live_splitter_moved)
+        self.live_splitter.handle(1).installEventFilter(self)
+        self.live_splitter.handle(2).installEventFilter(self)
+        live_grid.addWidget(self.live_splitter, 0, 0, 2, 3)
         live_grid.setRowStretch(1, 1)
 
         setter_page = QWidget()
@@ -1830,7 +1849,18 @@ class BridgeWindow(QMainWindow):
             else:
                 self.close()
             return True
+        splitter = getattr(self, "live_splitter", None)
+        if splitter is not None and obj is splitter and event.type() == QEvent.Type.Resize and not self._live_sized and splitter.width() > 300:
+            splitter.setSizes([round(splitter.width() * w / 10) for w in (4, 3, 3)])      # until the first drag (or a saved layout)
+        if splitter is not None and event.type() == QEvent.Type.MouseButtonDblClick and obj in (splitter.handle(1), splitter.handle(2)):
+            total = max(1, sum(splitter.sizes()))
+            splitter.setSizes([round(total * w / 10) for w in (4, 3, 3)])          # double-click a wall: default widths
+            return True
         return super().eventFilter(obj, event)
+
+    def _live_splitter_moved(self, *_):
+        self._live_sized = True                                # the user chose the widths: stop auto-sizing, remember them
+        QSettings("KeyLabGrandOrgue", "LiveLayout").setValue("splitter", self.live_splitter.saveState())
 
     def _stop_grid_button_changed(self, checked):
         self._grid_close_pending = not checked
@@ -2798,9 +2828,9 @@ class BridgeWindow(QMainWindow):
         for button in self._pad_buttons:
             button.setMinimumHeight(round(h * 2.4))
         self.combination_list.setMinimumHeight(round(h * 6))
-        for box in (self.setter_keys_box, self.transport_box):
+        for box, lines in ((self.setter_keys_box, 2.7), (self.transport_box, 1.7)):      # setter keys carry a second line: [key name]
             for child in box.findChildren(QPushButton):
-                child.setMinimumHeight(round(h * 1.7))
+                child.setMinimumHeight(round(h * lines))
 
     # ------------------------------------------------------------------ menu bar and docks
     def _dock_widget(self, key, widget, title):

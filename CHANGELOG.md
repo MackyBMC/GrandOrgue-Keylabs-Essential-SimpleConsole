@@ -18,6 +18,7 @@
 - Scaling: "Text size %" (60-160 %) now scales paddings, scroll bars, tabs, menus, slider handles and check marks with the text, control heights follow the font, the main window can shrink to 560 x 420, the top bar wraps onto a second row instead of clipping its buttons, and the Live page has one scroll bar that only appears when even the smallest layout does not fit.
 - Piano roll snapping like FL Studio: snap on by default (new option "Note length"), notes follow the snap live while placing, moving and resizing either end; hold Alt for free.
 - `pyrightconfig.json` (Windows platform, basic checking) and type-clean optional-library imports, so Pylance shows no errors for `audio_tap.py`, `audio_mixer.py` and the new files.
+- Live page: the walls between the setter list, the stops column and the transport column can be dragged to resize them (remembered; double-click a wall for the default widths).
 
 ### Fixed
 - Fixed the Pylance-reported attribute, optional-value and type errors in `qt_gui.py` by clarifying dynamic imports, widget types and nullable UI state.
