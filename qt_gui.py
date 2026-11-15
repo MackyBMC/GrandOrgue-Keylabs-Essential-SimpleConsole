@@ -1,6 +1,7 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-15  Live page: a small piano roll of the loaded MIDI (a take just recorded or a file just opened) sits under its name in the MIDI player; double-click opens it in the Piano Roll tab.
 2026-11-15  Fluid columns everywhere (fluid_columns.py): every table / tree keeps its columns' shares of the width when the window or a dock is resized (drag an edge to change them).
             Ctrl+M reliably toggles the Mixer (own application shortcut; the Piano Roll's "Import" moved to Ctrl+Shift+I, it clashed). Sheet music: a folder of page
             images (png / jpg / ...) is listed as one score and converted once to "<folder> (from images).pdf" (sheet_images.py), then opens like any PDF.
@@ -1652,7 +1653,11 @@ class BridgeWindow(QMainWindow):
         transport_layout.addWidget(self.transport_bar, 0, 0, 1, 2)
         self.open_midi_button = QPushButton("Open MIDI...")
         self.open_midi_button.clicked.connect(self._open_midi_file)
-        rows = 1
+        from take_preview import TakePreview
+        self.take_preview = TakePreview(self._open_take_in_roll)
+        self.take_preview.hide()
+        transport_layout.addWidget(self.take_preview, 1, 0, 1, 2)
+        rows = 2
         transport_layout.addWidget(self.open_midi_button, rows, 0, 1, 2)
         self.tempo_control = TempoControl(self.bridge.tempo)
         transport_layout.addWidget(self.tempo_control, rows + 1, 0, 1, 2)
@@ -3050,6 +3055,11 @@ class BridgeWindow(QMainWindow):
     def _same_file(a, b):
         return bool(a and b) and os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
 
+    def _open_take_in_roll(self):
+        """Double-click on the take preview: the loaded MIDI in the full Piano Roll."""
+        self.top_tabs.setCurrentIndex(2)
+        self._follow_take()
+
     def _follow_take(self):
         """The stave editor (and with it the piano roll) opens the file the main window has loaded."""
         stave, path = getattr(self, "stave_window", None), self._last_take_path
@@ -3301,6 +3311,7 @@ class BridgeWindow(QMainWindow):
 
         self.lcd_text.setText(f"{snapshot['lcd'][0][:16].ljust(16)}\n{snapshot['lcd'][1][:16].ljust(16)}")
         take = (snapshot.get("transport") or {}).get("take_path", "")
+        self.take_preview.show_file(take if take and not os.path.basename(take).startswith("_preview") else "")
         if take != self._last_take_path:
             self._last_take_path = take
             stave = getattr(self, "stave_window", None)
