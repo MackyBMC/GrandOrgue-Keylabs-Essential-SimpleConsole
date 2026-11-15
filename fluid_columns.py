@@ -2,9 +2,11 @@
 
 Every QTreeView / QTableView (QTreeWidget, QTableWidget, ...) gets columns that keep their share of the width when the window or a dock is resized,
 so the layout rearranges itself instead of leaving dead space or cutting text. You can still drag a column edge: the new shares are kept.
-A view that already stretches a column by itself (resize mode Stretch) or sets the property "fluidSkip" is left alone.
+A view with the property "fluidSkip" is left alone.
 
 CHANGELOG
+2026-11-15  Dragging a column edge resizes that column and the columns to its right share what is left (nothing is pushed out of view); window resizes keep the proportions.
+2026-11-15  Tables that the app had set to Stretch / ResizeToContents (setter list, ...) are fluid too, so they get drag handles.
 2026-11-15  New.
 """
 from typing import Dict, List, Optional
@@ -83,10 +85,31 @@ class _Fluid(QObject):
         finally:
             self.busy = False
 
-    def _section_resized(self, _index: int, _old: int, _new: int) -> None:
+    def _section_resized(self, index: int, _old: int, new: int) -> None:
         if self.busy or not (QApplication.mouseButtons() & Qt.MouseButton.LeftButton):
             return                                              # only a real drag of a column edge changes the shares
         visible = self._visible()
+        width = self.view.viewport().width()
+        if index not in visible or width < 50:
+            return
+        pos = visible.index(index)
+        left = sum(self.header.sectionSize(i) for i in visible[:pos])
+        right = visible[pos + 1:]
+        room = width - left - MIN_SECTION * len(right)          # the dragged column may not push the others out of view
+        size = max(MIN_SECTION, min(new, room if right else width - left))
+        old = {i: self.shares.get(i, 1.0 / len(visible)) for i in right}
+        total_old = sum(old.values()) or 1.0
+        rest = width - left - size
+        self.busy = True
+        try:
+            self.header.resizeSection(index, size)
+            used = 0
+            for n, i in enumerate(right):                       # the columns to the right share what is left, in their old proportions
+                part = rest - used if n == len(right) - 1 else max(MIN_SECTION, round(rest * old[i] / total_old))
+                self.header.resizeSection(i, max(MIN_SECTION, part))
+                used += self.header.sectionSize(i)
+        finally:
+            self.busy = False
         total = sum(self.header.sectionSize(i) for i in visible) or 1
         self.shares = {i: self.header.sectionSize(i) / total for i in visible}
         self.user_set = True
@@ -108,9 +131,7 @@ class FluidColumns(QObject):
             obj.setProperty("fluidDone", True)
             header = header_of(obj)
             if header is not None and header.count() > 0 and not obj.property("fluidSkip"):
-                modes = [header.sectionResizeMode(i) for i in range(header.count())]
-                if not any(m == QHeaderView.ResizeMode.Stretch for m in modes):
-                    _Fluid(obj, header)
+                _Fluid(obj, header)                                     # also replaces Stretch / ResizeToContents set by the app: those have no drag handle
         return False
 
 
