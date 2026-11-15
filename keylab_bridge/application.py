@@ -134,6 +134,7 @@ class BridgeApp:
         self.midi_dir = midi_dir
         self._voice_regs = {}                   # manual name -> (setter file, step, name) from REG markers during playback
         self.midi_rec = None                    # explicit Record-button session
+        self.before_record = None               # GUI hook: called before a new recording starts; returns False to cancel (unsaved edits)
         self.take_to_play = None
         self.take_length, self.take_info = 0.0, ""                # last recorded take: the next Play button press plays it
         forced = recorder_cfg.get("playback_channel")             # optional: force every note onto one channel
@@ -1205,6 +1206,14 @@ class BridgeApp:
         from .take_recorder import make_midi_recorder, write_stave_friendly
         now = time.time() if now is None else now
         if self.midi_rec is None:
+            hook = self.before_record
+            if hook is not None:
+                try:
+                    if hook() is False:
+                        self.log("Recording cancelled (the loaded MIDI has unsaved edits)")
+                        return
+                except Exception as exc:
+                    self.log(f"before-record check failed: {exc}", notify=False)
             if self.recorder is not None:
                 self.recorder.close()
             self.take_player.stop()

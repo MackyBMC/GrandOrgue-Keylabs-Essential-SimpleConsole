@@ -1,6 +1,7 @@
 """One MIDI file transport for the whole app (main, stave editor, piano roll): the same buttons everywhere.
 
 CHANGELOG
+2026-11-15  Recording shows in red on every transport. New "Quantised" toggle on every transport: plays the stave / roll version of an edited MIDI quantised (on) or as played (off); Play on an edited MIDI plays that version.
 2026-11-13  Type-clean (player is checked before position()).
 2026-11-12  New. Play / Pause, Stop / Panic, Loop, Metronome (+ Save), position slider, time and loaded-file label. Device agnostic: it only
             posts bridge events ("transport", "take_seek", "metro_down" ...) and reads the bridge's one MIDI take, exactly what any
@@ -48,6 +49,15 @@ class TransportBar(QWidget):
                 b.clicked.connect(lambda checked=False, a=action: self.act(a))
             self.buttons[key] = b
             lay.addWidget(b, index // 2, index % 2) if vertical else lay.addWidget(b, 0, index)
+        self.quant_button = QPushButton("Quantised")                 # one shared setting; the window wires quant_get / quant_set / play_override
+        self.quant_button.setCheckable(True)
+        self.quant_button.setMinimumHeight(28)
+        self.quant_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.quant_button.setToolTip("Edited MIDI (stave / piano roll): on = play it quantised as the stave shows it, off = play the notes as played")
+        self.quant_button.clicked.connect(self._quant_clicked)
+        self.buttons["gui_quant"] = self.quant_button
+        lay.addWidget(self.quant_button, 2, 1) if vertical else lay.addWidget(self.quant_button, 0, 5)
+        self.quant_get = self.quant_set = self.play_override = None
         self.slider = polish.make_seek_slider()
         self.slider.setToolTip("Click or drag to move to a position in the MIDI file")
         self.slider.seek.connect(self._seek)
@@ -77,8 +87,14 @@ class TransportBar(QWidget):
         if name == "save":
             if self.save_cb:
                 self.save_cb()
+        elif name == "play" and self.play_override is not None and self.play_override():
+            return                                                  # an edited MIDI plays from the stave / roll (quantised or as played)
         else:
             self.bridge.post_ui_event("transport", name)
+
+    def _quant_clicked(self, checked):
+        if self.quant_set is not None:
+            self.quant_set(bool(checked))
 
     def _metro_down(self):
         self.metro_pressed = True
@@ -107,8 +123,13 @@ class TransportBar(QWidget):
         player = getattr(b, "take_player", None)
         playing = getattr(player, "active", False)
         recording = getattr(b, "midi_rec", None) is not None
-        text = "Recording..." if recording else ("Loaded: " + os.path.basename(path) if path else "MIDI: nothing loaded")
+        text = "\u25cf Recording..." if recording else ("Loaded: " + os.path.basename(path) if path else "MIDI: nothing loaded")
         self.file_label.setText(text + ("  [PLAYING]" if playing else ""))
+        self.file_label.setStyleSheet("color: #e53935; font-weight: 700;" if recording else "")
+        if self.quant_get is not None:
+            state = self.quant_get()
+            if state is not None and self.quant_button.isChecked() != state:
+                self.quant_button.setChecked(state)
         self.file_label.setToolTip((path or "") + "\n" + getattr(b, "take_info", ""))
         length = self._length()
         pos = (player.position() or 0.0) if (playing and player is not None) else 0.0

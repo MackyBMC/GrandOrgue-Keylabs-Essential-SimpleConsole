@@ -1,6 +1,8 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-15  Stop Selection Grid popup no longer jumps: it stays inside the screen (frame included) and opens / closes without the overshoot that kept resizing it.
+            Pressing Record on a MIDI with unsaved stave / roll edits asks to Save / Discard / Cancel first. "Quantised" toggle + Play of an edited MIDI on every transport.
 2026-11-15  Live page: a small piano roll of the loaded MIDI (a take just recorded or a file just opened) sits under its name in the MIDI player; double-click opens it in the Piano Roll tab.
 2026-11-15  Fluid columns everywhere (fluid_columns.py): every table / tree keeps its columns' shares of the width when the window or a dock is resized (drag an edge to change them).
             Ctrl+M reliably toggles the Mixer (own application shortcut; the Piano Roll's "Import" moved to Ctrl+Shift+I, it clashed). Sheet music: a folder of page
@@ -1140,6 +1142,7 @@ class StopGridDialog(QDialog):
         remembered = WINDOW_MEMORY.saved_rect("StopGridDialog:Stop Selection Grid") if WINDOW_MEMORY is not None else None
         if remembered is not None:
             self._target_geometry = remembered              # reopen where the user last left the grid
+        self._target_geometry = self._inside(self._target_geometry, available)
         self._animation = None
         self._closing = False
         self._preserve_mode_on_close = False
@@ -1148,6 +1151,15 @@ class StopGridDialog(QDialog):
         layout = QVBoxLayout(self)
         self.grid = StopGridWidget()
         layout.addWidget(self.grid)
+
+    @staticmethod
+    def _inside(rect, area):
+        """The window including its frame (8 px sides / bottom, 31 px title bar) stays on the screen, so Windows never has to refuse the size."""
+        w = max(560, min(rect.width(), area.width() - 16))
+        h = max(380, min(rect.height(), area.height() - 39))
+        x = max(area.left() + 8, min(rect.x(), area.right() - w - 7))
+        y = max(area.top() + 31, min(rect.y(), area.bottom() - h - 7))
+        return QRect(x, y, w, h)
 
     @property
     def is_closing(self):
@@ -1210,7 +1222,7 @@ class StopGridDialog(QDialog):
             self.setWindowOpacity(0.0)
             self.show()
             self.raise_()
-        self._animate(self._target_geometry, 1.0, 420, QEasingCurve.Type.OutBack, False)
+        self._animate(self._target_geometry, 1.0, 260, QEasingCurve.Type.OutCubic, False)
 
     def animate_close(self, preserve_mode=False):
         if self._closing:
@@ -1220,7 +1232,7 @@ class StopGridDialog(QDialog):
             self._allow_close = True
             self.close()
             return
-        self._animate(self._collapsed_geometry(), 0.0, 260, QEasingCurve.Type.InBack, True)
+        self._animate(self._collapsed_geometry(), 0.0, 200, QEasingCurve.Type.InCubic, True)
 
     def close_immediately(self):
         if self._animation is not None:
@@ -1418,6 +1430,7 @@ class _MiniRoll(QWidget):
 
 class BridgeWindow(QMainWindow):
     sheet_music_navigation_requested = Signal(int)
+    _record_check = Signal(object)
     sheet_jog_requested = Signal(int)
     sheet_press_requested = Signal()
     sheet_zone_requested = Signal()
@@ -1649,6 +1662,9 @@ class BridgeWindow(QMainWindow):
             setter_keys_layout.addWidget(button, index // 2, index % 2)
         self.transport_bar = TransportBar(self.bridge, vertical=True, save_cb=self._save_midi_as)
         self.transport_bars = [self.transport_bar]
+        self._wire_bar(self.transport_bar)
+        self._record_check.connect(self._record_check_slot)
+        self.bridge.before_record = self._before_record
         self._transport_buttons.update(self.transport_bar.buttons)
         transport_layout.addWidget(self.transport_bar, 0, 0, 1, 2)
         self.open_midi_button = QPushButton("Open MIDI...")
@@ -2822,9 +2838,70 @@ class BridgeWindow(QMainWindow):
     def show_licenses(self):
         QMessageBox.information(self, self._t("gui_licenses"), self._t("gui_license_notice"))
 
+    def _stave_edited(self):
+        stave = getattr(self, "stave_window", None)
+        return stave if (stave is not None and getattr(stave, "notes", None) and getattr(stave, "notes_edited", False)) else None
+
+    def _wire_bar(self, bar):
+        """The Quantised toggle and Play of an edited MIDI are the same on every transport."""
+        def get():
+            stave = getattr(self, "stave_window", None)
+            return bool(stave.play_quantised.isChecked()) if stave is not None else None
+        def put(value):
+            stave = getattr(self, "stave_window", None)
+            if stave is not None:
+                stave.play_quantised.setChecked(value)
+        def play():
+            stave = self._stave_edited()
+            player = getattr(self.bridge, "take_player", None)
+            if stave is None or getattr(player, "active", False):
+                return False
+            current = getattr(self.bridge, "take_to_play", "") or ""
+            if not (os.path.basename(current).startswith("_preview") or self._same_file(current, stave.path)):
+                return False
+            stave.play_on_organ()
+            return True
+        bar.quant_get, bar.quant_set, bar.play_override = get, put, play
+
+    def _before_record(self):
+        """Called by the bridge before a new recording starts. False = cancel. Asks when the loaded MIDI has unsaved stave / roll edits."""
+        import threading
+        if threading.current_thread() is threading.main_thread():
+            return self._ask_save_before_record()
+        box = {"event": threading.Event(), "ok": True}
+        self._record_check.emit(box)
+        box["event"].wait(120)
+        return box["ok"]
+
+    def _record_check_slot(self, box):
+        try:
+            box["ok"] = self._ask_save_before_record()
+        finally:
+            box["event"].set()
+
+    def _ask_save_before_record(self):
+        stave = self._stave_edited()
+        if stave is None:
+            return True
+        name = os.path.basename(getattr(stave, "path", "") or "the loaded MIDI")
+        ask = QMessageBox(self)
+        ask.setWindowTitle("New recording")
+        ask.setText(f"{name} has edits that are not saved. A new recording replaces it in the player.")
+        save = ask.addButton("Save edited MIDI...", QMessageBox.ButtonRole.AcceptRole)
+        ask.addButton("Don't save", QMessageBox.ButtonRole.DestructiveRole)
+        cancel = ask.addButton("Cancel recording", QMessageBox.ButtonRole.RejectRole)
+        ask.exec()
+        clicked = ask.clickedButton()
+        if clicked is cancel or clicked is None:
+            return False
+        if clicked is save:
+            stave.save_edited_midi()
+        return True
+
     def _new_transport_bar(self):
         """Another copy of the one MIDI transport (stave editor, piano roll)."""
         bar = TransportBar(self.bridge, vertical=False, save_cb=self._save_midi_as)
+        self._wire_bar(bar)
         bar.retranslate(self._t)
         self.transport_bars.append(bar)
         bar.destroyed.connect(lambda *_: self.transport_bars.remove(bar) if bar in self.transport_bars else None)
