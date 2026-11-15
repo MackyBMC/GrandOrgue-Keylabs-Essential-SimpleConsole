@@ -1,0 +1,7 @@
+ANSWERS-FOR: v2.0.9-lcd-dock.txt
+SAVED: 2026-11-15 13:15
+FORMAT: 1
+
+Q1: Docked LCD height: (a) about right  (b) taller  (c) shorter.  Default: a. (Controller toggle question 2, "also a KeyLab pad?", is still open: default n.)
+A1: DISCUSS
+N1: dock height should be fluid

@@ -1,0 +1,11 @@
+ANSWERS-FOR: v3.0.0-05-repo-hygiene.txt
+SAVED: 2026-11-15 13:26
+FORMAT: 1
+
+Q1: Mixer dock (Copilot, 2026-11-13) is new feature work and the mixer was a borderline item in docs/SCOPE.md. Keep as is, or hold further mixer work until the scope questions in v3.0.0-01 are answered?
+A1: YES
+N1: this feature was tied to the volume control from the original midi interface. it became clear the user did not have full audio control to eliminate or balance other audio outputs. thus it is a missed oportunity feature that came late but was still important enough to current and in v3 scope.
+
+Q2: Questions 2-9 in v3.0.0-01-scope-architecture-docs.txt are still unanswered (scope rings and freeze, borderline items, branch/version, plugins in-tree, YAML, second engine, real-organ checklist, CHANGELOG entry). Answer when ready; nothing is treated as decided until then.
+A2: YES
+N2: answered.....
