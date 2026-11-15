@@ -2,6 +2,7 @@
 strip, a keyboard and a velocity lane that all share two scroll bars (one horizontal, one vertical).
 
 CHANGELOG
+2026-11-15  Import MIDI / MusicXML is Ctrl+Shift+I (Ctrl+M now belongs to the main window's Mixer).
 2026-11-13  FL-style snapping: snap is ON by default and new option "Note length" (snap to the New note length); placing, moving and both ends of a note
             snap live while you drag; hold Alt for free (unsnapped) placing / moving / resizing. Status line says so.
 2026-11-12  Fix: RollWindow uses the module its Stave came from (inside the bridge `import midi_stave` found the midi_stave folder: "no attribute PianoKeys").
@@ -332,7 +333,7 @@ class RollWindow(QMainWindow):
         st, roll = self.stave, self.stave.roll
         a = self._menus_action
         m = self.menuBar().addMenu("&File")
-        a(m, "Import MIDI / MusicXML...", st.open_dialog, "Ctrl+M")
+        a(m, "Import MIDI / MusicXML...", st.open_dialog, "Ctrl+Shift+I")
         a(m, "New blank score...", st.new_blank, "Ctrl+N")
         a(m, "Save as MIDI...", st.save_edited_midi, "Ctrl+S")
         a(m, "Export score as PDF...", st.export_pdf)

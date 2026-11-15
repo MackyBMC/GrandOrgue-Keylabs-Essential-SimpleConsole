@@ -1,6 +1,9 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-15  Fluid columns everywhere (fluid_columns.py): every table / tree keeps its columns' shares of the width when the window or a dock is resized (drag an edge to change them).
+            Ctrl+M reliably toggles the Mixer (own application shortcut; the Piano Roll's "Import" moved to Ctrl+Shift+I, it clashed). Sheet music: a folder of page
+            images (png / jpg / ...) is listed as one score and converted once to "<folder> (from images).pdf" (sheet_images.py), then opens like any PDF.
 2026-11-14  Live page: the walls between the setter list, the stops / registration column and the transport column are now draggable (QSplitter); widths are
             remembered between runs (double-click a wall = back to the default widths). Setter key buttons keep their second line [key name].
 2026-11-13  Resolve Pylance errors in configuration, stave-editor, preset-selection and LCD UI code.
@@ -319,22 +322,33 @@ class SheetMusicWindow(QDialog):
                     return True
         return super().eventFilter(obj, event)
 
+    IMAGES_ROLE = Qt.ItemDataRole.UserRole + 1                # set on a row that stands for a folder of page images
+
     def _load_file_list(self):
         if not os.path.isdir(self.FOLDER):
             self.status_label.setText(f"Folder not found: {self.FOLDER}")
             return
-        paths = []
+        import sheet_images
+        entries = []                                          # (display name, path of the pdf, image folder or "")
         for root, _, filenames in os.walk(self.FOLDER):
-            paths.extend(os.path.join(root, name) for name in filenames if name.lower().endswith(".pdf"))
-        paths.sort(key=lambda path: os.path.relpath(path, self.FOLDER).casefold())
-        for path in paths:
-            display_name = os.path.relpath(path, self.FOLDER)
+            for name in filenames:
+                if name.lower().endswith(".pdf"):
+                    entries.append((os.path.relpath(os.path.join(root, name), self.FOLDER), os.path.join(root, name), ""))
+            pictures = sheet_images.image_files(root)
+            if pictures and not sheet_images.is_current(root):   # an up-to-date converted pdf is listed as a normal pdf above
+                label = os.path.relpath(root, self.FOLDER)
+                label = "(pictures)" if label == "." else label
+                entries.append((f"{label}  [{len(pictures)} images]", sheet_images.pdf_path_for(root), root))
+        entries.sort(key=lambda e: e[0].casefold())
+        for display_name, path, folder in entries:
             self.file_list.addItem(display_name)
-            self.file_list.item(self.file_list.count() - 1).setData(Qt.ItemDataRole.UserRole, path)
-        if paths:
+            item = self.file_list.item(self.file_list.count() - 1)
+            item.setData(Qt.ItemDataRole.UserRole, path)
+            item.setData(self.IMAGES_ROLE, folder)
+        if entries:
             self.file_list.setCurrentRow(0)
         else:
-            self.status_label.setText("No PDF files found")
+            self.status_label.setText("No PDF files or image folders found")
 
     def _load_file_at(self, row):
         if row < 0:
@@ -348,6 +362,17 @@ class SheetMusicWindow(QDialog):
         self._mark_active(self.file_list, row)
         self._load_token += 1
         token = self._load_token
+        folder = item.data(self.IMAGES_ROLE)
+        if isinstance(folder, str) and folder:                # a folder of page images: make (or reuse) its pdf, then open that
+            import sheet_images
+            self.status_label.setText(f"Converting {item.text()} to a PDF...")
+            QApplication.processEvents()
+            made = sheet_images.ensure_pdf(folder)
+            if made is None:
+                self.status_label.setText("Could not convert these images to a PDF (is the folder writable?)")
+                return
+            path = made
+            item.setData(Qt.ItemDataRole.UserRole, path)
         self.status_label.setText(f"Loading {item.text()}...")
         self.setWindowTitle(f"Sheet music - {os.path.basename(path)}")
         QTimer.singleShot(30, lambda: self._open_pdf(path, token))   # let the highlight paint; skip superseded requests
@@ -2817,8 +2842,10 @@ class BridgeWindow(QMainWindow):
         self.mixer_dock.topLevelChanged.connect(lambda f: QSettings("KeyLabGrandOrgue", "Mixer").setValue("floating", "true" if f else "false"))
         self.mixer_dock.visibilityChanged.connect(lambda v: QSettings("KeyLabGrandOrgue", "Mixer").setValue("visible", "true" if v else "false"))
         toggle = self.mixer_dock.toggleViewAction()
-        toggle.setText("&Mixer")
-        toggle.setShortcut("Ctrl+M")
+        toggle.setText("&Mixer\tCtrl+M")                     # the key itself is an application shortcut below (an action shortcut clashed / needed the menu opened)
+        self._mixer_shortcut = QShortcut(QKeySequence("Ctrl+M"), self)
+        self._mixer_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        self._mixer_shortcut.activated.connect(lambda: self.mixer_dock.setVisible(not self.mixer_dock.isVisible()))
 
     def _apply_scale(self):
         """Minimum sizes from the font height, so a smaller / larger text size resizes the controls with it."""
@@ -3418,6 +3445,8 @@ def run_qt_ui(bridge, ui):
     global WINDOW_MEMORY
     WINDOW_MEMORY = WindowMemory(os.path.dirname(os.path.abspath(bridge.cfg_path)))
     application.installEventFilter(WINDOW_MEMORY)
+    import fluid_columns
+    fluid_columns.install(application)
     application.aboutToQuit.connect(WINDOW_MEMORY.flush)
     window = BridgeWindow(bridge)
     engine_thread = threading.Thread(target=bridge.run, name="bridge-engine", daemon=True)

@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.9 (unreleased) - additions
+- Fluid columns in every list/table; Ctrl+M toggles the Mixer reliably (Piano Roll import is Ctrl+Shift+I); sheet music folders of page images convert to a PDF.
+
 ## Unreleased
 
 ### New
