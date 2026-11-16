@@ -23,6 +23,9 @@
 - `pyrightconfig.json` (Windows platform, basic checking) and type-clean optional-library imports, so Pylance shows no errors for `audio_tap.py`, `audio_mixer.py` and the new files.
 - Live page: the walls between the setter list, the stops column and the transport column can be dragged to resize them (remembered; double-click a wall for the default widths).
 
+### Licensing
+- THIRD_PARTY_NOTICES.md rewritten: every bundled component with its licence, the LGPL conditions for Qt and Verovio, the music21 corpus caveat (some bundled encodings are non-commercial), Font Awesome and Apache attributions, the reference project, and a list of items still to verify.
+
 ### Fixed
 - Fixed the Pylance-reported attribute, optional-value and type errors in `qt_gui.py` by clarifying dynamic imports, widget types and nullable UI state.
 - Piano Roll tab crashed with `module 'midi_stave' has no attribute 'PianoKeys'` inside the bridge (the bare `import midi_stave` found the folder, not the module); the roll window and the track organ dialog now use the module their Stave came from.

@@ -200,7 +200,7 @@ def write_stave_friendly(path, out_path, target_bpm=None):
         return False
 
 
-class TakePlayer:
+`lass TakePlayer:
     """Plays a take file into GrandOrgue on a background thread. send(mido message) delivers to the GO port."""
 
     def __init__(self, send, channel=None, on_marker=None):
