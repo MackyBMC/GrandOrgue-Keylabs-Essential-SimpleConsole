@@ -4,6 +4,7 @@ volume knobs and the swell fader (they turn and slide as the real ones move; dra
 spectrum / oscilloscope of the sound going to the output (audio_tap.py). Drag the panel anywhere; right-click for options.
 
 CHANGELOG
+2026-11-16  Docked LCD no longer stretches across the whole window: it is centred at a sane width (760 px, never wider than 1000) and still takes the height it is given.
 2026-11-16  Floating LCD transport icon reflects the shared MIDI player's paused state and retained position.
 2026-11-16  Docked LCD height is fluid: no fixed 260 px minimum (now 90 px), Expanding size policy, and the main window gives the docked panel a share of the
         height that follows the window (qt_gui._fit_lcd_height). The floating LCD is unchanged.
@@ -95,7 +96,7 @@ class LcdFloat(QWidget):
 
     # ---------------------------------------------------------------- docking
     def sizeHint(self):
-        return QSize(420, 150) if self.docked else super().sizeHint()
+        return QSize(760, 150) if self.docked else super().sizeHint()
 
     def dock_into(self, layout, parent):
         """Become an ordinary child of `parent`, placed in `layout` (the main window's LCD panel)."""
@@ -105,7 +106,8 @@ class LcdFloat(QWidget):
         self.grip.hide()
         self.setMinimumSize(380, 90)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        layout.addWidget(self, 1)
+        self.setMaximumWidth(1000)
+        layout.addWidget(self, 1, Qt.AlignmentFlag.AlignHCenter)     # centred; width = size hint, height fluid
         self.settings.setValue("docked", "true")
         self.show()
 
@@ -117,6 +119,7 @@ class LcdFloat(QWidget):
         self.docked = False
         self.grip.show()
         self.setMinimumSize(380, 140)
+        self.setMaximumWidth(16777215)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         S = self.settings.value
         self.resize(int(S("w", 600)), int(S("h", 500)))
