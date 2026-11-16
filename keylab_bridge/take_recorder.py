@@ -6,6 +6,7 @@ silence, so a practice session becomes a row of separate takes. The take in prog
 AUTOSAVE seconds, so a crash or power cut never loses more than that.
 
 CHANGELOG
+2026-11-16  Pylance: take name from self.path or '' (path is None before the first note).
 2026-11-16  TakePlayer pause/resume preserves the current file position for the shared MIDI transport.
 2026-11-10  TakePlayer timing: absolute schedule (no slow-down creep); a stall (note later than 60 ms) is absorbed instead of
             bursting out to catch up; tempo changes re-anchor the schedule; shorter GIL switch interval while playing.
@@ -127,7 +128,7 @@ class TakeRecorder:
         if self.started is not None:
             if self.notes >= self.min_notes:
                 self._write()
-                self.log(f"Take saved: {os.path.basename(self.path)} ({self.notes} notes)")
+                self.log(f"Take saved: {os.path.basename(self.path or '')} ({self.notes} notes)")
             elif self.path and os.path.isfile(self.path):
                 try:
                     os.remove(self.path)                       # a few stray notes are not a take
