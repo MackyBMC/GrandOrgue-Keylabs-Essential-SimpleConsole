@@ -1,0 +1,10 @@
+v2.0.9-third-party-notices-2.patch  (THIRD_PARTY_NOTICES.md and CHANGELOG.md; base origin/release-2.0 @ 1618879)
+Folds your answers from v2.0.9-third-party-notices. Qt PDF is now confirmed LGPL-3.0 (Qt 6.8 page, with a PDFium snapshot whose components are listed). Verovio's page requires visible credit and allows commercial use if unmodified and dynamically linked; it does not mention the fonts. rjuang's MIT text and "Copyright (c) 2020 Ray Juang" are reproduced. music21 corpus: kept for v2, to be excluded from v3 builds (recorded as an open item for M1 of the roadmap).
+
+Questions
+1. Verovio asks for visible credit and the other notices need a home. Want a code patch for an About / Licences screen (reads THIRD_PARTY_NOTICES.md, opened from Help) so a credit is visible inside the app?
+2. The five Verovio fonts have no stated licence anywhere you could look. For v2 (free) leave as is; for v3 I will list this as a blocker to check before release. OK?
+3. Code answers still pending from your other answer files: (a) docked LCD height should be fluid; (b) playback of the stave's edited notes in the main window should be selectable (setting), default stays the original MIDI. (Controller toggle as a KeyLab pad: no.) Do you want these as the next v2.0.9 patches, in that order?
+
+Notes
+- Documentation only; no build or source change.
