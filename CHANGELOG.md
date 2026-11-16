@@ -2,6 +2,8 @@
 
 ## 2.0.9 (unreleased) - additions
 - Fluid columns in every list/table; Ctrl+M toggles the Mixer reliably (Piano Roll import is Ctrl+Shift+I); sheet music folders of page images convert to a PDF.
+- Docked LCD height is fluid: it shares the window height with the tabs and shrinks with the window (minimum 90 px instead of 260).
+- Help > Licenses shows the full THIRD_PARTY_NOTICES.md inside the app; Help > About carries the visible Verovio / Qt / music21 credits.
 
 ## Unreleased
 

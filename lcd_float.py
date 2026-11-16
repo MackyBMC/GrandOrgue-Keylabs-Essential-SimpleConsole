@@ -4,6 +4,8 @@ volume knobs and the swell fader (they turn and slide as the real ones move; dra
 spectrum / oscilloscope of the sound going to the output (audio_tap.py). Drag the panel anywhere; right-click for options.
 
 CHANGELOG
+2026-11-16  Docked LCD height is fluid: no fixed 260 px minimum (now 90 px), Expanding size policy, and the main window gives the docked panel a share of the
+        height that follows the window (qt_gui._fit_lcd_height). The floating LCD is unchanged.
 2026-11-12  Fixed: closing the LCD raised a TypeError (closeEvent handed its close event to hideEvent).
 2026-11-12  Docking: right-click "Dock into the main window" puts the LCD in the main window's LCD panel (replacing the fixed 2-line LCD);
             "Undock (float)" or the "LCD float" button pops it out again. Remembered between runs. Docked it has no drag, grip or
@@ -29,7 +31,7 @@ import time
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
-from PySide6.QtWidgets import QColorDialog, QMenu, QSizeGrip, QWidget
+from PySide6.QtWidgets import QColorDialog, QMenu, QSizeGrip, QSizePolicy, QWidget
 
 SCHEMES = {                       # name: (ink, back)
     "Amber (Casio)": ("#ffb84d", "#16130c"),
@@ -92,7 +94,7 @@ class LcdFloat(QWidget):
 
     # ---------------------------------------------------------------- docking
     def sizeHint(self):
-        return QSize(600, 300) if self.docked else super().sizeHint()
+        return QSize(420, 150) if self.docked else super().sizeHint()
 
     def dock_into(self, layout, parent):
         """Become an ordinary child of `parent`, placed in `layout` (the main window's LCD panel)."""
@@ -100,7 +102,8 @@ class LcdFloat(QWidget):
         self.setParent(parent, Qt.WindowType.Widget)
         self.docked = True
         self.grip.hide()
-        self.setMinimumSize(380, 260)
+        self.setMinimumSize(380, 90)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         layout.addWidget(self, 1)
         self.settings.setValue("docked", "true")
         self.show()
@@ -113,6 +116,7 @@ class LcdFloat(QWidget):
         self.docked = False
         self.grip.show()
         self.setMinimumSize(380, 140)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         S = self.settings.value
         self.resize(int(S("w", 600)), int(S("h", 500)))
         pos = S("pos")

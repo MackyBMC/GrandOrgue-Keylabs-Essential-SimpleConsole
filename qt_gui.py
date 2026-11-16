@@ -1,6 +1,9 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-16  Docked LCD height is fluid: the LCD panel takes a share of the window height (stretch 1 against 3 for the tabs) and shrinks with it; collapsed = one line.
+2026-11-16  Help > Licenses opens a window showing THIRD_PARTY_NOTICES.md (QTextBrowser, scrolls); Help > About lists the version and the visible credits (Qt / PySide6 LGPL,
+            Verovio LGPL, music21, rjuang's KeyLab script) with a button to the full notices. Works from source and from the frozen build (file is a packaged data file).
 2026-11-15  Stop Selection Grid popup no longer jumps: it stays inside the screen (frame included) and opens / closes without the overshoot that kept resizing it.
             Pressing Record on a MIDI with unsaved stave / roll edits asks to Save / Discard / Cancel first. "Quantised" toggle + Play of an edited MIDI on every transport.
 2026-11-15  Live page: a small piano roll of the loaded MIDI (a take just recorded or a file just opened) sits under its name in the MIDI player; double-click opens it in the Piano Roll tab.
@@ -1497,6 +1500,7 @@ class BridgeWindow(QMainWindow):
         self.setMinimumSize(560, 420)
         root = QWidget()
         layout = QVBoxLayout(root)
+        self._main_layout = layout
         self._docks = {}
         self._build_mixer_dock()
         self.top_tabs = QTabWidget()
@@ -1591,6 +1595,7 @@ class BridgeWindow(QMainWindow):
 
         self.main_tabs = QTabWidget()
         layout.addWidget(self.main_tabs, 1)
+        self._fit_lcd_height()
         live_page = QWidget()
         live_grid = QGridLayout(live_page)
         live_scroll = QScrollArea()                         # fluid first: panels share the window; scroll only below the smallest layout
@@ -2835,8 +2840,55 @@ class BridgeWindow(QMainWindow):
             self.bridge.post_ui_event("command", text)
             self.command_box.setCurrentText("")
 
+    def _notices_text(self):
+        from keylab_bridge import paths
+        for folder in (paths.app_dir(), os.path.dirname(os.path.abspath(__file__))):
+            try:
+                with open(os.path.join(folder, "THIRD_PARTY_NOTICES.md"), encoding="utf-8") as handle:
+                    return handle.read()
+            except OSError:
+                continue
+        return ""
+
     def show_licenses(self):
-        QMessageBox.information(self, self._t("gui_licenses"), self._t("gui_license_notice"))
+        """Third-party notices window: THIRD_PARTY_NOTICES.md rendered as Markdown; the short built-in notice when the file is missing."""
+        from PySide6.QtWidgets import QTextBrowser
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self._t("gui_licenses"))
+        dialog.resize(760, 560)
+        box = QVBoxLayout(dialog)
+        view = QTextBrowser()
+        view.setOpenExternalLinks(True)
+        text = self._notices_text()
+        if text:
+            view.setMarkdown(text)
+        else:
+            view.setPlainText(self._t("gui_license_notice"))
+        box.addWidget(view, 1)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        box.addWidget(buttons)
+        dialog.exec()
+
+    def show_about(self):
+        from version import APP_VERSION
+        ask = QMessageBox(self)
+        ask.setWindowTitle("About")
+        ask.setTextFormat(Qt.TextFormat.RichText)
+        ask.setText(
+            f"<b>GrandOrgue KeyLab bridge {APP_VERSION}</b><br>Stave Station: MIDI to sheet music for organ.<br>"
+            "Application code: MIT License.<br><br>"
+            "<b>Credits</b><br>"
+            "Music engraving: <a href='https://www.verovio.org'>Verovio</a> (LGPL-3.0), "
+            "&copy; RISM Digital Center and the Verovio contributors.<br>"
+            "Interface: Qt and PySide6 (LGPL-3.0). MIDI / notation analysis: music21 (BSD).<br>"
+            "KeyLab MIDI mapping: based on rjuang/flstudio-arturia-keylab-mk2 (MIT, &copy; 2020 Ray Juang).<br><br>"
+            "Licence texts and the full list are under Help &gt; Licenses.")
+        ask.setStandardButtons(QMessageBox.StandardButton.Ok)
+        licences = ask.addButton("Licenses...", QMessageBox.ButtonRole.ActionRole)
+        ask.exec()
+        if ask.clickedButton() is licences:
+            self.show_licenses()
 
     def _stave_edited(self):
         stave = getattr(self, "stave_window", None)
@@ -3086,10 +3138,7 @@ class BridgeWindow(QMainWindow):
         add(window_menu, "&KeyLab LCD panel: collapse / expand", lambda: self.lcd_box.setChecked(not self.lcd_box.isChecked()))
         help_menu = bar.addMenu("&Help")
         add(help_menu, "&Licenses", self.show_licenses)
-        def about():
-            from version import APP_VERSION
-            QMessageBox.about(self, "About", f"GrandOrgue KeyLab bridge {APP_VERSION}\nStave Station: MIDI to sheet music for organ.")
-        add(help_menu, "&About", about)
+        add(help_menu, "&About", self.show_about)
         self._menus = {"File": file_menu, "Edit": edit_menu, "Select": select_menu, "View": view_menu, "Zoom": zoom_menu,
                        "Layout": layout_menu, "Window": window_menu, "Help": help_menu}
         self._merged = {"stave": [], "roll": []}          # [(action, enabled before it was dimmed)] merged from the embedded windows
@@ -3176,6 +3225,7 @@ class BridgeWindow(QMainWindow):
         for child in self.lcd_box.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly):
             child.setVisible(expanded and (child is not self.lcd_text or not lcd_docked))
         self.lcd_box.setMaximumHeight(16777215 if expanded else self.lcd_box.fontMetrics().height() + 16)
+        self._fit_lcd_height()
         if not expanded:
             lcd = self._ensure_lcd()
             if not lcd.isVisible():
@@ -3196,9 +3246,20 @@ class BridgeWindow(QMainWindow):
         else:
             lcd.undock(self._lcd_layout)
             self.lcd_text.show()
+        self._fit_lcd_height()
         bridge = getattr(self, "bridge", None)
         if bridge is not None:
             lcd.update_state(bridge.get_snapshot())
+
+    def _fit_lcd_height(self):
+        """A docked, expanded LCD panel shares the window height with the tabs (1 : 3) so it grows and shrinks with the window; otherwise it keeps its natural height."""
+        tabs = getattr(self, "main_tabs", None)
+        if tabs is None:                                          # still building the window
+            return
+        lcd = self.lcd_float
+        fluid = lcd is not None and lcd.docked and self.lcd_box.isChecked()
+        self._main_layout.setStretchFactor(self.lcd_box, 1 if fluid else 0)
+        self._main_layout.setStretchFactor(tabs, 3 if fluid else 1)
 
     def toggle_lcd_float(self):
         lcd = self._ensure_lcd()
