@@ -1,6 +1,7 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-16  Shared transport pauses/resumes the edited Stave MIDI through the bridge player, and shared Stop clears the editor's saved pause point.
 2026-11-16  Docked LCD height is fluid: the LCD panel takes a share of the window height (stretch 1 against 3 for the tabs) and shrinks with it; collapsed = one line.
 2026-11-16  Help > Licenses opens a window showing THIRD_PARTY_NOTICES.md (QTextBrowser, scrolls); Help > About lists the version and the visible credits (Qt / PySide6 LGPL,
             Verovio LGPL, music21, rjuang's KeyLab script) with a button to the full notices. Works from source and from the frozen build (file is a packaged data file).
@@ -2906,14 +2907,23 @@ class BridgeWindow(QMainWindow):
         def play():
             stave = self._stave_edited()
             player = getattr(self.bridge, "take_player", None)
-            if stave is None or getattr(player, "active", False):
+            if stave is None:
                 return False
             current = getattr(self.bridge, "take_to_play", "") or ""
             if not (os.path.basename(current).startswith("_preview") or self._same_file(current, stave.path)):
                 return False
-            stave.play_on_organ()
+            if getattr(player, "active", False):
+                stave.pause_on_organ()
+            elif player is not None and getattr(player, "paused", False):
+                stave.play_on_organ(offset=player.position())
+            else:
+                stave.play_on_organ()
             return True
-        bar.quant_get, bar.quant_set, bar.play_override = get, put, play
+        def stop():
+            stave = getattr(self, "stave_window", None)
+            if stave is not None:
+                stave.clear_playback_pause()
+        bar.quant_get, bar.quant_set, bar.play_override, bar.stop_override = get, put, play, stop
 
     def _before_record(self):
         """Called by the bridge before a new recording starts. False = cancel. Asks when the loaded MIDI has unsaved stave / roll edits."""
@@ -3159,6 +3169,7 @@ class BridgeWindow(QMainWindow):
                 self.stave_window.play_hook = lambda path, offset=0.0: self.bridge.post_ui_event("preview_play", f"{path}|@{offset}")
                 self.stave_window.seek_hook = lambda t: self.bridge.post_ui_event("take_seek", t)
                 self.stave_window.stop_hook = lambda: self.bridge.post_ui_event("preview_stop")
+                self.stave_window.pause_hook = self.bridge.take_player.pause
                 self.stave_window.pos_hook = lambda: self.bridge.take_player.position()
                 self.stave_window.chord_hook = lambda items, hold: self.bridge.post_ui_event("chord", (items, hold))
                 self.stave_window.gate_hook = lambda on, items: self.bridge.post_ui_event("gate", (on, items))

@@ -1,6 +1,7 @@
 """One MIDI file transport for the whole app (main, stave editor, piano roll): the same buttons everywhere.
 
 CHANGELOG
+2026-11-16  Shared transport retains and displays the paused MIDI position; edited-score Play / Stop overrides stay in sync.
 2026-11-15  Recording shows in red on every transport. New "Quantised" toggle on every transport: plays the stave / roll version of an edited MIDI quantised (on) or as played (off); Play on an edited MIDI plays that version.
 2026-11-13  Type-clean (player is checked before position()).
 2026-11-12  New. Play / Pause, Stop / Panic, Loop, Metronome (+ Save), position slider, time and loaded-file label. Device agnostic: it only
@@ -57,7 +58,7 @@ class TransportBar(QWidget):
         self.quant_button.clicked.connect(self._quant_clicked)
         self.buttons["gui_quant"] = self.quant_button
         lay.addWidget(self.quant_button, 2, 1) if vertical else lay.addWidget(self.quant_button, 0, 5)
-        self.quant_get = self.quant_set = self.play_override = None
+        self.quant_get = self.quant_set = self.play_override = self.stop_override = None
         self.slider = polish.make_seek_slider()
         self.slider.setToolTip("Click or drag to move to a position in the MIDI file")
         self.slider.seek.connect(self._seek)
@@ -90,6 +91,8 @@ class TransportBar(QWidget):
         elif name == "play" and self.play_override is not None and self.play_override():
             return                                                  # an edited MIDI plays from the stave / roll (quantised or as played)
         else:
+            if name == "stop" and self.stop_override is not None:
+                self.stop_override()
             self.bridge.post_ui_event("transport", name)
 
     def _quant_clicked(self, checked):
@@ -122,9 +125,11 @@ class TransportBar(QWidget):
         path = getattr(b, "take_to_play", None)
         player = getattr(b, "take_player", None)
         playing = getattr(player, "active", False)
+        paused = getattr(player, "paused", False)
         recording = getattr(b, "midi_rec", None) is not None
         text = "\u25cf Recording..." if recording else ("Loaded: " + os.path.basename(path) if path else "MIDI: nothing loaded")
-        self.file_label.setText(text + ("  [PLAYING]" if playing else ""))
+        status = "  [PLAYING]" if playing else ("  [PAUSED]" if paused else "")
+        self.file_label.setText(text + status)
         self.file_label.setStyleSheet("color: #e53935; font-weight: 700;" if recording else "")
         if self.quant_get is not None:
             state = self.quant_get()
@@ -132,7 +137,7 @@ class TransportBar(QWidget):
                 self.quant_button.setChecked(state)
         self.file_label.setToolTip((path or "") + "\n" + getattr(b, "take_info", ""))
         length = self._length()
-        pos = (player.position() or 0.0) if (playing and player is not None) else 0.0
+        pos = (player.position() or 0.0) if ((playing or paused) and player is not None) else 0.0
         if length > 0 and not self.slider.dragging:
             self.slider.setValue(int(min(1.0, pos / length) * 1000))
         self.time_label.setText(f"{clock(pos)} / {clock(length)}")

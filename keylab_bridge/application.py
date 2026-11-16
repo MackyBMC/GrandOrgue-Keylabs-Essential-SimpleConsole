@@ -1,6 +1,7 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-16  Shared MIDI transport pause now resumes TakePlayer from its saved file position; Stop clears the paused position.
 2026-11-12  The KeyLab controller is only engaged at start when it is detected (saved "off" still wins); not detected = the bridge runs without it and
             the toggle stays dim. Snapshot carries "controller_detected" (checked every 2 s).
 2026-11-12  Transport state carries "take_path" (full path of the MIDI file in play), so the main window can keep the stave editor on the same file.
@@ -1176,9 +1177,11 @@ class BridgeApp:
             if value == "play" and self.take_to_play and not self.br.sequence_mode:
                 self.toggle_take_playback()
                 return
-            if value == "stop" and self.take_player.active:
+            if value == "stop":
+                was_active = self.take_player.active
                 self.take_player.stop()
-                return
+                if was_active:
+                    return
             notes = {
                 "previous_step": N_REWIND, "next_step": N_FORWARD,
                 "load": N_JOG_PRESS, "save": N_SAVE, "metro": N_METRO,
@@ -1419,9 +1422,12 @@ class BridgeApp:
                  "make_go_midi_import.py and import the result, once)", notify=False)
 
     def toggle_take_playback(self):
+        if not self.take_to_play:
+            return
         if self.take_player.active:
-            self.take_player.stop()
-        else:
+            if not self.take_player.pause():
+                self.take_player.stop()
+        elif not self.take_player.resume(self.take_to_play):
             self._start_take(self.take_to_play)
 
     PANEL_SYSEX_NOTES = {0x16: N_CAT_CHAR, 0x17: N_PRESET, 0x18: N_NAV_LEFT, 0x19: N_NAV_RIGHT}
@@ -1531,9 +1537,12 @@ class BridgeApp:
             if message.note == N_PLAY and self.take_to_play and not self.br.sequence_mode:
                 self.toggle_take_playback()                           # play the recorded take through GrandOrgue
                 return
-            if message.note == N_STOP and self.take_player.active:
-                self.take_player.stop()
-                return
+            if message.note == N_STOP:
+                if self.take_player.active:
+                    self.take_player.stop()
+                    return
+                if self.take_player.paused:
+                    self.take_player.stop()
         if message.channel == 0 and message.type == "note_on" and message.velocity > 0:
             if message.note == N_PRESET and self.br.stop_grid_ui_enabled:
                 self.br.stop_grid_mode = not self.br.stop_grid_mode
@@ -1908,7 +1917,7 @@ class BridgeApp:
         """What the floating LCD shows about playing / recording (all plain values, safe to read from the GUI thread)."""
         player, rec, br = self.take_player, self.midi_rec, self.br
         try:
-            position = player.position() if player.active else None
+            position = player.position() if player.active or player.paused else None
         except Exception:
             position = None
         started = getattr(rec, "started", None) if rec is not None else None
@@ -1916,6 +1925,7 @@ class BridgeApp:
             "take_file": os.path.basename(self.take_to_play) if self.take_to_play else "",
             "take_path": self.take_to_play or "",
             "take_playing": bool(player.active),
+            "take_paused": bool(player.paused),
             "take_pos": position,                       # seconds into the file at its own tempo
             "take_len": float(self.take_length or 0.0),
             "speed": float(getattr(player, "speed", 1.0)),

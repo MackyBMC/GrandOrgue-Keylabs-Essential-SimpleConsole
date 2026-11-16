@@ -4,6 +4,7 @@ volume knobs and the swell fader (they turn and slide as the real ones move; dra
 spectrum / oscilloscope of the sound going to the output (audio_tap.py). Drag the panel anywhere; right-click for options.
 
 CHANGELOG
+2026-11-16  Floating LCD transport icon reflects the shared MIDI player's paused state and retained position.
 2026-11-16  Docked LCD height is fluid: no fixed 260 px minimum (now 90 px), Expanding size policy, and the main window gives the docked panel a share of the
         height that follows the window (qt_gui._fit_lcd_height). The floating LCD is unchanged.
 2026-11-12  Fixed: closing the LCD raised a TypeError (closeEvent handed its close event to hideEvent).
@@ -293,7 +294,7 @@ class LcdFloat(QWidget):
             cx = x
             icon = QRectF(0, 0, small * 1.05, small * 1.05)
             playing = t.get("take_playing") or (t.get("go_playing") and not t.get("go_paused"))
-            paused = t.get("go_paused")
+            paused = t.get("go_paused") or t.get("take_paused")
             r = icon.translated(cx, y + (row_h - icon.height()) / 2)
             p.setPen(QPen(ink if (playing or paused) else dim, 1)); p.setBrush(QBrush(ink if playing else (dim if not paused else ink)))
             if paused:

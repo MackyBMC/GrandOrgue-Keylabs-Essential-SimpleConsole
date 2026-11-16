@@ -1,5 +1,6 @@
 """
 CHANGELOG
+2026-11-16  Shared transport pause hooks into the bridge player, preserving the edited-score resume position; Stop and loading another score clear that position.
 2026-11-13  Piano roll snapping like FL Studio: the note end / start, the whole note and a new note follow the snap LIVE while dragging (not only on release);
             hold Alt = free. add_note_at(free=...). Snap stays on by default.
 2026-11-12  roll_host hook: inside the main app the piano roll is shown as a dock of the main window (show_roll calls it); standalone it is still its own window.
@@ -1493,7 +1494,7 @@ class Stave(QMainWindow):
         self.voice_reg = []                          # per stave: [{"bar", "kind": "setter"|"stops", ...}] registration changes
         self.seek_hook = None
         self.lyrics = {}
-        self.play_hook = self.stop_hook = self.pos_hook = None   # set by the bridge: play a file / stop / playback position
+        self.play_hook = self.stop_hook = self.pause_hook = self.pos_hook = None   # set by the bridge: play / stop / pause / position
         self.sel_notes, self.undo_stack, self.redo_stack = set(), [], []
         self.hl_bar, self.page_widgets = None, []
         self.pool, self.job_running, self.job_dirty = None, False, False
@@ -2128,6 +2129,7 @@ class Stave(QMainWindow):
         except Exception as exc:
             QMessageBox.warning(self, "MIDI to Stave", f"Could not read that file:\n{exc}")
             return
+        self.clear_playback_pause()
         if self.stop_hook:
             self.stop_hook()                                  # loading while playing stops the old playback
         self.path = path
@@ -2602,7 +2604,7 @@ class Stave(QMainWindow):
         self.statusBar().showMessage("Playing on the organ" + (f" from {offset:.1f} s" if offset else ""))
 
     def stop_on_organ(self, *_):
-        self._paused_at = None                                # Stop rewinds; Space / Pause keeps the place
+        self.clear_playback_pause()                            # Stop rewinds; Space / Pause keeps the place
         if self.stop_hook:
             self.stop_hook()
 
@@ -2611,8 +2613,13 @@ class Stave(QMainWindow):
         if t is not None:
             self._paused_at = float(t)
             self.statusBar().showMessage("Paused - press Play (or Space) to carry on")
-        if self.stop_hook:
+        if self.pause_hook:
+            self.pause_hook()
+        elif self.stop_hook:
             self.stop_hook()
+
+    def clear_playback_pause(self):
+        self._paused_at = None
 
     def staves_for_export(self):
         p = self.params()

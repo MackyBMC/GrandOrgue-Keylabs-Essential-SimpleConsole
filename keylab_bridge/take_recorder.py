@@ -6,6 +6,7 @@ silence, so a practice session becomes a row of separate takes. The take in prog
 AUTOSAVE seconds, so a crash or power cut never loses more than that.
 
 CHANGELOG
+2026-11-16  TakePlayer pause/resume preserves the current file position for the shared MIDI transport.
 2026-11-10  TakePlayer timing: absolute schedule (no slow-down creep); a stall (note later than 60 ms) is absorbed instead of
             bursting out to catch up; tempo changes re-anchor the schedule; shorter GIL switch interval while playing.
             The playback log reports the worst lateness and the number of stalls.
@@ -223,6 +224,9 @@ class TakePlayer:
         self.next_file = 0.0
         self.thread = None
         self.stop_flag = False
+        self._paused_path: str | None = None
+        self._paused_position: float | None = None
+        self._completion = None
 
     @property
     def speed(self):
@@ -280,10 +284,15 @@ class TakePlayer:
             self.fanout = {}
         self.failed = 0
         self.sent = 0
-        self.thread = threading.Thread(target=self._run, args=(path, on_done, float(offset)), daemon=True)
+        self._completion = {"suppressed": False}
+        self.thread = threading.Thread(
+            target=self._run, args=(path, on_done, float(offset), self._completion), daemon=True
+        )
         self.thread.start()
 
     def stop(self):
+        self._paused_path = None
+        self._paused_position = None
         self.stop_flag = True
         with self._speed_changed:
             self._speed_changed.notify_all()
@@ -308,12 +317,43 @@ class TakePlayer:
         threading.Timer(hold, release).start()
 
     def position(self):
-        """Seconds into the file now (file time, so tempo scaling does not matter); None when nothing is playing."""
+        """Seconds into the file now (file time); a paused position is retained, otherwise None when idle."""
         if not self.active:
-            return None
+            return self._paused_position
         with self._speed_changed:
             return self.pos_file + max(0.0, min(self.next_file - self.pos_file,
                                                 (time.perf_counter() - self.pos_wall) * self._speed))
+
+    @property
+    def paused(self):
+        return self._paused_position is not None and not self.active
+
+    def pause(self):
+        if not self.active:
+            return False
+        path = getattr(self, "path", None)
+        position = self.position()
+        if path is None or position is None:
+            return False
+        completion = self._completion
+        if completion is not None:
+            completion["suppressed"] = True
+        self.stop()
+        self._paused_path = path
+        self._paused_position = position
+        return True
+
+    def resume(self, path):
+        if self._paused_path is None or self._paused_position is None:
+            return False
+        if os.path.normcase(os.path.abspath(path)) != os.path.normcase(os.path.abspath(self._paused_path)):
+            return False
+        offset = self._paused_position
+        on_done = getattr(self, "on_done_cb", None)
+        self._paused_path = None
+        self._paused_position = None
+        self.start(path, on_done=on_done, offset=offset)
+        return True
 
     def _targets(self, msg, when=None):
         if when is not None and self.low_chans and msg.type in ("note_on", "note_off") and msg.channel in self.low_chans:
@@ -378,7 +418,7 @@ class TakePlayer:
             if wait > 0.004:                                   # coarse sleep, then spin the last ~2 ms
                 _time.sleep(min(wait - 0.002, 0.01))
 
-    def _run(self, path, on_done, offset=0.0):
+    def _run(self, path, on_done, offset=0.0, completion=None):
         import mido
         sounding, used = set(), set()
         boost = _realtime_boost()
@@ -445,7 +485,7 @@ class TakePlayer:
                 self.send(mido.Message("note_off", channel=target, note=note, velocity=0))
             for target in used:
                 self.send(mido.Message("control_change", channel=target, control=64, value=0))
-            if on_done:
+            if on_done and not (completion and completion["suppressed"]):
                 on_done()
 
 
