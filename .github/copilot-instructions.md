@@ -9,7 +9,7 @@ Working rules (full text in CLAUDE.md):
 - No new Friesach, GrandOrgue-path, channel, CC or KeyLab constants outside their own module; tag new ones `# E:` (engine) or `# C:` (controller).
 - Code must be free of Pylance/pyright errors. Put a dated CHANGELOG block at the top of each edited source file and update CHANGELOG.md.
 - Graph output (graphify-out/) is generated and git-ignored: never commit it, and treat it as a hint only; the docs above decide intent.
-
+- Before producing any patch, read docs/claude.chat/PATCH-RULES.md and follow it.
 ## graphify
 
 For any question about this repo's architecture, structure, components, or how to add/modify/find
