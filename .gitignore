@@ -26,3 +26,9 @@ controller_engaged.txt
 # generated / runtime output
 graphify-out/
 *.json.tmp
+
+# development operations: not part of the published project, not licensed (see README "Scope of the licence")
+docs/claude.chat/
+tools/
+.kilo/
+.vscode/

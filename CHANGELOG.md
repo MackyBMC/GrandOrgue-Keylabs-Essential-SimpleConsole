@@ -24,6 +24,7 @@
 - Live page: the walls between the setter list, the stops column and the transport column can be dragged to resize them (remembered; double-click a wall for the default widths).
 
 ### Licensing
+- Development-operations files (assistant question/answer exchange files, tools/, .kilo/, .vscode/) are no longer published: ignored by git and excluded from the licence by a scope statement in the README.
 - THIRD_PARTY_NOTICES.md: Qt PDF licence and its PDFium components, Verovio credit requirement, the reference project's MIT notice with its copyright line, and the music21 corpus decision (kept for v2, excluded from v3 builds).
 - THIRD_PARTY_NOTICES.md rewritten: every bundled component with its licence, the LGPL conditions for Qt and Verovio, the music21 corpus caveat (some bundled encodings are non-commercial), Font Awesome and Apache attributions, the reference project, and a list of items still to verify.
 

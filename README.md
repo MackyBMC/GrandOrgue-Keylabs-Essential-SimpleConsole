@@ -337,3 +337,5 @@ warranty or support guarantees. Back up your GrandOrgue settings and organ data.
 This project is not affiliated with or endorsed by Arturia, GrandOrgue, Piotr
 Grabowski, or Anthropic. KeyLab and Arturia are trademarks of Arturia SA; Claude is
 a trademark of Anthropic.
+
+**Scope of the licence.** The MIT licence covers the application source code and its end-user documentation in this repository. It does not cover development-operations material: working notes, question-and-answer exchange files, assistant-instruction files, deployment, release and environment tooling, and editor or CI configuration. That material is not part of the published project, is not licensed for use, copying or redistribution, and is being moved out of the public repository.
