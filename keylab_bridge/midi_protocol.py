@@ -1,4 +1,8 @@
-"""KeyLab and GrandOrgue MIDI protocol and bridge state."""
+"""KeyLab and GrandOrgue MIDI protocol and bridge state.
+
+CHANGELOG
+2026-11-17  _toggle_item(cc): switch one registration on / off by its CC (the Active registrations list in the main window).
+"""
 
 import itertools
 from collections.abc import Callable
@@ -688,6 +692,17 @@ class Bridge:
         self.last_activity = now
         location = (it.division if self.stop_grid_mode else BANKS[self.bank]["code"])
         self._detail(it.name, ("ON " if new else "off") + f"{location} pad {n + 1}")
+        return [self._cc(it.channel, it.key, 127 if new else 0)]
+
+    def _toggle_item(self, cc, now):
+        it = ITEM_BY_CC.get(cc)
+        if it is None:
+            return []
+        new = not bool(self.state.get(it.cc))
+        self.state[it.cc] = new
+        self.last_sent[it.cc] = (new, now)
+        self.last_activity = now
+        self._detail(it.name, ("ON " if new else "off") + it.bank_code)
         return [self._cc(it.channel, it.key, 127 if new else 0)]
 
     def _desired_leds(self):

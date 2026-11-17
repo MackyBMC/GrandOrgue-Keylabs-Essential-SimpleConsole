@@ -36,10 +36,9 @@ Nuitka (AGPL-3.0; its documentation states that compiled output is not covered b
 ## Not distributed with this application
 - GrandOrgue (GPL): run as a separate program; no GrandOrgue code is included.
 - The Friesach Parish Church sample set (Piotr Grabowski): obtained separately under its own terms.
-- Aeolus (planned engine; GPL as far as known): to be run as a separate program, never bundled. **verify** before any integration.
 
 ## Open items
-1. music21 corpus (owner decision 2026-11-16): v2 keeps the build as is; **v3 builds must exclude the corpus** (some bundled encodings are non-commercial only). The application only parses the user's own files. Test a build without it first. The Scala scale collection has its own licence file: check it too.
-2. Verovio music fonts: confirm the licence of Bravura, Gootville, Leipzig, Leland and Petaluma (neither Verovio's licensing page nor the wheel states them) before the v3 release.
+1. music21 corpus: the build bundles all of music21's package data, including its corpus, and some of those encodings are licensed for non-commercial use only. The application only parses the user's own files. Anyone redistributing commercially should remove the corpus. The Scala scale collection has its own licence file: check it too.
+2. Verovio music fonts: confirm the licence of Bravura, Gootville, Leipzig, Leland and Petaluma (neither Verovio's licensing page nor the wheel states them).
 3. Credits and licence texts to ship (About / Licences screen or a `licenses/` folder): visible Verovio credit; FreeType and IJG acknowledgements; Apache-2.0 notices (Material Design Icons, Remix, Abseil, PyAudioWPatch); Font Awesome CC BY 4.0 attribution; full LGPL-3.0 text; the reference project's MIT notice above.
 4. Nuitka: confirm from its documentation that compiled output is not covered by the AGPL.

@@ -3,6 +3,7 @@
 ## 2.0.9 (unreleased) - additions
 - Pylance fixes in Stave Station MusicXML parsing: optional stave fields, Score/Part/Opus narrowing, and explicit Note/Chord handling.
 - Shared MIDI transport Play / Pause now resumes from the saved file position; Stop rewinds and the Stave / Piano Roll edited-score controls use the same pause state.
+- Registration bank: pads scale with the text and stay centred; the marks are gone; the bank is a list; Cat/Char starts the jog on it (then on to the Active registrations, buttons and tick boxes, cycling); click an active registration to switch it off, again to switch it on.
 - View > "Play stave edits in the main window": choose whether Play uses the original MIDI (default) or the stave / roll edits.
 - Fluid columns in every list/table; Ctrl+M toggles the Mixer reliably (Piano Roll import is Ctrl+Shift+I); sheet music folders of page images convert to a PDF.
 - Docked LCD height is fluid: it shares the window height with the tabs and shrinks with the window (minimum 90 px instead of 260).
@@ -30,7 +31,7 @@
 
 ### Licensing
 - Development-operations files (assistant question/answer exchange files, tools/, .kilo/, .vscode/) are no longer published: ignored by git and excluded from the licence by a scope statement in the README.
-- THIRD_PARTY_NOTICES.md: Qt PDF licence and its PDFium components, Verovio credit requirement, the reference project's MIT notice with its copyright line, and the music21 corpus decision (kept for v2, excluded from v3 builds).
+- THIRD_PARTY_NOTICES.md: Qt PDF licence and its PDFium components, Verovio credit requirement, the reference project's MIT notice with its copyright line, and the music21 corpus caveat.
 - THIRD_PARTY_NOTICES.md rewritten: every bundled component with its licence, the LGPL conditions for Qt and Verovio, the music21 corpus caveat (some bundled encodings are non-commercial), Font Awesome and Apache attributions, the reference project, and a list of items still to verify.
 
 ### Fixed

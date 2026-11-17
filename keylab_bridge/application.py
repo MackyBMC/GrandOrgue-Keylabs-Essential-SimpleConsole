@@ -1,6 +1,7 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-17  UI event "toggle_item" (switch a registration by CC); snapshot "active_items".
 2026-11-16  Shared MIDI transport pause now resumes TakePlayer from its saved file position; Stop clears the paused position.
 2026-11-12  The KeyLab controller is only engaged at start when it is detected (saved "off" still wins); not detected = the bridge runs without it and
             the toggle stays dim. Snapshot carries "controller_detected" (checked every 2 s).
@@ -1074,6 +1075,8 @@ class BridgeApp:
             self.key(str(value))
         elif event == "pad":
             self.emit(self.br._pad_press(int(value), time.time()))
+        elif event == "toggle_item":
+            self.emit(self.br._toggle_item(int(value), time.time()))
         elif event == "bank":
             self.br._change_bank((int(value) - self.br.bank) % len(BANKS))
         elif event == "volume":
@@ -1799,6 +1802,8 @@ class BridgeApp:
             "volume_labels": {key: VOLS[key][2] for key in VOLS},
             "active_stop_items": [(item.division, item.name) for item in ITEMS
                                   if item.kind == "stop" and self.br.state.get(item.cc)],
+            "active_items": [(item.cc, f"{item.bank_code}  {item.name}") for item in ITEMS
+                             if item.kind == "stop" and self.br.state.get(item.cc)],
             "active_stops": active_stops, "metro_bpm": br.metro_bpm, "metro_lit": br.metro_lit,
             "volumes": {key: br.vol_sent.get(key, br.vol[key]) for key in VOLS},
             "volume_active": self._volume_activity(),

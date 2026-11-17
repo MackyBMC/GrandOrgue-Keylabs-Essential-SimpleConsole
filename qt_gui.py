@@ -1,6 +1,11 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-17  Cat/Char jog walk starts on the registration bank list (H1 / H2 ...), stepping onto a row selects that bank for the pads; past the end of the list it goes on to the
+            Active registrations rows (jog press switches one), then the buttons / tick boxes / drop-downs, and cycles round (the setter list is the no-Cat/Char default and is left out).
+2026-11-17  Registration bank: the bank drop-down is a list (click, or tick "Jog turn selects the set" and turn the jog; remembered), the marks (fader positions) are gone from the
+            window, the pads scale with the text size and stay centred instead of stretching across the column, and the Active registrations list is clickable:
+            click a registration to switch it off (it stays listed, greyed), click again to switch it on; the greyed ones clear when another setter is selected.
 2026-11-17  Stave editor gets paused_hook (the bridge player's paused state).
 2026-11-17  View > "Play stave edits in the main window" (remembered, default off): off = the main window plays the original MIDI; on = Play on an edited MIDI plays the stave / roll version.
 2026-11-16  Shared transport pauses/resumes the edited Stave MIDI through the bridge player, and shared Stop clears the editor's saved pause point.
@@ -1461,6 +1466,7 @@ class BridgeWindow(QMainWindow):
         self._metro_active = False
         self.transport_bars = []
         self._active_stop_snapshot = None
+        self._active_ghosts: dict[int, str] = {}                  # registrations switched off by a click, kept listed (greyed) until another setter is chosen
         self._last_preset_event_index = None
         self._combination_tree_signature = None
         self._combination_snapshot = []
@@ -1634,12 +1640,11 @@ class BridgeWindow(QMainWindow):
         setter_layout.addLayout(setter_actions)
 
         self.bank_box = QGroupBox()
-        bank_layout = QHBoxLayout(self.bank_box)
-        self.bank_box_combo = QComboBox()
-        self.bank_box_combo.currentIndexChanged.connect(self._bank_selected)
-        bank_layout.addWidget(self.bank_box_combo, 1)
-        self.marks_label = QLabel()
-        bank_layout.addWidget(self.marks_label)
+        bank_layout = QVBoxLayout(self.bank_box)
+        self.bank_list = QListWidget()
+        self.bank_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.bank_list.currentRowChanged.connect(self._bank_selected)
+        bank_layout.addWidget(self.bank_list, 1)
         stops_controls = QVBoxLayout()
         stops_controls.addWidget(self.bank_box)
 
@@ -1651,7 +1656,15 @@ class BridgeWindow(QMainWindow):
             button.clicked.connect(lambda checked=False, pad=index: self.bridge.post_ui_event("pad", pad))
             self._pad_buttons.append(button)
             pads.addWidget(button, index // 4, index % 4)
-        stops_controls.addLayout(pads, 2)
+        pad_host = QWidget()                                       # pads keep a sane size: scaled with the text, centred, never stretched across the column
+        pad_host.setLayout(pads)
+        pad_host.setMaximumWidth(960)
+        pads.setContentsMargins(0, 0, 0, 0)
+        pad_row = QHBoxLayout()
+        pad_row.addStretch(1)
+        pad_row.addWidget(pad_host, 100)
+        pad_row.addStretch(1)
+        stops_controls.addLayout(pad_row)
 
         self.setter_keys_box = QGroupBox()
         self.setter_keys_box.setObjectName("setterKeys")
@@ -1717,14 +1730,10 @@ class BridgeWindow(QMainWindow):
         self.active_box = QGroupBox()
         active_layout = QVBoxLayout(self.active_box)
         self.active_list = QListWidget()
-        self.active_list.setProperty("jogSkip", True)      # display-only; jog must not walk it
         self.active_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.active_list.setMinimumHeight(self.active_list.fontMetrics().height() * 8 + 28)
+        self.active_list.itemClicked.connect(self._active_item_clicked)
         active_layout.addWidget(self.active_list)
-        self.mark_legend = QLabel()
-        self.mark_legend.setWordWrap(False)
-        self.mark_legend.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        active_layout.addWidget(self.mark_legend)
         stops_controls.addWidget(self.active_box, 1)
         self.live_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.live_splitter.setChildrenCollapsible(False)
@@ -2089,7 +2098,6 @@ class BridgeWindow(QMainWindow):
         for key, label in self._volume_labels.items():
             label.setText(self._t(f"volume_{key}") if key in ("master", "pedal", "hw", "sw", "sl", "noises", "swell")
                           else VOLS[key][2])
-        self.mark_legend.setText(self._t("gui_marks_legend"))
         self._transport_buttons["gui_metro"].setToolTip(self._t("gui_metro_tempo"))
         for index, theme in enumerate(THEME_PALETTES):
             self.theme_box.setItemText(index, self._t(f"theme_{theme}"))
@@ -2102,6 +2110,18 @@ class BridgeWindow(QMainWindow):
     def _bank_selected(self, index):
         if index >= 0:
             self.bridge.post_ui_event("bank", index)
+
+    def _active_item_clicked(self, item):
+        """Click a registration in the Active list: off if it is on (it stays listed, greyed), on again if it is greyed."""
+        cc = item.data(Qt.ItemDataRole.UserRole)
+        if cc is None:
+            return
+        cc = int(cc)
+        if cc in self._active_ghosts:
+            self._active_ghosts.pop(cc, None)
+        else:
+            self._active_ghosts[cc] = item.text()
+        self.bridge.post_ui_event("toggle_item", cc)
 
     def _combination_selected(self):
         items = self.combination_list.selectedItems()
@@ -2766,14 +2786,27 @@ class BridgeWindow(QMainWindow):
         targets = []
         if page is None:
             return targets
+        first, second, rest = [], [], []                          # bank list, then the Active registrations, then everything else
         for widget in page.findChildren(QWidget):
             if not widget.isEnabled() or not widget.isVisibleTo(page) or widget.property("jogSkip"):
                 continue
             if isinstance(widget, QListWidget):
-                targets.extend((widget, row) for row in range(widget.count()))
+                rows = [(widget, row) for row in range(widget.count())]
+                (first if widget is self.bank_list else second if widget is self.active_list else rest).extend(rows)
             elif isinstance(widget, (QPushButton, QCheckBox, QComboBox)):
-                targets.append((widget, None))
-        return targets
+                rest.append((widget, None))
+        return first + second + rest
+
+    def _menu_start(self):
+        """Cat/Char just switched on: the jog starts on the registration bank list, on the bank the pads show now."""
+        self._menu_cursor = None
+        targets = self._menu_targets()
+        row = self.bank_list.currentRow()
+        for index, (widget, target_row) in enumerate(targets):
+            if widget is self.bank_list and target_row == row:
+                self._menu_cursor = index
+                self.bridge.post_ui_event("menu_focus", self._menu_describe(targets[index]))
+                return
 
     @staticmethod
     def _menu_is_tickbox(item):
@@ -3005,7 +3038,9 @@ class BridgeWindow(QMainWindow):
         self.lcd_text.setMinimumHeight(round(h * 3.2))
         self.lcd_text.setMaximumHeight(round(h * 6))
         for button in self._pad_buttons:
-            button.setMinimumHeight(round(h * 2.4))
+            button.setMinimumHeight(round(h * 3.0))
+            button.setMaximumHeight(round(h * 4.6))
+        self.bank_list.setMinimumHeight(round(h * 4.5))
         self.combination_list.setMinimumHeight(round(h * 6))
         for box, lines in ((self.setter_keys_box, 2.7), (self.transport_box, 1.7)):      # setter keys carry a second line: [key name]
             for child in box.findChildren(QPushButton):
@@ -3401,6 +3436,9 @@ class BridgeWindow(QMainWindow):
             self._last_backend_tab = menu["tab"]
             if self.main_tabs.currentIndex() != menu["tab"]:
                 self.main_tabs.setCurrentIndex(menu["tab"])
+        if menu["active"] and not getattr(self, "_last_menu_active", False):
+            self._menu_start()
+        self._last_menu_active = bool(menu["active"])
         self.menu_status_label.setText(
             f"MENU {'ON' if menu['active'] else 'OFF'}  |  {menu['pages'][menu['tab']]['name']}"
         )
@@ -3483,14 +3521,12 @@ class BridgeWindow(QMainWindow):
         lcd = self.lcd_float
         if lcd is not None and lcd.isVisible():
             lcd.update_state(snapshot)
-        self.bank_box_combo.blockSignals(True)
-        if self.bank_box_combo.count() != len(snapshot["banks"]):
-            self.bank_box_combo.clear()
-            self.bank_box_combo.addItems(snapshot["banks"])
-        self.bank_box_combo.setCurrentIndex(snapshot["bank_index"])
-        self.bank_box_combo.blockSignals(False)
-        self.marks_label.setText(f"{self._t('marks')}: {snapshot['marks']}")
-        self.marks_label.setToolTip(snapshot["mark_legend"])
+        self.bank_list.blockSignals(True)
+        if self.bank_list.count() != len(snapshot["banks"]):
+            self.bank_list.clear()
+            self.bank_list.addItems(snapshot["banks"])
+        self.bank_list.setCurrentRow(snapshot["bank_index"])
+        self.bank_list.blockSignals(False)
         signature = tuple((item["filename"], item["internal_id"], item["name"])
                           for item in snapshot["combinations"])
         self._combination_snapshot = list(snapshot["combinations"])
@@ -3542,14 +3578,29 @@ class BridgeWindow(QMainWindow):
         selected_index = snapshot.get("combination_index")
         if selected_index != getattr(self, "_last_selected_combo", -2):
             self._last_selected_combo = selected_index
+            self._active_ghosts.clear()
             self._select_combination_row(selected_index)
         self.combination_list.blockSignals(False)
 
-        if snapshot["active_stops"] != self._active_stop_snapshot:
+        live = [(int(cc), str(text)) for cc, text in snapshot.get("active_items", [])]
+        live_ids = {cc for cc, _text in live}
+        for cc in list(self._active_ghosts):
+            if cc in live_ids:
+                self._active_ghosts.pop(cc, None)                   # switched on again elsewhere (pad, setter)
+        shown = [(cc, text, True) for cc, text in live] + [(cc, text, False) for cc, text in self._active_ghosts.items()]
+        if shown != self._active_stop_snapshot:
             self.active_list.clear()
-            for registration in snapshot["active_stops"]:
-                self.active_list.addItem(registration)
-            self._active_stop_snapshot = list(snapshot["active_stops"])
+            grey = QBrush(QColor("#8a8f98"))
+            for cc, text, on in shown:
+                entry = QListWidgetItem(text)
+                entry.setData(Qt.ItemDataRole.UserRole, cc)
+                if not on:
+                    entry.setForeground(grey)
+                    font = entry.font()
+                    font.setItalic(True)
+                    entry.setFont(font)
+                self.active_list.addItem(entry)
+            self._active_stop_snapshot = shown
 
         for button, pad in zip(self._pad_buttons, snapshot["pads"]):
             if pad["cc"] is None:               # nothing assigned: flat grey, no text, not clickable
