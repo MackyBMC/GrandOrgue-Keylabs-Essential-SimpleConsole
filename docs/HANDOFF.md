@@ -18,6 +18,7 @@ Release: bump `version.py`, tag `v<version>`, push; the GitHub Actions workflow 
 - `keylab_bridge/application.py`: BridgeApp, UI event queue (`post_ui_event` / `process_ui_event`), MIDI ports, setters.
 - `keylab_bridge/take_recorder.py`: `TakePlayer` (file playback thread; events: chord, gate, seek), recorder, stave-friendly copy.
 - `keylab_bridge/tempo.py` + `tempo_control.py` (from 2.0.4): one session-wide BPM (`TempoSession`, undo/redo, listeners); `TempoControl` fader+spin with ticks used in main, Stave and roll.
+- `transport_widget.py` (one MIDI transport used in main / stave / roll: Play-Pause, Stop-Panic, Loop, Metronome, Save, Quantised, position), `lcd_float.py` (floating or docked LCD), `mixer_panel.py` + `audio_mixer.py` (Windows per-application volumes), `take_preview.py`, `fluid_columns.py`, `sheet_images.py` (image folder to PDF).
 - `keylab_bridge/paths.py` (`go_folder()`), `preset_store.py`, `organ_layout.py`, `stop_grid.py`.
 - `midi_stave/core.py`: notes, `BarMap`, bar detection, quantise/shape (`shape_notes`), `make_staves`/`organ_staves`/`NAME_SETS`, `stave_go_channels`, `export_fixed_midi`.
 - `midi_stave/midi_stave.py`: `Stave` main window, `PianoRoll`, layouts, per-stave manual rows, registration dialogs, audition, playback hooks.
@@ -29,6 +30,9 @@ Release: bump `version.py`, tag `v<version>`, push; the GitHub Actions workflow 
 - **Track to organ mapping**: `Stave.track_map[(track, channel)] = {manuals, reg, bass_split}`; feeds `core.TRACK_ROUTES / TRACK_SPLIT`; a track with no manual follows the stave layout.
 - **Bass to pedal**: lowest note of each chord on the Pedal (mono lead) with a limit; can also be extracted into a real pedal track.
 - **Time bases (easy to get wrong).** Stave preview file `_preview.mid` is written at the file's average tempo (`barmap.average_bpm()`). `TakePlayer.position()` returns file time at that tempo; beat = `t * average_bpm / 60`. Playback speed = session BPM / file average BPM (`TakePlayer.base_bpm`). Do not treat preview time as original-score seconds.
+- **Pause / resume.** `TakePlayer.pause()` stores the file position; `resume(path)` restarts from it (a `_preview` file counts as the same take). `paused` / `position()` are what every transport, the LCD and the stave read; Stop clears it. The stave editor's `pause_hook` / `paused_hook` call the same player.
+- **Main-window Play of an edited MIDI** uses the stave / roll version only when View > "Play stave edits in the main window" is on (default off).
+- **Registration bank.** Banks are a list (`bank_list`), pads are centred and scaled with the font; the Active registrations list is clickable (`toggle_item` event, `_toggle_item(cc)`); Cat/Char jog walk order is bank list, Active rows, then other controls (`_menu_targets`). Fader marks are no longer shown.
 - **Tempo** is stored only when a MIDI / MusicXML file is saved or exported. Opening a file sets the session BPM to its average (no undo step); the stave preview keeps the chosen BPM.
 - Opening a MIDI with 2+ tracks starts with "one stave per track, highest first".
 - Quantise "Source": raw or quantised piano roll feeds the stave; shaping modes keep / snap / legato / fingered / organ (organ-friendly legato only lengthens).
