@@ -1,4 +1,0 @@
-v2.0.9-live-splitter - notes
-Done: Live / Main page: the walls (vertical dividers) between the setter list, the stops/registration column and the transport column are draggable; widths are remembered; double-click a wall = default widths. Also: setter key buttons keep their 2nd line [key name] when the window is short.
-I read "setter horizontal maxim wall" as the width limit of the setter list (its right-hand wall). If you meant a HEIGHT wall (e.g. between setter list and the status line) say so.
-Q1: also make the wall between the LCD panel and the tabs draggable (height)? default y, next patch

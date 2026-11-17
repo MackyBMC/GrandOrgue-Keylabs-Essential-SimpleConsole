@@ -1,6 +1,0 @@
-Questions / notes (default answers in brackets)
-1. Fluid columns apply to every table/tree automatically; a view that sets a Stretch column or property fluidSkip=true is left alone. [ok]
-2. Ctrl+M is now an application shortcut for the Mixer. Piano Roll "Import MIDI / MusicXML" moved to Ctrl+Shift+I. [ok]
-3. Sheet music: a folder with png/jpg/... is listed as "<folder> [N images]"; opening it writes "<folder> (from images).pdf" next to the images
-   (pages in natural name order) and opens it. Re-converted only if an image is newer. [ok]
-   Unverified on Windows: needs a writable folder.

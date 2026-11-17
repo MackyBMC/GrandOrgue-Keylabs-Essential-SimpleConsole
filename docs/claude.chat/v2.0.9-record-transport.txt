@@ -1,9 +1,0 @@
-Notes (defaults in brackets)
-0. Record on a MIDI with UNSAVED stave / piano-roll edits asks: Save edited MIDI / Don't save / Cancel. A loaded, unedited file starts recording at once. [ok]
-1. Recording shows as red "Recording..." on every transport (main, stave, roll). The controller's record button already starts it.
-2. Stave playback buttons: NOT reproduced. Headless, the stave's Play reaches the bridge (preview_play). If it still fails, press the Stave's Play and
-   paste the console text. Note: the embedded stave's own status line is not visible, which hides its messages. [open]
-3. "Quantised" toggle is on every transport (one shared setting = the stave's "Play what the stave shows"). Play on an MIDI that has note edits now plays the stave version
-   (quantised on) or the notes as played (off). Unedited files still play the file itself. [ok]
-4. Stop Selection Grid popup: stays inside the screen incl. frame and no longer overshoots (the overshoot caused the endless setGeometry warnings). Delete the
-   "StopGridDialog" entry in window_layout.json if it still opens oddly once.

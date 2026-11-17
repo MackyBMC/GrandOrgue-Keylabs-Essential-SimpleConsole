@@ -1,5 +1,0 @@
-Notes
-1. A small piano roll of the loaded MIDI (new recording or opened file) shows under "Loaded: <name>" in the MIDI player. Colour = MIDI channel. [ok]
-2. Double-click on it opens the Piano Roll tab with that file. [ok]
-3. It is hidden while nothing is loaded or the file has no notes. Unverified with a real controller recording.
-Apply with: git apply --3way (the CHANGELOG block at the top of qt_gui.py may need "Accept Combination").

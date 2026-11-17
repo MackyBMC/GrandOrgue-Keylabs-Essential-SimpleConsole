@@ -1,7 +1,0 @@
-ANSWERS-FOR: v2.0.9-one-project.txt
-SAVED: 2026-11-15 13:16
-FORMAT: 1
-
-Q1: Should the main window play the stave's edited notes (via a temporary file) instead of the original MIDI?  (y/n)  Default: n.
-A1: DISCUSS
-N1: selectable.
