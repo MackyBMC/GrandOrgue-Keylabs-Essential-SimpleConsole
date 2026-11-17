@@ -6,6 +6,7 @@ silence, so a practice session becomes a row of separate takes. The take in prog
 AUTOSAVE seconds, so a crash or power cut never loses more than that.
 
 CHANGELOG
+2026-11-17  Resume works across the main window and the stave / roll: a paused preview file and the loaded take count as the same place.
 2026-11-16  Pylance: take name from self.path or '' (path is None before the first note).
 2026-11-16  TakePlayer pause/resume preserves the current file position for the shared MIDI transport.
 2026-11-10  TakePlayer timing: absolute schedule (no slow-down creep); a stall (note later than 60 ms) is absorbed instead of
@@ -347,7 +348,9 @@ class TakePlayer:
     def resume(self, path):
         if self._paused_path is None or self._paused_position is None:
             return False
-        if os.path.normcase(os.path.abspath(path)) != os.path.normcase(os.path.abspath(self._paused_path)):
+        same = os.path.normcase(os.path.abspath(path)) == os.path.normcase(os.path.abspath(self._paused_path))
+        previews = os.path.basename(path).startswith("_preview") or os.path.basename(self._paused_path).startswith("_preview")
+        if not same and not previews:                          # a stave / roll preview of the loaded take counts as the same place
             return False
         offset = self._paused_position
         on_done = getattr(self, "on_done_cb", None)

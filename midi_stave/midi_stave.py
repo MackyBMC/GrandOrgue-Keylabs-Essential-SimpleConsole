@@ -1,5 +1,6 @@
 """
 CHANGELOG
+2026-11-17  The score follows the music again after Pause / Play from any window (a still playhead re-arms the follow; a redraw while paused no longer restarts playback).
 2026-11-16  Shared transport pause hooks into the bridge player, preserving the edited-score resume position; Stop and loading another score clear that position.
 2026-11-13  Piano roll snapping like FL Studio: the note end / start, the whole note and a new note follow the snap LIVE while dragging (not only on release);
             hold Alt = free. add_note_at(free=...). Snap stays on by default.
@@ -1494,7 +1495,7 @@ class Stave(QMainWindow):
         self.voice_reg = []                          # per stave: [{"bar", "kind": "setter"|"stops", ...}] registration changes
         self.seek_hook = None
         self.lyrics = {}
-        self.play_hook = self.stop_hook = self.pause_hook = self.pos_hook = None   # set by the bridge: play / stop / pause / position
+        self.play_hook = self.stop_hook = self.pause_hook = self.pos_hook = self.paused_hook = None   # set by the bridge: play / stop / pause / position
         self.sel_notes, self.undo_stack, self.redo_stack = set(), [], []
         self.hl_bar, self.page_widgets = None, []
         self.pool, self.job_running, self.job_dirty = None, False, False
@@ -3557,6 +3558,9 @@ class Stave(QMainWindow):
     def poll_playhead(self):
         t_file = self.pos_hook() if self.pos_hook else None
         self._update_timeline(t_file)
+        if t_file is not None and t_file == getattr(self, "_last_poll_t", None):
+            self._followed = None                                    # playhead standing still (paused): the next move follows again, from any window
+        self._last_poll_t = t_file
         if t_file is None:
             self._followed = None                                    # next Play follows from its first bar
             if self.roll.play_time is not None and time.time() > self.step_until:
@@ -3822,7 +3826,8 @@ class Stave(QMainWindow):
                                      f"{self.barmap.average_bpm():.0f} BPM average")
         try:                                                   # playing: carry on from the same place with the updated score
             now = self.pos_hook() if self.pos_hook else None
-            if now is not None and not self.job_dirty and not getattr(self, "_to_top", False):
+            paused = bool(self.paused_hook()) if self.paused_hook else False
+            if now is not None and not paused and not self.job_dirty and not getattr(self, "_to_top", False):
                 self.play_on_organ(offset=float(now))
         except Exception:
             pass

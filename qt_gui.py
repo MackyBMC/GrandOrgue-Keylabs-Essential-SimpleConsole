@@ -1,6 +1,8 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-17  Stave editor gets paused_hook (the bridge player's paused state).
+2026-11-17  View > "Play stave edits in the main window" (remembered, default off): off = the main window plays the original MIDI; on = Play on an edited MIDI plays the stave / roll version.
 2026-11-16  Shared transport pauses/resumes the edited Stave MIDI through the bridge player, and shared Stop clears the editor's saved pause point.
 2026-11-16  Docked LCD height is fluid: the LCD panel takes a share of the window height (stretch 1 against 3 for the tabs) and shrinks with it; collapsed = one line.
 2026-11-16  Help > Licenses opens a window showing THIRD_PARTY_NOTICES.md (QTextBrowser, scrolls); Help > About lists the version and the visible credits (Qt / PySide6 LGPL,
@@ -2907,7 +2909,7 @@ class BridgeWindow(QMainWindow):
         def play():
             stave = self._stave_edited()
             player = getattr(self.bridge, "take_player", None)
-            if stave is None:
+            if stave is None or not self._play_stave_edits():
                 return False
             current = getattr(self.bridge, "take_to_play", "") or ""
             if not (os.path.basename(current).startswith("_preview") or self._same_file(current, stave.path)):
@@ -2924,6 +2926,12 @@ class BridgeWindow(QMainWindow):
             if stave is not None:
                 stave.clear_playback_pause()
         bar.quant_get, bar.quant_set, bar.play_override, bar.stop_override = get, put, play, stop
+
+    def _play_stave_edits(self):
+        return str(QSettings("KeyLabGrandOrgue", "Playback").value("play_stave_edits", "false")) == "true"
+
+    def _set_play_stave_edits(self, on):
+        QSettings("KeyLabGrandOrgue", "Playback").setValue("play_stave_edits", "true" if on else "false")
 
     def _before_record(self):
         """Called by the bridge before a new recording starts. False = cancel. Asks when the loaded MIDI has unsaved stave / roll edits."""
@@ -3134,6 +3142,11 @@ class BridgeWindow(QMainWindow):
         add(view_menu, "&Piano Roll", lambda: self.top_tabs.setCurrentIndex(2))
         add(view_menu, "S&heet music", self.show_sheet_music)
         add(view_menu, "&LCD float / dock", self.toggle_lcd_float)
+        edits = add(view_menu, "Play stave &edits in the main window", lambda: None)
+        edits.setCheckable(True)
+        edits.setChecked(self._play_stave_edits())
+        edits.setToolTip("Off: Play uses the original MIDI. On: an edited MIDI plays its stave / piano roll version.")
+        edits.toggled.connect(self._set_play_stave_edits)
         view_menu.addAction(self.mixer_dock.toggleViewAction())
         zoom_menu = bar.addMenu("&Zoom")
         layout_menu = bar.addMenu("&Layout")
@@ -3170,6 +3183,7 @@ class BridgeWindow(QMainWindow):
                 self.stave_window.seek_hook = lambda t: self.bridge.post_ui_event("take_seek", t)
                 self.stave_window.stop_hook = lambda: self.bridge.post_ui_event("preview_stop")
                 self.stave_window.pause_hook = self.bridge.take_player.pause
+                self.stave_window.paused_hook = lambda: self.bridge.take_player.paused
                 self.stave_window.pos_hook = lambda: self.bridge.take_player.position()
                 self.stave_window.chord_hook = lambda items, hold: self.bridge.post_ui_event("chord", (items, hold))
                 self.stave_window.gate_hook = lambda on, items: self.bridge.post_ui_event("gate", (on, items))
