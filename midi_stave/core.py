@@ -5,6 +5,7 @@ falls between the two bar lines, so a bar played slowly or in a rush still comes
 only the notes around it change. A bar may have its own length (pick-up bars, 3/4 -> 4/4 changes) and its own grid.
 
 CHANGELOG
+2026-11-17  Type MusicXML part selection, chord/note handling, and optional stave fields for Pylance.
 2026-11-11  slur_phrases: no slur starts on or runs through a chord or a note over two beats, and none covers more than 8 beats
             (held organ notes are ties; bar-long slurs over sustained chords were unreadable).
 """
@@ -350,9 +351,9 @@ class StaveSpec:
     hi: int = 127
     channels: tuple = ()          # empty = any
     voices: tuple = ()            # ((track, channel), ...) this stave takes; empty = any
-    go_chs: tuple = None          # MIDI channels (1-16) this stave is written on (one per manual it plays); empty = keep source
+    go_chs: tuple[int, ...] | None = None  # MIDI channels (1-16) this stave is written on (one per manual it plays); empty = keep source
     role: str = ""                # "manual:<n>" (0 = first manual) or "pedal": lets the editor suggest the GrandOrgue manual
-    lead_limit: int = None        # pedal stave fed only by the lowest note of each chord, at or below this MIDI note
+    lead_limit: int | None = None  # pedal stave fed only by the lowest note of each chord, at or below this MIDI note
 
 
 NAME_SETS = {"English": (["Great", "Swell", "Choir", "Solo", "Echo"], "Pedal"),
@@ -622,9 +623,17 @@ def slur_phrases(line, threshold=0.9, min_events=3, max_events=8, max_beats=8):
 def load_musicxml(path):
     """Read a MusicXML / .mxl file as a 'performance' at its written tempo: (notes, info). info["barmap"] holds the
     bar lines exactly as written (so nothing needs detecting), info["names"] the part names."""
-    from music21 import converter, tempo, stream
+    from music21 import chord, converter, tempo, stream
+    from music21.note import Note as M21Note
     score = converter.parse(path)
-    parts = list(score.parts) or [score]
+    if isinstance(score, stream.Opus):
+        parts = [part for score_part in score.scores for part in score_part.parts]
+    elif isinstance(score, stream.Score):
+        parts = list(score.parts)
+    else:
+        parts = [score]
+    if not parts:
+        parts = [score]
     bpm = 90.0
     for mark in score.recurse().getElementsByClass(tempo.MetronomeMark):
         value = mark.getQuarterBPM() or mark.number
@@ -634,14 +643,20 @@ def load_musicxml(path):
     spq = 60.0 / bpm
     notes, names, open_ties = [], [], {}
     for pi, part in enumerate(parts):
-        names.append(str(part.partName or f"Part {pi + 1}"))
+        names.append(str(getattr(part, "partName", None) or f"Part {pi + 1}"))
         found = []
         for el in part.recurse().notes:
             if el.duration.quarterLength <= 0:
                 continue                                        # grace notes
             start = float(el.getOffsetInHierarchy(part))
             vel = el.volume.velocity if getattr(el, "volume", None) is not None and el.volume.velocity else 80
-            for n in (el.notes if hasattr(el, "notes") and el.isChord else [el]):
+            if isinstance(el, chord.Chord):
+                chord_notes = el.notes
+            elif isinstance(el, M21Note):
+                chord_notes = (el,)
+            else:
+                continue
+            for n in chord_notes:
                 found.append((start, float(el.duration.quarterLength), n.pitch.midi, vel,
                               n.tie.type if n.tie is not None else None))
         found.sort(key=lambda f: (f[0], f[2]))
