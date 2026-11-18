@@ -1,5 +1,6 @@
 """
 CHANGELOG
+2026-11-19  write_organ_file(path): the file the organ plays (notes on the manual channels, setter and registration markers), for the GrandOrgue-native export.
 2026-11-17  The score follows the music again after Pause / Play from any window (a still playhead re-arms the follow; a redraw while paused no longer restarts playback).
 2026-11-16  Shared transport pause hooks into the bridge player, preserving the edited-score resume position; Stop and loading another score clear that position.
 2026-11-13  Piano roll snapping like FL Studio: the note end / start, the whole note and a new note follow the snap LIVE while dragging (not only on release);
@@ -2603,6 +2604,16 @@ class Stave(QMainWindow):
         except TypeError:
             self.play_hook(path)
         self.statusBar().showMessage("Playing on the organ" + (f" from {offset:.1f} s" if offset else ""))
+
+    def write_organ_file(self, path):
+        """Write exactly what Play sends to the organ (visible tracks, quantised if the toggle says so, setter + registration markers)."""
+        hidden = self.hidden_tracks
+        notes = [n for n in self.notes if (n.track, n.ch) not in hidden and not n.mute]
+        quant = None
+        if self.play_quantised.isChecked() and self.qnotes and not self.job_dirty and not self.job_running:
+            quant = [q for q in self.qnotes if (q.track, q.ch) not in hidden and not (0 <= q.src < len(self.notes) and self.notes[q.src].mute)]
+        core.export_fixed_midi(notes, self.barmap, path, quantised=quant, staves=self.staves_for_export(),
+                               markers=self.setter_markers() + self.voice_markers(), transpose=self.transpose.value())
 
     def stop_on_organ(self, *_):
         self.clear_playback_pause()                            # Stop rewinds; Space / Pause keeps the place

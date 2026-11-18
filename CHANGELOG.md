@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2.0.9 (unreleased) - additions
+- File > "Export for GrandOrgue (native MIDI)...": writes the loaded MIDI (with stave / roll edits, setters and registrations) as a GrandOrgue-format recording whose stop on / off events are inside the file, so GrandOrgue's own MIDI player switches the stops without the bridge.
 - Pylance fixes in Stave Station MusicXML parsing: optional stave fields, Score/Part/Opus narrowing, and explicit Note/Chord handling.
 - Shared MIDI transport Play / Pause now resumes from the saved file position; Stop rewinds and the Stave / Piano Roll edited-score controls use the same pause state.
 - Registration bank: pads scale with the text and stay centred; the marks are gone; the bank is a list; Cat/Char starts the jog on it (then on to the Active registrations, buttons and tick boxes, cycling); click an active registration to switch it off, again to switch it on.

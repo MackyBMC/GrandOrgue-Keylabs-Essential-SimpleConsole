@@ -1,6 +1,7 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-19  File > "Export for GrandOrgue (native MIDI)...": the loaded MIDI (stave / roll edits included) as a GrandOrgue recording that switches the stops by itself.
 2026-11-17  Cat/Char jog walk starts on the registration bank list (H1 / H2 ...), stepping onto a row selects that bank for the pads; past the end of the list it goes on to the
             Active registrations rows (jog press switches one), then the buttons / tick boxes / drop-downs, and cycles round (the setter list is the no-Cat/Char default and is left out).
 2026-11-17  Registration bank: the bank drop-down is a list (click, or tick "Jog turn selects the set" and turn the jog; remembered), the marks (fader positions) are gone from the
@@ -2886,6 +2887,37 @@ class BridgeWindow(QMainWindow):
                 continue
         return ""
 
+    def export_native(self):
+        """Save the loaded MIDI as a GrandOrgue-native recording (setters and registrations become stop on / off events)."""
+        stave = self._stave_edited() or getattr(self, "stave_window", None)
+        take = getattr(self.bridge, "take_to_play", "") or ""
+        temp = ""
+        if stave is not None and getattr(stave, "notes", None):
+            folder = getattr(stave, "default_dir", "") or os.path.dirname(take) or os.getcwd()
+            temp = os.path.join(folder, "_native_source.mid")
+            stave.write_organ_file(temp)
+            src, base = temp, os.path.splitext(os.path.basename(getattr(stave, "path", "") or take or "organ"))[0]
+        elif take:
+            stave_copy = take[:-4] + " (stave).mid"
+            src, base = (stave_copy if os.path.isfile(stave_copy) else take), os.path.splitext(os.path.basename(take))[0]
+        else:
+            QMessageBox.information(self, "Export for GrandOrgue", "Load a MIDI file first.")
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Export for GrandOrgue (native MIDI)", lastdir.get("midi_save", os.path.dirname(take) or "") + os.sep + base + " (GrandOrgue).mid", "MIDI files (*.mid)")
+        if path:
+            lastdir.put("midi_save", path)
+            try:
+                text = self.bridge.export_native_midi(src, path, float(getattr(getattr(self.bridge, "take_player", None), "speed", 1.0) or 1.0))
+            except (OSError, ValueError, RuntimeError) as exc:
+                QMessageBox.warning(self, "Export for GrandOrgue", f"Could not export:\n{exc}")
+            else:
+                QMessageBox.information(self, "Export for GrandOrgue", f"Saved: {text}\n\nPlay it from GrandOrgue's MIDI player with the same organ loaded. Not tested on the real organ yet.")
+        if temp:
+            try:
+                os.remove(temp)
+            except OSError:
+                pass
+
     def show_licenses(self):
         """Third-party notices window: THIRD_PARTY_NOTICES.md rendered as Markdown; the short built-in notice when the file is missing."""
         from PySide6.QtWidgets import QTextBrowser
@@ -3160,6 +3192,7 @@ class BridgeWindow(QMainWindow):
         file_menu = bar.addMenu("&File")
         add(file_menu, "&Open MIDI...", self._open_midi_file, "Ctrl+O")
         add(file_menu, "Open &project (.ss)...", stave_action("open_project_dialog", True))
+        add(file_menu, "Export for &GrandOrgue (native MIDI)...", self.export_native)
         file_menu.addSeparator()
         add(file_menu, "&Save MIDI as...", self._save_midi_as, "Ctrl+S")
         add(file_menu, "Save pro&ject", stave_action("flush_project"))

@@ -1,6 +1,7 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-19  export_native_midi(src, dst): converts a bridge-ready MIDI (notes on the manual channels + setter / registration markers) to a GrandOrgue-native recording (go_native_midi.py).
 2026-11-17  UI event "toggle_item" (switch a registration by CC); snapshot "active_items".
 2026-11-16  Shared MIDI transport pause now resumes TakePlayer from its saved file position; Stop clears the paused position.
 2026-11-12  The KeyLab controller is only engaged at start when it is detected (saved "off" still wins); not detected = the bridge runs without it and
@@ -1282,6 +1283,22 @@ class BridgeApp:
             if c["filename"] == filename and c["internal_id"] == internal_id:
                 return index
         return None
+
+    def export_native_midi(self, src, dst, speed=1.0):
+        """Write `dst` as a GrandOrgue-native MIDI recording of `src` (stops switch by themselves, no bridge needed). Returns a summary."""
+        from . import go_native_midi
+        from .odf_scan import scan_odf
+        from .take_recorder import stave_module
+        if not self.organ_path or not os.path.isfile(self.organ_path):
+            raise ValueError("the organ file (.organ) is not set or not found: select the organ first")
+        profile = scan_odf(self.organ_path)
+
+        def setter_paths(filename, internal_id):
+            index = self._find_combination(filename, internal_id)
+            return set(self.combinations[index]["switch_paths"]) if index is not None else None
+        items = [it for it in ITEMS if it.kind in ("stop", "coupler", "tremulant")]
+        return go_native_midi.convert(src, dst, str(profile["name"]), stave_module('sessionmeta').manual_channels(), items, profile,
+                                      setter_paths, speed)
 
     def apply_voice_regs(self):
         """For each registered manual set its stops to those of the chosen setter (other manuals are left alone)."""
