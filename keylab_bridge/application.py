@@ -1,6 +1,9 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-19  Snapshot "go_setter_feedback": what GrandOrgue shows (file label, step) and which setter that matched (or none); a TRACE line when nothing matches.
+2026-11-19  Setter tick = verified: GrandOrgue's own file/step feedback matches the loaded setter AND every stop the setter switches on has been reported ON by GrandOrgue.
+            Snapshot "active_combination_verified" (+ "active_combination_pending": what is still unproven). Missing feedback stays unconfirmed.
 2026-11-19  Refresh GrandOrgue's cached combination-file list before switching setter files.
 2026-11-19  Explicit Record-button takes capture the session BPM before recording starts, matching the always-on take recorder.
 2026-11-19  Tempo session records the engine metronome BPM (driven / confirmed by GrandOrgue feedback) for the sync indicator.
@@ -107,7 +110,7 @@ from .odf_scan import compare_with_builtin, scan_odf, spec_from_profile, summari
 from .organ_layout import ACTIVE_LAYOUT, STOP_CHANNELS
 from .tempo import TempoSession
 from .preset_store import (
-    _normalized_mapping_key, _write_managed_switches, combination_root, load_combinations, project_root, set_config_key,
+    _normalized_mapping_key, _write_managed_switches, read_combination_yaml, combination_root, load_combinations, project_root, set_config_key,
     controller_file, load_controller_engaged, load_language, load_preset_activation, load_theme, bridge_settings,
 )
 from translations import LANGUAGE_NAMES, translate
@@ -893,6 +896,26 @@ class BridgeApp:
             self.loaded_switch_paths = frozenset(self._current_registration_paths())
             self._baseline_settle_at = None
 
+    def _combination_unproven(self):
+        """What is still unproven about the loaded setter, as a list of short reasons ([] = verified).
+        Fail closed: unknown feedback is never treated as a match."""
+        index = self.loaded_combination_index
+        if index is None or not 0 <= index < len(self.combinations):
+            return ["no setter loaded"]
+        now = time.time()
+        if self.br.cued:
+            return ["load not confirmed"]
+        if now < getattr(self, "_activation_until", 0.0) or not self._baseline_ready(now):
+            return ["organ still settling"]
+        if self._combination_index_from_feedback() != index:
+            return ["GrandOrgue shows another file/step"]
+        wanted = self.combinations[index]["switch_paths"]
+        missing = []
+        for item in ITEMS:
+            if item.path in wanted and self.br.fb_state.get(item.cc) is not True:
+                missing.append(item.name)
+        return [f"stop not confirmed on: {name}" for name in missing[:3]] + (["..."] if len(missing) > 3 else [])
+
     def _combination_is_dirty(self):
         """True when the stops currently drawn differ from the combination
         we think is selected -- i.e. someone has been tinkering with the
@@ -953,7 +976,7 @@ class BridgeApp:
         path = os.path.join(folder, selected["filename"])
         try:
             with open(path, encoding="utf-8") as combination_file:
-                data = yaml.safe_load(combination_file) or {}
+                data = read_combination_yaml(combination_file) or {}
         except (OSError, yaml.YAMLError) as exc:
             self.log(f"Could not update setter: {exc}", level="ERROR")
             return
@@ -1029,7 +1052,7 @@ class BridgeApp:
         path = os.path.join(folder, filename)
         try:
             with open(path, encoding="utf-8") as combination_file:
-                data = yaml.safe_load(combination_file) or {}
+                data = read_combination_yaml(combination_file) or {}
         except FileNotFoundError:
             data = {"info": {"content-type": "GrandOrgue Combinations",
                               "organ-name": str(self.raw.get("combination_set", "Friesach"))},
@@ -1784,6 +1807,12 @@ class BridgeApp:
                              notify=False, level="TRACE")
                 self.selected_combination_index = index
         self._last_feedback_cued = br.cued
+        shown = (br.text.strip(), br.pos.strip())
+        if shown != getattr(self, "_last_shown_setter", None) and not br.cued and shown[0]:
+            self._last_shown_setter = shown
+            if self._combination_index_from_feedback() is None:
+                self.log(f"No setter matches GrandOrgue's file label '{shown[0]}' step {shown[1] or '?'}",
+                         notify=False, level="TRACE")
         self._sync_loaded_combination_from_feedback(load_confirmed=load_confirmed)
         active_combination_index = self.loaded_combination_index
         cue_diff, manual_diff = self._registration_diff()
@@ -1823,7 +1852,11 @@ class BridgeApp:
             ),
             "combination_index": self.selected_combination_index,
             "active_combination_index": active_combination_index,
+            "active_combination_pending": self._combination_unproven() if active_combination_index is not None else [],
+            "active_combination_verified": active_combination_index is not None and not self._combination_unproven(),
             "internal_position": br.pos.strip(),
+            "go_setter_feedback": {"text": br.text.strip(), "pos": br.pos.strip(),
+                                   "matched": self._combination_index_from_feedback()},
             "preset_activation": self.preset_activation,
             "controller_engaged": self.controller_engaged,
             "controller_detected": self._controller_seen(),

@@ -1,4 +1,10 @@
-"""Configuration and file-backed setter persistence."""
+"""Configuration and file-backed setter persistence.
+
+CHANGELOG
+2026-11-20  Setter (combination) files are read with decimal integers: PyYAML's YAML 1.1 octal rule turned ids such as 011 / 013 / 015 into 9 / 11 / 13
+            (and 008 / 009 into text), so 16 of 48 setters pointed at the wrong stops (wrong ticks, wrong cue diff, wrong native export, corrupt re-saves).
+            GrandOrgue (YAML 1.2) reads them as decimal; read_combination_yaml() does the same.
+"""
 
 import os
 import re
@@ -113,6 +119,20 @@ def load_preset_activation(config_path, raw):
     return mode if mode in ("staged", "direct") else "staged"
 
 
+def read_combination_yaml(stream):
+    """yaml.safe_load for GrandOrgue setter files: 011 is eleven (YAML 1.2), not octal nine (PyYAML's YAML 1.1)."""
+    import yaml
+
+    class _Decimal(yaml.SafeLoader):
+        pass
+
+    _Decimal.yaml_implicit_resolvers = {k: [(t, r) for t, r in v if t != "tag:yaml.org,2002:int"]
+                                        for k, v in yaml.SafeLoader.yaml_implicit_resolvers.items()}
+    _Decimal.add_implicit_resolver("tag:yaml.org,2002:int", re.compile(r"^[-+]?[0-9]+$"), list("-+0123456789"))
+    _Decimal.add_constructor("tag:yaml.org,2002:int", lambda loader, node: int(loader.construct_scalar(node), 10))
+    return yaml.load(stream, Loader=_Decimal)
+
+
 def load_combinations(config_path, raw):
     import yaml
 
@@ -127,7 +147,7 @@ def load_combinations(config_path, raw):
         path = os.path.join(folder, filename)
         try:
             with open(path, encoding="utf-8") as combination_file:
-                data = yaml.safe_load(combination_file) or {}
+                data = read_combination_yaml(combination_file) or {}
         except (OSError, yaml.YAMLError):
             continue
         info = data.get("info") or {}

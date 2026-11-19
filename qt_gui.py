@@ -1,6 +1,8 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-19  Setter list tooltip shows what GrandOrgue reports (file label, step) and the setter it was matched to, to trace tick mismatches.
+2026-11-19  Setter list tick: full tick only when GrandOrgue has confirmed the setter (file/step + stops); a dash (partial) while loaded but unconfirmed; tooltip says what is missing.
 2026-11-19  File > "Export for GrandOrgue (native MIDI)...": the loaded MIDI (stave / roll edits included) as a GrandOrgue recording that switches the stops by itself.
 2026-11-17  Cat/Char jog walk starts on the registration bank list (H1 / H2 ...), stepping onto a row selects that bank for the pads; past the end of the list it goes on to the
             Active registrations rows (jog press switches one), then the buttons / tick boxes / drop-downs, and cycles round (the setter list is the no-Cat/Char default and is left out).
@@ -3586,6 +3588,13 @@ class BridgeWindow(QMainWindow):
             self.combination_list.expandAll()
             self._combination_tree_signature = signature
             self._last_selected_combo = -2              # tree rebuilt: re-apply the selection below
+        fb = snapshot.get("go_setter_feedback") or {}
+        matched = fb.get("matched")
+        names = snapshot["combinations"]
+        self.combination_list.setToolTip(
+            f"GrandOrgue shows: '{fb.get('text', '')}' step {fb.get('pos') or '?'} -> "
+            + (f"{names[matched]['filename']} #{names[matched]['internal_id']} {names[matched]['name']}"
+               if isinstance(matched, int) and 0 <= matched < len(names) else "no matching setter"))
         active_index = snapshot["active_combination_index"]
         for parent_index in range(self.combination_list.topLevelItemCount()):
             parent = self.combination_list.topLevelItem(parent_index)
@@ -3596,8 +3605,15 @@ class BridgeWindow(QMainWindow):
                 if child is None:
                     continue
                 index = child.data(0, Qt.ItemDataRole.UserRole)
-                child.setCheckState(2, Qt.CheckState.Checked if index == active_index
-                                    else Qt.CheckState.Unchecked)
+                if index == active_index:
+                    verified = bool(snapshot.get("active_combination_verified"))
+                    child.setCheckState(2, Qt.CheckState.Checked if verified else Qt.CheckState.PartiallyChecked)
+                    pending = snapshot.get("active_combination_pending") or []
+                    child.setToolTip(2, "Verified: GrandOrgue reports this setter and its stops" if verified
+                                     else "Loaded, not yet confirmed by GrandOrgue: " + "; ".join(pending))
+                else:
+                    child.setCheckState(2, Qt.CheckState.Unchecked)
+                    child.setToolTip(2, "")
                 # Note: we deliberately do NOT force the tree's selection
                 # cursor to follow `selected_index` here. This runs on every
                 # periodic refresh, and forcing selection would snap the

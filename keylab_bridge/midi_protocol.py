@@ -1,6 +1,7 @@
 """KeyLab and GrandOrgue MIDI protocol and bridge state.
 
 CHANGELOG
+2026-11-19  fb_state: last on / off GrandOrgue itself reported per registration switch (used to verify a loaded setter; never set by our own presses).
 2026-11-19  Add the GrandOrgue RefreshFiles command used before loading setter files.
 2026-11-19  CMD tempo_up10 / tempo_down10 (GrandOrgue MetronomeBpmP10 / M10) for fast tempo moves.
 2026-11-17  _toggle_item(cc): switch one registration on / off by its CC (the Active registrations list in the main window).
@@ -314,6 +315,7 @@ class Bridge:
         self.daw_trace = bool(daw_trace)
         self.hui_seen = False
         self.go_state_changed_at = 0.0
+        self.fb_state = {}                       # item cc -> last state GrandOrgue itself reported
         self.map_number = None                # last "F0 00 20 6B 7F 42 05 nn F7" seen on MAIN
         self.trace_sink: Callable[[str], None] | None = None
         self._aftertouch_press = {}           # note -> time of the last aftertouch-triggered pad press
@@ -752,6 +754,7 @@ class Bridge:
             if self.state.get(wired.cc) != val and not (sent and now - sent[1] < 1.0):
                 self.go_state_changed_at = now          # the organ is echoing a loaded combination (not our own press)
             self.state[wired.cc] = val
+            self.fb_state[wired.cc] = val
         elif msg.channel == FB_CH:
             c = msg.control
             if c == FB["load_lit"]:
