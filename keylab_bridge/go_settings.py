@@ -4,6 +4,9 @@ The format was taken from a real GrandOrgue v3.17.3-1 export of the Friesach org
 a `path`, and `receive` / `send` lists of events. Only the channel-based entries the bridge itself uses are
 generated. Device-specific bindings (e.g. a KeyLab wired straight to GrandOrgue) are the user's own and are
 left alone, so the file is meant to be imported alongside them, never as a replacement for them.
+
+CHANGELOG
+2026-11-19  BPM label path is "Metronome/Metronome BPM": GrandOrgue names a label by its display text ("Metronome/MetronomeBPM" was reported unused).
 """
 import datetime
 import copy
@@ -21,6 +24,7 @@ COMMAND_OBJECTS = (
     ("Sequencer/LoadFile", "load", "load_lit"), ("Sequencer/SaveFile", "save", None),
     ("Metronome/MetronomeOn", "metro", "metro_lit"),
     ("Metronome/MetronomeBpmP1", "tempo_up", None), ("Metronome/MetronomeBpmM1", "tempo_down", None),
+    ("Metronome/MetronomeBpmP10", "tempo_up10", None), ("Metronome/MetronomeBpmM10", "tempo_down10", None),
     ("MidiPlayer/MidiPlayerPlay", "play", "play_lit"), ("MidiPlayer/MidiPlayerStop", "stop", None),
     ("MidiPlayer/MidiPlayerPause", "pause", "pause_lit"), ("Setter/PanicButton", "panic", None),
 )
@@ -52,7 +56,7 @@ def build_go_settings(organ_name, spec, windchests=0, enclosures=0,
     for number in enclosure_numbers:
         cc = len(windchest_numbers) + int(number) + 1
         objects.append({"path": f"enclosures/{int(number):03d}", "receive": [_cc(VOL_CH, cc, 127)]})
-    for path, key in (("Sequencer/sequencer position", 2), ("Metronome/MetronomeBPM", 3)):
+    for path, key in (("Sequencer/sequencer position", 2), ("Metronome/Metronome BPM", 3)):
         objects.append({"path": path, "send": [{"event_type": "HWString", "key": key, "start": 0, "length": 16}]})
     for _kind, path, _number, _name, channel, key in items_for_spec(spec):
         if channel is None:                       # beyond the configured channels: never write an invented binding

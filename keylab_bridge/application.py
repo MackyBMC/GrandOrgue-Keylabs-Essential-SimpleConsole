@@ -1,6 +1,8 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-19  Universal BPM: Metro held + >> / << = session BPM +1 / -1, Metro held + jog = free fast change (by turn speed). The session BPM drives
+            GrandOrgue's metronome with P10 / M1 presses from a tracked GrandOrgue BPM (feedback corrects it); GrandOrgue echoes are ignored briefly after our own presses.
 2026-11-19  export_native_midi(src, dst): converts a bridge-ready MIDI (notes on the manual channels + setter / registration markers) to a GrandOrgue-native recording (go_native_midi.py).
 2026-11-17  UI event "toggle_item" (switch a registration by CC); snapshot "active_items".
 2026-11-16  Shared MIDI transport pause now resumes TakePlayer from its saved file position; Stop clears the paused position.
@@ -117,6 +119,8 @@ class BridgeApp:
         self.ui = ui
         self.tempo = TempoSession()
         self._go_tempo_target = self.tempo.bpm
+        self._go_bpm = None                  # GrandOrgue metronome BPM as last known / last driven
+        self._go_sent_at = 0.0
         self.combinations = load_combinations(cfg_path, raw)
         self.selected_combination_index = None
         self.loaded_combination_index = None
@@ -1525,6 +1529,10 @@ class BridgeApp:
             if message.type == "note_on" and message.channel == 0 and message.velocity > 0 and message.note == N_JOG_PRESS:
                 self.modal_press_handler()                                           # jog press = click the focused button
                 return
+        if (self.br.metro_held and message.type == "note_on" and message.channel == 0 and message.velocity > 0
+                and message.note in (N_REWIND, N_FORWARD)):
+            self.metro_nudge(1 if message.note == N_FORWARD else -1)      # Metro + >> / << = BPM +1 / -1
+            return
         hook = getattr(self, "stave_step_hook", None)
         if (hook is not None and message.type == "note_on" and message.channel == 0 and message.velocity > 0
                 and message.note in (N_REWIND, N_FORWARD)):
@@ -1619,7 +1627,8 @@ class BridgeApp:
         if message.type == "control_change" and message.control == CC_JOG:
             direction = -1 if message.value >= 64 else 1
             if self.br.metro_held:
-                self.emit(self.br.adjust_metro(direction))
+                turn = message.value - 64 if message.value >= 64 else message.value
+                self.metro_nudge(direction, abs(turn))      # faster turn = bigger step
                 return
             if self.br.stop_grid_mode:
                 self.br.stop_grid_move_vertical(direction)
@@ -1981,14 +1990,31 @@ class BridgeApp:
         return int(round(float(match.group()))) if match else None
 
     def _sync_grandorgue_tempo(self):
-        current = self._parse_bpm(self.br.metro_bpm)
+        """Move GrandOrgue's metronome to the session BPM using P10/M10 and P1/M1 presses from its tracked BPM."""
         target = self._go_tempo_target
-        if target is None or current is None:
+        if target is None:
             return
-        if current == target:
-            self._go_tempo_target = None
+        current = self._go_bpm if self._go_bpm is not None else self._parse_bpm(self.br.metro_bpm)
+        if current is None:
+            current = 80                               # GrandOrgue's own default until feedback tells us
+        diff = int(target) - int(current)
+        self._go_tempo_target = None
+        if diff == 0:
             return
-        self.emit(self.br._press("tempo_up" if current < target else "tempo_down"))
+        up = diff > 0
+        tens, ones = divmod(abs(diff), 10)
+        presses = [self.br._press("tempo_up10" if up else "tempo_down10")] * tens
+        presses += [self.br._press("tempo_up" if up else "tempo_down")] * ones
+        for press in presses:
+            self.emit(press)
+        self._go_bpm = int(target)
+        self._go_sent_at = time.time()
+
+    def metro_nudge(self, direction, step=1):
+        """Metro held on the KeyLab: change the one universal session BPM; everything (GrandOrgue metronome, takes, stave) follows."""
+        self.br.metro_adjusted = True
+        self.tempo.set_bpm(self.tempo.bpm + int(direction) * max(1, int(step)))
+        self.br._detail(f"Tempo {self.tempo.bpm} BPM", "", 1.0)
 
     def handle_go_message(self, message):
         before = self.br.metro_bpm
@@ -1997,10 +2023,10 @@ class BridgeApp:
             current = self._parse_bpm(self.br.metro_bpm)
             if current is None:
                 return
-            if self._go_tempo_target is None:
-                self.tempo.set_bpm(current, origin="grandorgue")
-            else:
-                self._sync_grandorgue_tempo()
+            if time.time() - self._go_sent_at < 1.0:
+                return                                 # echo of our own presses; the session BPM stays master
+            self._go_bpm = current
+            self.tempo.set_bpm(current, origin="grandorgue")
 
     def drain_port(self, key, count_key, handler, sysex=False):
         for message in self.ports.drain_input(key):

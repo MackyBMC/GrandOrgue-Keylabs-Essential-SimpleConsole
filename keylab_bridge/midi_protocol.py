@@ -1,6 +1,7 @@
 """KeyLab and GrandOrgue MIDI protocol and bridge state.
 
 CHANGELOG
+2026-11-19  CMD tempo_up10 / tempo_down10 (GrandOrgue MetronomeBpmP10 / M10) for fast tempo moves.
 2026-11-17  _toggle_item(cc): switch one registration on / off by its CC (the Active registrations list in the main window).
 """
 
@@ -15,7 +16,8 @@ CMD_CH, STOP_CH, FB_CH = 15, 14, 13          # mido channels are 0-based: 16, 15
 
 
 CMD = dict(prev_step=1, next_step=2, prev_file=3, next_file=4, load=5, save=6,
-           metro=7, play=8, stop=9, pause=10, panic=11, tempo_up=12, tempo_down=13)  # CC on ch 16
+           metro=7, play=8, stop=9, pause=10, panic=11, tempo_up=12, tempo_down=13,
+           tempo_up10=14, tempo_down10=15)  # CC on ch 16
 
 
 FB = dict(load_lit=1, play_lit=2, pause_lit=3, metro_lit=4)          # GrandOrgue -> bridge, CC on ch 14
@@ -27,6 +29,7 @@ CMD_PATHS = {                                                        # GrandOrgu
     "load": "Sequencer/LoadFile", "save": "Sequencer/SaveFile",
     "metro": "Metronome/MetronomeOn",
     "tempo_up": "Metronome/MetronomeBpmP1", "tempo_down": "Metronome/MetronomeBpmM1",
+    "tempo_up10": "Metronome/MetronomeBpmP10", "tempo_down10": "Metronome/MetronomeBpmM10",
     "play": "MidiPlayer/MidiPlayerPlay", "stop": "MidiPlayer/MidiPlayerStop",
     "pause": "MidiPlayer/MidiPlayerPause", "panic": "Setter/PanicButton",
 }

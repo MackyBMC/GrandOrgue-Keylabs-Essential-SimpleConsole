@@ -261,6 +261,40 @@ objects:
     key: 4
     low_value: 0
     high_value: 127
+- path: Metronome/MetronomeBpmP1
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 12
+    low_value: 0
+    high_value: 1
+- path: Metronome/MetronomeBpmM1
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 13
+    low_value: 0
+    high_value: 1
+- path: Metronome/MetronomeBpmP10
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 14
+    low_value: 0
+    high_value: 1
+- path: Metronome/MetronomeBpmM10
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 15
+    low_value: 0
+    high_value: 1
+- path: Metronome/Metronome BPM
+  send:
+  - event_type: HWString
+    key: 3
+    start: 0
+    length: 16
 - path: MidiPlayer/MidiPlayerPlay
   receive:
   - event_type: ControlChange
