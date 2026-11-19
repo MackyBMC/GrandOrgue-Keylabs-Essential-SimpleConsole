@@ -1,6 +1,8 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-19  Tempo session records the engine metronome BPM (driven / confirmed by GrandOrgue feedback) for the sync indicator.
+2026-11-19  Session BPM starts at 80 (GrandOrgue's default) and spans GrandOrgue's 1-500; takes are recorded at the session BPM.
 2026-11-19  Universal BPM: Metro held + >> / << = session BPM +1 / -1, Metro held + jog = free fast change (by turn speed). The session BPM drives
             GrandOrgue's metronome with P10 / M1 presses from a tracked GrandOrgue BPM (feedback corrects it); GrandOrgue echoes are ignored briefly after our own presses.
 2026-11-19  export_native_midi(src, dst): converts a bridge-ready MIDI (notes on the manual channels + setter / registration markers) to a GrandOrgue-native recording (go_native_midi.py).
@@ -134,6 +136,8 @@ class BridgeApp:
                 folder = os.path.join(os.path.dirname(os.path.abspath(cfg_path)), folder)
             self.recorder = TakeRecorder(folder, recorder_cfg.get("gap", 25), recorder_cfg.get("min_notes", 6),
                                          recorder_cfg.get("autosave", 30), log=lambda text, **k: self.log(text, notify=False))
+        if self.recorder is not None:
+            self.recorder.bpm_source = lambda: self.tempo.bpm
         from .take_recorder import make_midi_recorder, TakePlayer
         midi_dir = str(recorder_cfg.get("midi_folder", "midi"))
         if not os.path.isabs(midi_dir):
@@ -2008,6 +2012,7 @@ class BridgeApp:
         for press in presses:
             self.emit(press)
         self._go_bpm = int(target)
+        self.tempo.engine_bpm, self.tempo.engine_confirmed = int(target), False
         self._go_sent_at = time.time()
 
     def metro_nudge(self, direction, step=1):
@@ -2026,6 +2031,7 @@ class BridgeApp:
             if time.time() - self._go_sent_at < 1.0:
                 return                                 # echo of our own presses; the session BPM stays master
             self._go_bpm = current
+            self.tempo.engine_bpm, self.tempo.engine_confirmed = current, True
             self.tempo.set_bpm(current, origin="grandorgue")
 
     def drain_port(self, key, count_key, handler, sysex=False):

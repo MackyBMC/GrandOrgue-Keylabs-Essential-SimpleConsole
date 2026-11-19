@@ -1,8 +1,13 @@
-"""Session-wide tempo target and undo history. Nothing is persisted until a music file is saved."""
+"""Session-wide tempo target and undo history. Nothing is persisted until a music file is saved.
 
-DEFAULT_BPM = 120
-MIN_BPM = 30
-MAX_BPM = 160
+CHANGELOG
+2026-11-19  engine_bpm / engine_confirmed: the audio engine's (GrandOrgue) metronome BPM as last driven / read back, shown beside the slider.
+2026-11-19  Default 80 BPM and range 1-500 follow GrandOrgue's metronome (the engine's values are the standard for the bridge).
+"""
+
+DEFAULT_BPM = 80      # GrandOrgue's own metronome default: bridge and engine start aligned
+MIN_BPM = 1           # GrandOrgue metronome range 1..500: the bridge supports all of it
+MAX_BPM = 500
 
 
 class TempoSession:
@@ -13,6 +18,8 @@ class TempoSession:
         self._listeners = []
         self.keep_on_load = True      # opening a file keeps the BPM you set (universal tempo); False = adopt each file's own tempo
         self.user_set = False         # true once the BPM was changed by hand: until then the first files opened set it
+        self.engine_bpm = None        # engine metronome BPM as last driven or read back (None = unknown)
+        self.engine_confirmed = False # true once the engine itself reported that BPM
         self.file_bpm = None          # written (average) tempo of the file last opened, for display
 
     def adopt_file_tempo(self, file_bpm):

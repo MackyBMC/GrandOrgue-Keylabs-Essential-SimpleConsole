@@ -1,6 +1,7 @@
 """Reusable, session-synchronized BPM fader with major/minor ticks and tempo undo/redo.
 
 CHANGELOG
+2026-11-19  Engine sync indicator: "GrandOrgue 80 ✓" (confirmed by GrandOrgue), "GrandOrgue 80 ..." (sent, not yet confirmed), "GrandOrgue ?" (unknown).
 2026-11-10  "Keep BPM" (default on: the BPM you set stays when you open files; off: each file sets its own), "file: NN" shows the
             opened file's written tempo, "= file" plays it as written. Until you set a BPM yourself, opened files still set it.
 """
@@ -83,7 +84,10 @@ class TempoControl(QWidget):
         self.keep_box = QCheckBox("Keep BPM")
         self.keep_box.setToolTip("On: the BPM you set stays when you open another file (universal tempo).\n"
                                  "Off: every file opened sets the BPM to its own written tempo.")
+        self.go_label = QLabel("")
+        self.go_label.setToolTip("GrandOrgue metronome BPM versus the session BPM: check = GrandOrgue reported the same value.")
         actions.insertWidget(0, self.file_label)
+        actions.insertWidget(1, self.go_label)
         actions.addWidget(self.file_button)
         actions.addWidget(self.keep_box)
         actions.addWidget(self.undo_button)
@@ -123,6 +127,14 @@ class TempoControl(QWidget):
         fb = getattr(self.controller, "file_bpm", None)
         self.file_label.setText(f"file: {fb:.0f}" if fb else "")
         self.file_button.setEnabled(bool(fb))
+        eb = getattr(self.controller, "engine_bpm", None)
+        ok = bool(getattr(self.controller, "engine_confirmed", False)) and eb == self.controller.bpm
+        if eb is None:
+            self.go_label.setText("GrandOrgue ?")
+            self.go_label.setStyleSheet("color: #8a94a0;")
+        else:
+            self.go_label.setText(f"GrandOrgue {eb} " + ("\u2713" if ok else "..."))
+            self.go_label.setStyleSheet("color: #3ecf6e;" if ok else "color: #e0a030;")
 
     def _controller_changed(self, bpm, _origin):
         self.tempoChanged.emit(bpm)

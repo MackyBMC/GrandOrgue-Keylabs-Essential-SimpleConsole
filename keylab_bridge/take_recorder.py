@@ -6,6 +6,7 @@ silence, so a practice session becomes a row of separate takes. The take in prog
 AUTOSAVE seconds, so a crash or power cut never loses more than that.
 
 CHANGELOG
+2026-11-19  Takes are stamped with the session BPM at the start of the take (same real-time timing; tempo meta + tick rate follow it), so playback at the session BPM is speed 1.0.
 2026-11-17  Resume works across the main window and the stave / roll: a paused preview file and the loaded take count as the same place.
 2026-11-16  Pylance: take name from self.path or '' (path is None before the first note).
 2026-11-16  TakePlayer pause/resume preserves the current file position for the shared MIDI transport.
@@ -84,6 +85,8 @@ class TakeRecorder:
         self.notes = 0
         self.path = None
         self.dirty = False
+        self.bpm_source = lambda: 120.0   # callable returning the session BPM (set by the application)
+        self.take_bpm = 120.0
 
     # ------------------------------------------------------------------ input
     def feed(self, message, now):
@@ -141,6 +144,10 @@ class TakeRecorder:
     def _begin(self, now):
         self.started = now
         self.last_save = now
+        try:
+            self.take_bpm = max(1.0, float(self.bpm_source()))
+        except Exception:
+            self.take_bpm = 120.0
         os.makedirs(self.folder, exist_ok=True)
         self.path = os.path.join(self.folder, time.strftime("Take %Y-%m-%d %H-%M-%S", time.localtime(now)) + ".mid")
 
@@ -149,10 +156,11 @@ class TakeRecorder:
             import mido
             track = mido.MidiTrack()
             track.append(mido.MetaMessage("track_name", name="KeyLab take", time=0))
-            track.append(mido.MetaMessage("set_tempo", tempo=500000, time=0))
+            track.append(mido.MetaMessage("set_tempo", tempo=round(60_000_000 / self.take_bpm), time=0))
+            ticks_per_second = 8.0 * self.take_bpm            # 480 ticks per beat
             previous = 0
             for at, kind, a, b in sorted(self.events, key=lambda e: e[0]):
-                tick = int(round(at * TICKS_PER_SECOND))
+                tick = int(round(at * ticks_per_second))
                 delta, previous = tick - previous, tick
                 if kind == "on":
                     track.append(mido.Message("note_on", channel=0, note=a, velocity=b, time=delta))
