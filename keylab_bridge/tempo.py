@@ -1,6 +1,7 @@
 """Session-wide tempo target and undo history. Nothing is persisted until a music file is saved.
 
 CHANGELOG
+2026-11-19  Type the optional GrandOrgue BPM feedback value for Pyright.
 2026-11-19  engine_bpm / engine_confirmed: the audio engine's (GrandOrgue) metronome BPM as last driven / read back, shown beside the slider.
 2026-11-19  Default 80 BPM and range 1-500 follow GrandOrgue's metronome (the engine's values are the standard for the bridge).
 """
@@ -18,7 +19,7 @@ class TempoSession:
         self._listeners = []
         self.keep_on_load = True      # opening a file keeps the BPM you set (universal tempo); False = adopt each file's own tempo
         self.user_set = False         # true once the BPM was changed by hand: until then the first files opened set it
-        self.engine_bpm = None        # engine metronome BPM as last driven or read back (None = unknown)
+        self.engine_bpm: int | None = None  # engine metronome BPM as last driven or read back (None = unknown)
         self.engine_confirmed = False # true once the engine itself reported that BPM
         self.file_bpm = None          # written (average) tempo of the file last opened, for display
 

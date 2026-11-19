@@ -1,6 +1,8 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-19  Refresh GrandOrgue's cached combination-file list before switching setter files.
+2026-11-19  Explicit Record-button takes capture the session BPM before recording starts, matching the always-on take recorder.
 2026-11-19  Tempo session records the engine metronome BPM (driven / confirmed by GrandOrgue feedback) for the sync indicator.
 2026-11-19  Session BPM starts at 80 (GrandOrgue's default) and spans GrandOrgue's 1-500; takes are recorded at the session BPM.
 2026-11-19  Universal BPM: Metro held + >> / << = session BPM +1 / -1, Metro held + jog = free fast change (by turn speed). The session BPM drives
@@ -361,6 +363,7 @@ class BridgeApp:
             for _ in range(abs(delta)):
                 out += br._press("next_step" if delta > 0 else "prev_step")
         else:
+            out += br._press("refresh_files")
             count = len(files)
             forward = (files.index(target["filename"]) - files.index(combos[current]["filename"])) % count
             backward = forward - count
@@ -1233,6 +1236,7 @@ class BridgeApp:
                 self.recorder.close()
             self.take_player.stop()
             self.midi_rec = make_midi_recorder(self.midi_dir, log=lambda t, **k: self.log(t, notify=False))
+            self.midi_rec.bpm_source = lambda: self.tempo.bpm
             self.midi_rec._begin(now)
             if self.midi_rec.path is not None:
                 self.midi_rec.path = self.midi_rec.path.replace("Take ", "Recording ")

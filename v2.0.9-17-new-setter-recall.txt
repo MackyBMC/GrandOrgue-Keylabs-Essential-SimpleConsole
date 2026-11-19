@@ -1,0 +1,19 @@
+Status: Ready for owner testing; no commit made.
+Patch: v2.0.9-17-new-setter-recall.patch
+Base: def16409d7acf9a36f3fbc3243cb0d80e88d5687, with patch 16 already applied in the worktree. Apply order: patch 16, then patch 17.
+
+What changed:
+- Adds GrandOrgue's Sequencer/RefreshFiles control to the Bridge command map and generated MIDI Settings.
+- Sends the refresh before navigating to a different setter file, so GrandOrgue can discover newly created combination files.
+
+Checks:
+- `git apply --check` against the pre-patch worktree with patch 16 present: PASS.
+- Current worktree matches this patch: `git apply --reverse --check`: PASS.
+- `python -m py_compile keylab_bridge\application.py keylab_bridge\go_settings.py keylab_bridge\midi_protocol.py`: PASS.
+- Runtime assertion for the generated RefreshFiles CC 16 mapping: PASS.
+- Pylance/pyright: UNVERIFIED (not run).
+
+UNVERIFIED:
+- Real GrandOrgue behavior and stop recall on the owner's organ. The updated MIDI Settings must be imported once; no restart is expected after import.
+
+Open question: Verify setter stop recall without restarting GrandOrgue; see `docs/claude.chat/v2.0.9-17-new-setter-recall.txt`.

@@ -6,6 +6,7 @@ generated. Device-specific bindings (e.g. a KeyLab wired straight to GrandOrgue)
 left alone, so the file is meant to be imported alongside them, never as a replacement for them.
 
 CHANGELOG
+2026-11-19  Map GrandOrgue's RefreshFiles control so new setter files can be used without restarting.
 2026-11-19  BPM label path is "Metronome/Metronome BPM": GrandOrgue names a label by its display text ("Metronome/MetronomeBPM" was reported unused).
 """
 import datetime
@@ -20,6 +21,7 @@ GO_VERSION = "v3.17.3-1"
 # (GrandOrgue object path, bridge command, feedback lamp the bridge reads back)
 COMMAND_OBJECTS = (
     ("Sequencer/Prev", "prev_step", None), ("Sequencer/Next", "next_step", None),
+    ("Sequencer/RefreshFiles", "refresh_files", None),
     ("Sequencer/PrevFile", "prev_file", None), ("Sequencer/NextFile", "next_file", None),
     ("Sequencer/LoadFile", "load", "load_lit"), ("Sequencer/SaveFile", "save", None),
     ("Metronome/MetronomeOn", "metro", "metro_lit"),

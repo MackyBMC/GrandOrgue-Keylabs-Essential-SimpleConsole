@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2.0.9 (unreleased) - additions
+- Selecting a setter refreshes GrandOrgue's cached combination-file list before loading it.
+- Record-button MIDI takes now capture and use the session BPM when recording starts.
+- Type the optional GrandOrgue metronome BPM feedback value.
 - File > "Export for GrandOrgue (native MIDI)...": writes the loaded MIDI (with stave / roll edits, setters and registrations) as a GrandOrgue-format recording whose stop on / off events are inside the file, so GrandOrgue's own MIDI player switches the stops without the bridge.
 - Pylance fixes in Stave Station MusicXML parsing: optional stave fields, Score/Part/Opus narrowing, and explicit Note/Chord handling.
 - Shared MIDI transport Play / Pause now resumes from the saved file position; Stop rewinds and the Stave / Piano Roll edited-score controls use the same pause state.
