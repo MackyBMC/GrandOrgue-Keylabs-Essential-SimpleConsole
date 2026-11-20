@@ -1,6 +1,9 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-20  Setter list shows the setter file's display name from the names matrix (language, then default) instead of the raw file stem.
+2026-11-20  Setter list: Status column (short hand "F+ S5/7": F+ GrandOrgue shows this file/step, F? settling / cued, Fx another file/step; S = stops confirmed ON / stops the setter switches on); tooltip names the unconfirmed stops.
+2026-11-20  Setter list: a loaded-but-unconfirmed setter shows "..." in the Active column (the partial tick was invisible in the dark theme).
 2026-11-19  Setter list tooltip shows what GrandOrgue reports (file label, step) and the setter it was matched to, to trace tick mismatches.
 2026-11-19  Setter list tick: full tick only when GrandOrgue has confirmed the setter (file/step + stops); a dash (partial) while loaded but unconfirmed; tooltip says what is missing.
 2026-11-19  File > "Export for GrandOrgue (native MIDI)...": the loaded MIDI (stave / roll edits included) as a GrandOrgue recording that switches the stops by itself.
@@ -548,7 +551,7 @@ class SheetMusicWindow(QDialog):
             self.setter_list.blockSignals(True)
             self.setter_list.clear()
             for index, c in enumerate(combinations):
-                item = QListWidgetItem(f"{c['filename'].rsplit('.', 1)[0]}  |  {c['name']}")
+                item = QListWidgetItem(f"{(c.get('file_names') or {}).get('default') or c['filename'].rsplit('.', 1)[0]}  |  {c['name']}")
                 item.setData(Qt.ItemDataRole.UserRole, index)
                 self.setter_list.addItem(item)
             self.setter_list.blockSignals(False)
@@ -1621,13 +1624,14 @@ class BridgeWindow(QMainWindow):
         self._text_labels["presets"] = QLabel()
         setter_layout.addWidget(self._text_labels["presets"])
         self.combination_list = QTreeWidget()
-        self.combination_list.setColumnCount(3)
-        self.combination_list.setHeaderLabels(["Setter combination / focused step", "ID", "Active"])
+        self.combination_list.setColumnCount(4)
+        self.combination_list.setHeaderLabels(["Setter combination / focused step", "ID", "Active", "Status"])
         self.combination_list.setWordWrap(False)
         self.combination_list.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.combination_list.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.combination_list.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.combination_list.header().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.combination_list.header().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.combination_list.setRootIsDecorated(True)
         self.combination_list.setItemDelegateForColumn(2, ActiveTickDelegate(self.combination_list))
         self.combination_list.setUniformRowHeights(True)
@@ -3578,11 +3582,13 @@ class BridgeWindow(QMainWindow):
             for index, item in enumerate(snapshot["combinations"]):
                 parent = parents.get(item["filename"])
                 if parent is None:
-                    parent_name = item["filename"].rsplit(".", 1)[0]
-                    parent = QTreeWidgetItem([parent_name, "", ""])
+                    names = item.get("file_names") or {}
+                    parent_name = (names.get(snapshot.get("language")) or names.get("default")
+                                   or item["filename"].rsplit(".", 1)[0])
+                    parent = QTreeWidgetItem([parent_name, "", "", ""])
                     self.combination_list.addTopLevelItem(parent)
                     parents[item["filename"]] = parent
-                child = QTreeWidgetItem([item["name"], item["internal_id"], ""])
+                child = QTreeWidgetItem([item["name"], item["internal_id"], "", ""])
                 child.setData(0, Qt.ItemDataRole.UserRole, index)
                 parent.addChild(child)
             self.combination_list.expandAll()
@@ -3608,12 +3614,21 @@ class BridgeWindow(QMainWindow):
                 if index == active_index:
                     verified = bool(snapshot.get("active_combination_verified"))
                     child.setCheckState(2, Qt.CheckState.Checked if verified else Qt.CheckState.PartiallyChecked)
+                    child.setText(2, "" if verified else "...")
+                    stat = snapshot.get("active_combination_status") or {}
+                    child.setText(3, stat.get("text", ""))
+                    child.setToolTip(3, "F+ file/step confirmed, F? settling or cued, Fx other file/step\n"
+                                     "S n/m = stops confirmed ON by GrandOrgue / stops this setter switches on"
+                                     + ("\nNot confirmed: " + ", ".join(stat.get("missing", [])) if stat.get("missing") else ""))
                     pending = snapshot.get("active_combination_pending") or []
                     child.setToolTip(2, "Verified: GrandOrgue reports this setter and its stops" if verified
                                      else "Loaded, not yet confirmed by GrandOrgue: " + "; ".join(pending))
                 else:
                     child.setCheckState(2, Qt.CheckState.Unchecked)
+                    child.setText(2, "")
+                    child.setText(3, "")
                     child.setToolTip(2, "")
+                    child.setToolTip(3, "")
                 # Note: we deliberately do NOT force the tree's selection
                 # cursor to follow `selected_index` here. This runs on every
                 # periodic refresh, and forcing selection would snap the

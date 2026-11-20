@@ -72,6 +72,23 @@ def read_all_markers(path):
     return found
 
 
+def canonical_filename(filename, scripts_dir=None):
+    """A setter file name saved before the names repair (marker, project) -> the file's current name."""
+    try:
+        import yaml
+        from keylab_bridge import setter_names
+        from keylab_bridge.preset_store import combination_root
+        scripts_dir = scripts_dir or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config = os.path.join(scripts_dir, "config.yaml")
+        with open(config, encoding="utf-8") as handle:
+            raw = yaml.safe_load(handle) or {}
+        set_name = str(raw.get("combination_set", "Friesach"))
+        matrix = setter_names.load_matrix(setter_names.matrix_path(combination_root(config, set_name), set_name))
+        return setter_names.canonical_filename(matrix, filename)
+    except Exception:
+        return filename
+
+
 def read_markers(path):
     """Setter markers of a MIDI file: [(seconds, filename, internal_id, name)] in time order."""
     import mido

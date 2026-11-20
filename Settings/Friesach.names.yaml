@@ -1,0 +1,29 @@
+# Names matrix: GrandOrgue-safe setter file names (the keys) and the names shown in the bridge.
+# Add languages under display: (for example en, de, af). 'default' is used when a language is missing.
+organ: Friesach
+setters:
+  Ave Verum Corpus - Recit doux:
+    aliases:
+    - Ave Verum Corpus - Récit doux.yaml
+    display:
+      default: Ave Verum Corpus - Récit doux
+  Classical - Full Organ:
+    aliases:
+    - Classical - Full Organ (moderate).yaml
+    display:
+      default: Classical - Full Organ (moderate)
+  French - Trompette en Chamade:
+    aliases:
+    - French - Trompette en Chamade Fanfare.yaml
+    display:
+      default: French - Trompette en Chamade Fanfare
+  Lament - Jubalflote Solo:
+    aliases:
+    - Lament - Jubalflöte Solo.yaml
+    display:
+      default: Lament - Jubalflöte Solo
+  Solemn Processional - Flutes and:
+    aliases:
+    - Solemn Processional - Flutes and 32ft.yaml
+    display:
+      default: Solemn Processional - Flutes and 32ft

@@ -1,6 +1,10 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-20  Setter names matrix: snapshot combinations carry "file_names" (display by language); a silent setter-name repair is reported once in the log.
+2026-11-20  Setter matching from GrandOrgue's file label folds like the LCD text does: letters beyond ASCII arrive as "_" (R_cit doux for Récit doux) and the label is cut at 32 characters.
+2026-11-20  Setter status: _combination_status() / snapshot "active_combination_status" {state, confirmed, total, missing, text}; text like "F+ S5/7" (F+ file/step confirmed, F? settling or cued, Fx other file/step; S = stops confirmed on).
+2026-11-20  TRACE line "Setter ... NOT verified after 2.5 s: <reasons>" when a loaded setter stays unconfirmed (what GrandOrgue has not reported).
 2026-11-19  Snapshot "go_setter_feedback": what GrandOrgue shows (file label, step) and which setter that matched (or none); a TRACE line when nothing matches.
 2026-11-19  Setter tick = verified: GrandOrgue's own file/step feedback matches the loaded setter AND every stop the setter switches on has been reported ON by GrandOrgue.
             Snapshot "active_combination_verified" (+ "active_combination_pending": what is still unproven). Missing feedback stays unconfirmed.
@@ -129,6 +133,7 @@ class BridgeApp:
         self._go_bpm = None                  # GrandOrgue metronome BPM as last known / last driven
         self._go_sent_at = 0.0
         self.combinations = load_combinations(cfg_path, raw)
+        self._report_setter_repair()
         self.selected_combination_index = None
         self.loaded_combination_index = None
         self.loaded_switch_paths = None
@@ -861,6 +866,8 @@ class BridgeApp:
         # drawn become the baseline, so quirks between file and organ never
         # look like user edits.
         self._baseline_settle_at = time.time() + 1.0
+        self._loaded_at = time.time()
+        self._unproven_logged = None
 
     def _sync_loaded_combination_from_feedback(self, load_confirmed=False):
         # A changed file/step identity while cued is only a pending selection;
@@ -896,24 +903,59 @@ class BridgeApp:
             self.loaded_switch_paths = frozenset(self._current_registration_paths())
             self._baseline_settle_at = None
 
+    def _report_setter_repair(self):
+        from .preset_store import LAST_REPAIR
+        if LAST_REPAIR.get("renamed"):
+            renamed = LAST_REPAIR["renamed"]
+            self.log(f"Setter files renamed to GrandOrgue-safe names ({len(renamed)}); originals kept in the names matrix, "
+                     f"folder backed up to {LAST_REPAIR.get('backup', '')}", notify=False)
+            LAST_REPAIR.clear()
+
+    def _combination_status(self):
+        """Loaded setter vs what GrandOrgue itself has reported.
+        state: none / cued / settling / mismatch / ok; confirmed / total = stops the setter switches ON that GrandOrgue reported ON."""
+        index = self.loaded_combination_index
+        status = {"state": "none", "confirmed": 0, "total": 0, "missing": []}
+        if index is None or not 0 <= index < len(self.combinations):
+            return status
+        wanted = self.combinations[index]["switch_paths"]
+        names = [item for item in ITEMS if item.path in wanted]
+        status["total"] = len(names)
+        status["missing"] = [item.name for item in names if self.br.fb_state.get(item.cc) is not True]
+        status["confirmed"] = len(names) - len(status["missing"])
+        now = time.time()
+        if self.br.cued:
+            status["state"] = "cued"
+        elif now < getattr(self, "_activation_until", 0.0) or not self._baseline_ready(now):
+            status["state"] = "settling"
+        elif self._combination_index_from_feedback() != index:
+            status["state"] = "mismatch"
+        else:
+            status["state"] = "ok"
+        return status
+
+    @staticmethod
+    def _status_text(status):
+        """Short hand: F = GrandOrgue's file/step matches (ok), ? still settling / cued, x another file/step; S n/m = stops confirmed on."""
+        state = status["state"]
+        if state == "none":
+            return ""
+        flag = {"ok": "F+", "settling": "F?", "cued": "F?", "mismatch": "Fx"}[state]
+        return f"{flag} S{status['confirmed']}/{status['total']}"
+
     def _combination_unproven(self):
         """What is still unproven about the loaded setter, as a list of short reasons ([] = verified).
         Fail closed: unknown feedback is never treated as a match."""
-        index = self.loaded_combination_index
-        if index is None or not 0 <= index < len(self.combinations):
+        status = self._combination_status()
+        state, missing = status["state"], status["missing"]
+        if state == "none":
             return ["no setter loaded"]
-        now = time.time()
-        if self.br.cued:
+        if state == "cued":
             return ["load not confirmed"]
-        if now < getattr(self, "_activation_until", 0.0) or not self._baseline_ready(now):
+        if state == "settling":
             return ["organ still settling"]
-        if self._combination_index_from_feedback() != index:
+        if state == "mismatch":
             return ["GrandOrgue shows another file/step"]
-        wanted = self.combinations[index]["switch_paths"]
-        missing = []
-        for item in ITEMS:
-            if item.path in wanted and self.br.fb_state.get(item.cc) is not True:
-                missing.append(item.name)
         return [f"stop not confirmed on: {name}" for name in missing[:3]] + (["..."] if len(missing) > 3 else [])
 
     def _combination_is_dirty(self):
@@ -1009,15 +1051,28 @@ class BridgeApp:
         self.message = f"Updated setter {selected['filename']} #{internal_id}"
         self.br.dirty = True
 
+    LABEL_WIDTH = 32          # GrandOrgue's file-name label is 32 characters wide
+
+    @staticmethod
+    def _label_fold(text):
+        """Compare names the way the label arrives: case-folded, spaces collapsed, every non-ASCII letter as "_"."""
+        return "".join(c if ord(c) < 128 else "_" for c in " ".join(str(text).casefold().split()))
+
+    def _label_equal(self, label, name):
+        label, name = self._label_fold(label), self._label_fold(name)
+        if len(label) >= self.LABEL_WIDTH:            # a long name arrives cut: match its beginning
+            return name.startswith(label)
+        return label == name
+
     def _combination_index_from_feedback(self):
-        current_name = " ".join(self.br.text.casefold().split())
+        current_name = self.br.text
         named_matches = [
             (index, preset) for index, preset in enumerate(self.combinations)
-            if current_name == " ".join(preset["name"].casefold().split())
+            if self._label_equal(current_name, preset["name"])
         ]
         matches = named_matches or [
             (index, preset) for index, preset in enumerate(self.combinations)
-            if current_name == " ".join(os.path.splitext(preset["filename"])[0].casefold().split())
+            if self._label_equal(current_name, os.path.splitext(preset["filename"])[0])
         ]
         if not matches:
             return None
@@ -1807,6 +1862,13 @@ class BridgeApp:
                              notify=False, level="TRACE")
                 self.selected_combination_index = index
         self._last_feedback_cued = br.cued
+        if self.loaded_combination_index is not None and time.time() - getattr(self, "_loaded_at", time.time()) > 2.5:
+            unproven = tuple(self._combination_unproven())
+            if unproven and unproven != getattr(self, "_unproven_logged", None):
+                self._unproven_logged = unproven
+                loaded = self.combinations[self.loaded_combination_index]
+                self.log(f"Setter #{self.loaded_combination_index} {loaded['filename']} step {loaded['internal_id']} "
+                         f"NOT verified after 2.5 s: {'; '.join(unproven)}", notify=False, level="TRACE")
         shown = (br.text.strip(), br.pos.strip())
         if shown != getattr(self, "_last_shown_setter", None) and not br.cued and shown[0]:
             self._last_shown_setter = shown
@@ -1823,7 +1885,7 @@ class BridgeApp:
             "marks": br._bank_marks(), "pads": pads,
             "mark_legend": self.t("mark_legend"),
             "combinations": [{"name": preset["name"], "filename": preset["filename"],
-                              "internal_id": preset["internal_id"],
+                              "internal_id": preset["internal_id"], "file_names": preset.get("file_names") or {},
                               "switch_paths": sorted(preset["switch_paths"])}
                              for preset in self.combinations],
             "available_stops": [{"path": item.path, "name": item.name, "division": item.division,
@@ -1852,6 +1914,7 @@ class BridgeApp:
             ),
             "combination_index": self.selected_combination_index,
             "active_combination_index": active_combination_index,
+            "active_combination_status": dict(self._combination_status(), text=self._status_text(self._combination_status())),
             "active_combination_pending": self._combination_unproven() if active_combination_index is not None else [],
             "active_combination_verified": active_combination_index is not None and not self._combination_unproven(),
             "internal_position": br.pos.strip(),

@@ -1,6 +1,7 @@
 """Configuration and file-backed setter persistence.
 
 CHANGELOG
+2026-11-20  load_combinations repairs the setter folder silently (setter_names.repair_folder: ASCII-safe names of at most 32 characters, folder backed up, original names kept in Settings/<organ>.names.yaml) and gives every step "file_names" (display names by language) and "aliases".
 2026-11-20  Setter (combination) files are read with decimal integers: PyYAML's YAML 1.1 octal rule turned ids such as 011 / 013 / 015 into 9 / 11 / 13
             (and 008 / 009 into text), so 16 of 48 setters pointed at the wrong stops (wrong ticks, wrong cue diff, wrong native export, corrupt re-saves).
             GrandOrgue (YAML 1.2) reads them as decimal; read_combination_yaml() does the same.
@@ -119,6 +120,9 @@ def load_preset_activation(config_path, raw):
     return mode if mode in ("staged", "direct") else "staged"
 
 
+LAST_REPAIR = {}          # the latest silent setter-name repair: {"renamed": [(old, new)], "backup": path}
+
+
 def read_combination_yaml(stream):
     """yaml.safe_load for GrandOrgue setter files: 011 is eleven (YAML 1.2), not octal nine (PyYAML's YAML 1.1)."""
     import yaml
@@ -141,6 +145,13 @@ def load_combinations(config_path, raw):
     combinations = []
     if not os.path.isdir(folder):
         return combinations
+    from . import setter_names
+    root = combination_root(config_path, set_name)
+    matrix_file = setter_names.matrix_path(root, set_name)
+    repair = setter_names.repair_folder(folder, matrix_file, organ=set_name)
+    if repair["renamed"]:
+        LAST_REPAIR.update(repair)
+    matrix = setter_names.load_matrix(matrix_file)
     for filename in sorted(os.listdir(folder), key=str.casefold):
         if not filename.lower().endswith((".yaml", ".yml")):
             continue
@@ -177,6 +188,7 @@ def load_combinations(config_path, raw):
                 "filename": filename,
                 "internal_id": normalized_id,
                 "switch_paths": switch_paths,
+                "file_names": setter_names.file_names(matrix, filename),
             })
     return combinations
 

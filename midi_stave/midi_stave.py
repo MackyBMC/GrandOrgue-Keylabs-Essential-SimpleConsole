@@ -1,5 +1,6 @@
 """
 CHANGELOG
+2026-11-20  Setter file names saved before the names repair (markers, projects) are mapped to the renamed files (sessionmeta.canonical_filename).
 2026-11-19  write_organ_file(path): the file the organ plays (notes on the manual channels, setter and registration markers), for the GrandOrgue-native export.
 2026-11-17  The score follows the music again after Pause / Play from any window (a still playhead re-arms the follow; a redraw while paused no longer restarts playback).
 2026-11-16  Shared transport pause hooks into the bridge player, preserving the edited-score resume position; Stop and loading another score clear that position.
@@ -2289,7 +2290,7 @@ class Stave(QMainWindow):
                 self.bar_grid = {int(b): project.grid_parse(v) for b, v in (bars.get("grid") or {}).items()}
             else:
                 self.detect_bars()
-            self.setters = [dict(x) for x in state.get("setters") or []]
+            self.setters = [dict(x, filename=sessionmeta.canonical_filename(x.get("filename", ""))) for x in state.get("setters") or []]
             self.divisions = {int(b): str(t) for b, t in (state.get("divisions") or {}).items()}
             self.refresh_setters()
             self._show_divisions()
@@ -2429,7 +2430,7 @@ class Stave(QMainWindow):
         self.setters = []
         for t, filename, internal_id, name in sessionmeta.read_markers(path):
             bar = self.barmap.bar_of_beat(self.barmap.sec_to_beat(t))
-            self.setters.append({"bar": int(bar), "filename": filename, "id": internal_id, "name": name})
+            self.setters.append({"bar": int(bar), "filename": sessionmeta.canonical_filename(filename), "id": internal_id, "name": name})
         self.refresh_setters()
 
     def setter_label(self, x):
