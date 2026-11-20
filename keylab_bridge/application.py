@@ -1,6 +1,7 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-20  Setter tick: shown as soon as GrandOrgue's file/step and stops are confirmed (no wait for the baseline quiet time); the setter GrandOrgue remembered at bridge start is adopted and ticked (status "F+ S?/n": stops cannot be proven, GrandOrgue only reports changes).
 2026-11-20  Fix: the setter-name repair report is logged in start(), not __init__ (self.recent did not exist yet: AttributeError at launch when files were renamed).
 2026-11-20  Setter names matrix: snapshot combinations carry "file_names" (display by language); a silent setter-name repair is reported once in the log.
 2026-11-20  Setter matching from GrandOrgue's file label folds like the LCD text does: letters beyond ASCII arrive as "_" (R_cit doux for Récit doux) and the label is cut at 32 characters.
@@ -175,6 +176,7 @@ class BridgeApp:
         self.preset_activation_path = os.path.join(os.path.dirname(cfg_path), "preset_activation.txt") if cfg_path else ""
         self._baseline_settle_at = None
         self._last_confirmed_identity = None
+        self._adopted_index = None
         self._last_feedback_cued = False
         self.pending_navigation_target = None
         self.started = time.perf_counter()
@@ -869,6 +871,7 @@ class BridgeApp:
         self._baseline_settle_at = time.time() + 1.0
         self._loaded_at = time.time()
         self._unproven_logged = None
+        self._adopted_index = None
 
     def _sync_loaded_combination_from_feedback(self, load_confirmed=False):
         # A changed file/step identity while cued is only a pending selection;
@@ -877,7 +880,10 @@ class BridgeApp:
             return
         index = self._combination_index_from_feedback()
         if index is not None and index != self.loaded_combination_index:
+            first = self.loaded_combination_index is None           # nothing loaded by us yet: GrandOrgue remembered it
             self._set_loaded_combination(index)
+            if first:
+                self._adopted_index = index
 
     BASELINE_QUIET_S = 0.8         # the organ must stop echoing stop changes this long before the baseline is adopted
     BASELINE_MAX_S = 6.0           # ...but never wait longer than this after a load
@@ -927,13 +933,18 @@ class BridgeApp:
         wanted = self.combinations[index]["switch_paths"]
         names = [item for item in ITEMS if item.path in wanted]
         status["total"] = len(names)
-        status["missing"] = [item.name for item in names if self.br.fb_state.get(item.cc) is not True]
+        adopted = getattr(self, "_adopted_index", None) == index      # remembered by GrandOrgue: it only reports changes, not the state
+        if adopted:
+            status["missing"] = [item.name for item in names if self.br.fb_state.get(item.cc) is False]
+            status["assumed"] = True
+        else:
+            status["missing"] = [item.name for item in names if self.br.fb_state.get(item.cc) is not True]
         status["confirmed"] = len(names) - len(status["missing"])
         now = time.time()
         if self.br.cued:
             status["state"] = "cued"
-        elif now < getattr(self, "_activation_until", 0.0) or not self._baseline_ready(now):
-            status["state"] = "settling"
+        elif now < getattr(self, "_activation_until", 0.0) or (status["missing"] and not self._baseline_ready(now)):
+            status["state"] = "settling"           # everything confirmed already: no need to wait for the baseline quiet time
         elif self._combination_index_from_feedback() != index:
             status["state"] = "mismatch"
         else:
@@ -947,7 +958,7 @@ class BridgeApp:
         if state == "none":
             return ""
         flag = {"ok": "F+", "settling": "F?", "cued": "F?", "mismatch": "Fx"}[state]
-        return f"{flag} S{status['confirmed']}/{status['total']}"
+        return f"{flag} S{'?' if status.get('assumed') else status['confirmed']}/{status['total']}"
 
     def _combination_unproven(self):
         """What is still unproven about the loaded setter, as a list of short reasons ([] = verified).
