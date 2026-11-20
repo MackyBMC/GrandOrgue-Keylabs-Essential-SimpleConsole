@@ -115,7 +115,7 @@ from .odf_scan import compare_with_builtin, scan_odf, spec_from_profile, summari
 from .organ_layout import ACTIVE_LAYOUT, STOP_CHANNELS
 from .tempo import TempoSession
 from .preset_store import (
-    _normalized_mapping_key, _write_managed_switches, read_combination_yaml, combination_root, load_combinations, project_root, set_config_key,
+    _normalized_mapping_key, _write_managed_switches, read_combination_yaml, write_combination_file, combination_root, load_combinations, project_root, set_config_key,
     controller_file, load_controller_engaged, load_language, load_preset_activation, load_theme, bridge_settings,
 )
 from translations import LANGUAGE_NAMES, translate
@@ -910,6 +910,11 @@ class BridgeApp:
             self.log(f"Setter files renamed to GrandOrgue-safe names ({len(renamed)}); originals kept in the names matrix, "
                      f"folder backed up to {LAST_REPAIR.get('backup', '')}", notify=False)
             LAST_REPAIR.clear()
+        from .preset_store import LAST_FORMAT_REPAIR
+        if LAST_FORMAT_REPAIR.get("repaired"):
+            self.log(f"Setter files rebuilt in GrandOrgue's format ({len(LAST_FORMAT_REPAIR['repaired'])}): "
+                     f"{', '.join(LAST_FORMAT_REPAIR['repaired'][:4])}...; backup {LAST_FORMAT_REPAIR.get('backup', '')}", notify=False)
+            LAST_FORMAT_REPAIR.clear()
 
     def _combination_status(self):
         """Loaded setter vs what GrandOrgue itself has reported.
@@ -1036,8 +1041,7 @@ class BridgeApp:
             sequence_key, {"manuals": {}, "switches": {}}))
         _write_managed_switches(sequence, self._current_registration_paths())
         try:
-            with open(path, "w", encoding="utf-8") as combination_file:
-                yaml.safe_dump(data, combination_file, sort_keys=False, allow_unicode=True, default_flow_style=False)
+            write_combination_file(path, data, folder)
         except OSError as exc:
             self.log(f"Could not update setter: {exc}", level="ERROR")
             return
@@ -1138,8 +1142,7 @@ class BridgeApp:
             if "stops" in step:
                 _write_managed_switches(sequence, step["stops"])
         try:
-            with open(path, "w", encoding="utf-8") as combination_file:
-                yaml.safe_dump(data, combination_file, sort_keys=False, allow_unicode=True, default_flow_style=False)
+            write_combination_file(path, data, folder)
         except OSError as exc:
             self.log(f"Could not save setter: {exc}", level="ERROR")
             return

@@ -1,6 +1,7 @@
 """Configuration and file-backed setter persistence.
 
 CHANGELOG
+2026-11-20  write_combination_file(); load_combinations also rebuilds setter files the old bridge saved with integer keys / octal-misread ids (setter_format.repair_folder_format), silently, folder backed up first.
 2026-11-20  load_combinations repairs the setter folder silently (setter_names.repair_folder: ASCII-safe names of at most 32 characters, folder backed up, original names kept in Settings/<organ>.names.yaml) and gives every step "file_names" (display names by language) and "aliases".
 2026-11-20  Setter (combination) files are read with decimal integers: PyYAML's YAML 1.1 octal rule turned ids such as 011 / 013 / 015 into 9 / 11 / 13
             (and 008 / 009 into text), so 16 of 48 setters pointed at the wrong stops (wrong ticks, wrong cue diff, wrong native export, corrupt re-saves).
@@ -120,7 +121,13 @@ def load_preset_activation(config_path, raw):
     return mode if mode in ("staged", "direct") else "staged"
 
 
+LAST_FORMAT_REPAIR = {}   # the latest silent setter-file rebuild: {"repaired": [names], "backup": path}
 LAST_REPAIR = {}          # the latest silent setter-name repair: {"renamed": [(old, new)], "backup": path}
+
+
+def write_combination_file(path, data, folder=None):
+    from .setter_format import write_combination_file as _write
+    _write(path, data, folder)
 
 
 def read_combination_yaml(stream):
@@ -151,6 +158,10 @@ def load_combinations(config_path, raw):
     repair = setter_names.repair_folder(folder, matrix_file, organ=set_name)
     if repair["renamed"]:
         LAST_REPAIR.update(repair)
+    from . import setter_format
+    format_repair = setter_format.repair_folder_format(folder)
+    if format_repair["repaired"]:
+        LAST_FORMAT_REPAIR.update(format_repair)
     matrix = setter_names.load_matrix(matrix_file)
     for filename in sorted(os.listdir(folder), key=str.casefold):
         if not filename.lower().endswith((".yaml", ".yml")):
