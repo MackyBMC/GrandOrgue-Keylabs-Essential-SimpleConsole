@@ -1,6 +1,7 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-20  Fix: the setter-name repair report is logged in start(), not __init__ (self.recent did not exist yet: AttributeError at launch when files were renamed).
 2026-11-20  Setter names matrix: snapshot combinations carry "file_names" (display by language); a silent setter-name repair is reported once in the log.
 2026-11-20  Setter matching from GrandOrgue's file label folds like the LCD text does: letters beyond ASCII arrive as "_" (R_cit doux for Récit doux) and the label is cut at 32 characters.
 2026-11-20  Setter status: _combination_status() / snapshot "active_combination_status" {state, confirmed, total, missing, text}; text like "F+ S5/7" (F+ file/step confirmed, F? settling or cued, Fx other file/step; S = stops confirmed on).
@@ -133,7 +134,6 @@ class BridgeApp:
         self._go_bpm = None                  # GrandOrgue metronome BPM as last known / last driven
         self._go_sent_at = 0.0
         self.combinations = load_combinations(cfg_path, raw)
-        self._report_setter_repair()
         self.selected_combination_index = None
         self.loaded_combination_index = None
         self.loaded_switch_paths = None
@@ -1991,6 +1991,7 @@ class BridgeApp:
             self.log(text, notify=False, level="DEBUG")
 
     def start(self):
+        self._report_setter_repair()                  # self.recent exists now (it did not yet while __init__ loaded the setters)
         self.log(self.t("message_settings_path", path=self.cfg_path) if self.raw else self.t("message_settings_builtin"))
         self.log(self.t("message_version", version=__version__))
         self.ports.open_all()

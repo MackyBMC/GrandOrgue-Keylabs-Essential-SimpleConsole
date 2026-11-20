@@ -52,3 +52,6 @@ docs/adr/
 keylab_bridge/CLAUDE.md
 midi_stave/CLAUDE.md
 packaging/CLAUDE.md
+
+# silent setter-name repair backups
+Combinations/_backup/
