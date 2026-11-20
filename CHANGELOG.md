@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.9 (unreleased) - additions
+## 2.0.9 (2026-11-20)
 - Selecting a setter refreshes GrandOrgue's cached combination-file list before loading it.
 - Record-button MIDI takes now capture and use the session BPM when recording starts.
 - Type the optional GrandOrgue metronome BPM feedback value.
