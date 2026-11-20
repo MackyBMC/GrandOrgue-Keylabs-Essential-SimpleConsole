@@ -144,6 +144,19 @@ def read_combination_yaml(stream):
     return yaml.load(stream, Loader=_Decimal)
 
 
+def read_go_yaml(stream):
+    """yaml.safe_load for GrandOrgue MIDI settings: a number with a leading zero (path: 047) stays text, never octal 39."""
+    import yaml
+
+    class _Text(yaml.SafeLoader):
+        pass
+
+    _Text.yaml_implicit_resolvers = {k: [(t, r) for t, r in v if t != "tag:yaml.org,2002:int"]
+                                     for k, v in yaml.SafeLoader.yaml_implicit_resolvers.items()}
+    _Text.add_implicit_resolver("tag:yaml.org,2002:int", re.compile(r"^[-+]?(0|[1-9][0-9]*)$"), list("-+0123456789"))
+    return yaml.load(stream, Loader=_Text)
+
+
 def load_combinations(config_path, raw):
     import yaml
 
@@ -163,7 +176,7 @@ def load_combinations(config_path, raw):
     if format_repair["repaired"]:
         LAST_FORMAT_REPAIR.update(format_repair)
     matrix = setter_names.load_matrix(matrix_file)
-    for filename in sorted(os.listdir(folder), key=str.casefold):
+    for filename in sorted(os.listdir(folder)):             # GrandOrgue sorts its setter files case-sensitively (wxArrayString::Sort)
         if not filename.lower().endswith((".yaml", ".yml")):
             continue
         path = os.path.join(folder, filename)

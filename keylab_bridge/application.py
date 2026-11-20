@@ -115,6 +115,7 @@ from .odf_scan import compare_with_builtin, scan_odf, spec_from_profile, summari
 from .organ_layout import ACTIVE_LAYOUT, STOP_CHANNELS
 from .tempo import TempoSession
 from .preset_store import (
+    read_go_yaml,
     _normalized_mapping_key, _write_managed_switches, read_combination_yaml, write_combination_file, combination_root, load_combinations, project_root, set_config_key,
     controller_file, load_controller_engaged, load_language, load_preset_activation, load_theme, bridge_settings,
 )
@@ -497,7 +498,7 @@ class BridgeApp:
         document = self._go_settings_for(profile, self.organ_spec)
         try:
             with open(export_path, encoding="utf-8") as export_stream:
-                export = yaml.safe_load(export_stream) or {}
+                export = read_go_yaml(export_stream) or {}
             document = merge_settings_export(export, document)
         except (OSError, yaml.YAMLError, ValueError) as exc:
             self.organ_summary = f"Could not merge GrandOrgue MIDI settings: {exc}"
@@ -603,7 +604,7 @@ class BridgeApp:
         settings_path = ""
         try:
             with open(export_path, encoding="utf-8") as export_stream:
-                export = yaml.safe_load(export_stream) or {}
+                export = read_go_yaml(export_stream) or {}
             self._validate_organ_midi_export(export, candidate_profile["name"])
             generated_settings = self._go_settings_for(candidate_profile, candidate_spec)
             merged_settings = merge_settings_export(export, generated_settings)
@@ -711,7 +712,7 @@ class BridgeApp:
             return
         try:
             with open(export_path, encoding="utf-8") as export_stream:
-                export = yaml.safe_load(export_stream) or {}
+                export = read_go_yaml(export_stream) or {}
             self._validate_organ_midi_export(export, pending["profile"]["name"])
             result = compare_with_export(pending["generated_settings"], export)
         except (OSError, yaml.YAMLError, TypeError, ValueError) as exc:
