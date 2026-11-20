@@ -1,0 +1,1174 @@
+info:
+  content-type: MIDI Settings
+  organ-name: Friesach
+  grandorgue-version: v3.17.3-1
+  saved_time: 2026/11/19 12:00:00
+objects:
+- path: Sequencer/current file name
+  send:
+  - event_type: HWLCD
+    key: 1
+    low_value: 0
+    start: 0
+    length: 32
+- path: Sequencer/sequencer position
+  send:
+  - event_type: HWString
+    key: 2
+    start: 0
+    length: 16
+- path: Sequencer/Prev
+  name: Previous
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 17
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+  - event_type: ControlChange
+    channel: 16
+    key: 1
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+- path: Sequencer/Next
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 16
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+  - event_type: ControlChange
+    channel: 16
+    key: 2
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+- path: Sequencer/PrevFile
+  name: Prev file
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 73
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 17
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+  - event_type: ControlChange
+    channel: 16
+    key: 3
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+- path: Sequencer/NextFile
+  name: Next file
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 16
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+  - event_type: ControlChange
+    channel: 16
+    key: 4
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+- path: Sequencer/LoadFile
+  name: Load file
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 18
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+  - event_type: ControlChange
+    channel: 16
+    key: 5
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 14
+    key: 1
+    low_value: 0
+    high_value: 127
+- path: Sequencer/SaveFile
+  name: Save file
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 6
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+- path: Setter/PanicButton
+  name: Panic
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 11
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+- path: manuals/000
+  name: 1. Pedal
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: Note
+    channel: 1
+    transpose: 0
+    low_key: 36
+    high_key: 60
+    low_value: 1
+    high_value: 127
+  - event_type: Note
+    channel: 2
+    transpose: 0
+    low_key: 0
+    high_key: 127
+    low_value: 1
+    high_value: 127
+- path: manuals/001
+  name: 2. Hauptwerk
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: Note
+    channel: 1
+    transpose: 0
+    low_key: 0
+    high_key: 127
+    low_value: 1
+    high_value: 127
+  - event_type: Note
+    channel: 3
+    transpose: 0
+    low_key: 0
+    high_key: 127
+    low_value: 1
+    high_value: 127
+- path: manuals/002
+  name: 3. Schwellwerk
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: Note
+    channel: 1
+    transpose: 0
+    low_key: 0
+    high_key: 127
+    low_value: 1
+    high_value: 127
+  - event_type: Note
+    channel: 4
+    transpose: 0
+    low_key: 0
+    high_key: 127
+    low_value: 1
+    high_value: 127
+- path: manuals/003
+  name: 4. Solowerk
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: Note
+    channel: 1
+    transpose: 0
+    low_key: 54
+    high_key: 96
+    low_value: 1
+    high_value: 127
+  - event_type: Note
+    channel: 5
+    transpose: 0
+    low_key: 0
+    high_key: 127
+    low_value: 1
+    high_value: 127
+- path: enclosures/001
+  name: Enclosure 2 Man
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 93
+    low_value: 0
+    high_value: 127
+  - event_type: ControlChange
+    channel: 12
+    key: 7
+    low_value: 0
+    high_value: 127
+- path: manuals/000/switches/001
+  name: Coupler 1
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 45
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 45
+    low_value: 0
+    high_value: 127
+- path: manuals/000/switches/002
+  name: Coupler 2
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 46
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 46
+    low_value: 0
+    high_value: 127
+- path: manuals/000/switches/003
+  name: Coupler 3
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 47
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 47
+    low_value: 0
+    high_value: 127
+- path: manuals/000/switches/004
+  name: P  Untersatz 32'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 1
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 1
+    low_value: 0
+    high_value: 127
+- path: manuals/000/switches/005
+  name: P  Contrabaß 16'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 2
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 2
+    low_value: 0
+    high_value: 127
+- path: manuals/000/switches/006
+  name: P  Subbaß 16'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 3
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 3
+    low_value: 0
+    high_value: 127
+- path: manuals/000/switches/007
+  name: P  Octavbaß 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 4
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 4
+    low_value: 0
+    high_value: 127
+- path: manuals/000/switches/008
+  name: P  Gedackt 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 5
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 5
+    low_value: 0
+    high_value: 127
+- path: manuals/000/switches/009
+  name: P  Choralbaß 4'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 6
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 6
+    low_value: 0
+    high_value: 127
+- path: manuals/000/switches/010
+  name: P  Posaune 32'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 7
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 7
+    low_value: 0
+    high_value: 127
+- path: manuals/000/switches/011
+  name: P  Posaune 16'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 8
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 8
+    low_value: 0
+    high_value: 127
+- path: manuals/000/switches/012
+  name: P  Trompete 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 9
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 9
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/001
+  name: Coupler 4
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 48
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 48
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/002
+  name: Coupler 5
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 49
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 49
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/003
+  name: HW  Praestant 16'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 10
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 10
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/004
+  name: HW  Principal 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 11
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 11
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/005
+  name: HW  Holzflöte 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 12
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 12
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/006
+  name: HW  Röhrflöte 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 13
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 13
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/007
+  name: HW  Gambe 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 14
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 14
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/008
+  name: HW  Octave 4'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 15
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 15
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/009
+  name: HW  Spitzflöte 4'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 16
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 16
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/010
+  name: HW  Quinte 2 2/3'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 17
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 17
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/011
+  name: HW  Octave 2'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 18
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 18
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/012
+  name: HW  Mixtur major 4-5f. 2 2/3'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 19
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 19
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/013
+  name: HW  Mixtur minor 4f. 1 1/3'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 20
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 20
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/014
+  name: HW  Trompete 16'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 21
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 21
+    low_value: 0
+    high_value: 127
+- path: manuals/001/switches/015
+  name: HW  Trompete 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 22
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 22
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/001
+  name: Coupler 6
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 50
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 50
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/002
+  name: SW  Bourdon 16'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 23
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 23
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/003
+  name: SW  Principal 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 24
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 24
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/004
+  name: SW  Nachthorn Gedackt 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 25
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 25
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/005
+  name: SW  Corno dolce 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 26
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 26
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/006
+  name: SW  Viola 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 27
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 27
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/007
+  name: SW  Vox celeste 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 28
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 28
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/008
+  name: SW  Geigenprincipal 4'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 29
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 29
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/009
+  name: SW  Querflöte 4'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 30
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 30
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/010
+  name: SW  Nazard 2 2/3'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 31
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 31
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/011
+  name: SW  Flageolett 2'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 32
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 32
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/012
+  name: SW  Tierce 1 3/5'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 33
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 33
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/013
+  name: SW  Larigot 1 1/3'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 34
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 34
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/014
+  name: SW  Plein Jeu 4-5f. 2'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 35
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 35
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/015
+  name: SW  Scharff 4f. 1'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 36
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 36
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/016
+  name: SW  Trompete harmonique 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 37
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 37
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/017
+  name: SW  Hautbois 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 38
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 38
+    low_value: 0
+    high_value: 127
+- path: manuals/002/switches/018
+  name: SW  Clairon 4'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 39
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 39
+    low_value: 0
+    high_value: 127
+- path: '047'
+  name: Tremulant 2 Man
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 51
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 51
+    low_value: 0
+    high_value: 127
+- path: manuals/003/switches/001
+  name: SL  Jubalflöte 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 40
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 40
+    low_value: 0
+    high_value: 127
+- path: manuals/003/switches/002
+  name: SL  Trichterflöte 4'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 41
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 41
+    low_value: 0
+    high_value: 127
+- path: manuals/003/switches/003
+  name: SL  Cornet a pavilon 1-8f. 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 42
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 42
+    low_value: 0
+    high_value: 127
+- path: manuals/003/switches/004
+  name: SL  Trompete en chamade 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 43
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 43
+    low_value: 0
+    high_value: 127
+- path: manuals/003/switches/005
+  name: SL  Englischhorn 8'
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 44
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 44
+    low_value: 0
+    high_value: 127
+- path: '053'
+  name: Tremulant 3 Man
+  receive:
+  - event_type: ControlChange
+    channel: 15
+    key: 52
+    low_value: 0
+    high_value: 127
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 15
+    key: 52
+    low_value: 0
+    high_value: 127
+- path: MidiPlayer/MidiPlayerPlay
+  name: PLAY
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 8
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 14
+    key: 2
+    low_value: 0
+    high_value: 127
+- path: MidiPlayer/MidiPlayerStop
+  name: STOP
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 9
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+- path: MidiPlayer/MidiPlayerPause
+  name: PAUSE
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 10
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 14
+    key: 3
+    low_value: 0
+    high_value: 127
+- path: Metronome/MetronomeOn
+  name: true
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 7
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+  send:
+  - event_type: ControlChange
+    channel: 14
+    key: 4
+    low_value: 0
+    high_value: 127
+- path: Metronome/MetronomeBpmP1
+  name: 1
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 12
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+- path: Metronome/MetronomeBpmM1
+  name: -1
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 13
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+- path: Metronome/MetronomeBpmP10
+  name: '+10'
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 14
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+- path: Metronome/MetronomeBpmM10
+  name: '-10'
+  receive:
+  - event_type: ControlChange
+    channel: 16
+    key: 15
+    low_value: 0
+    high_value: 1
+    debounce_time: 0
+- path: Metronome/Metronome BPM
+  send:
+  - event_type: HWString
+    key: 3
+    start: 0
+    length: 16
+- path: volumes/Master
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 85
+    low_value: 0
+    high_value: 127
+  - event_type: ControlChange
+    channel: 12
+    key: 1
+    low_value: 0
+    high_value: 127
+- path: volumes/Windchest001
+  name: 1. Pedal
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 74
+    low_value: 0
+    high_value: 127
+  - event_type: ControlChange
+    channel: 12
+    key: 2
+    low_value: 0
+    high_value: 127
+- path: volumes/Windchest002
+  name: 2. Hauptwerk
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 71
+    low_value: 0
+    high_value: 127
+  - event_type: ControlChange
+    channel: 12
+    key: 3
+    low_value: 0
+    high_value: 127
+- path: volumes/Windchest003
+  name: 3. Schwellwerk
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 76
+    low_value: 0
+    high_value: 127
+  - event_type: ControlChange
+    channel: 12
+    key: 4
+    low_value: 0
+    high_value: 127
+- path: volumes/Windchest004
+  name: 4. Solowerk
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 77
+    low_value: 0
+    high_value: 127
+  - event_type: ControlChange
+    channel: 12
+    key: 5
+    low_value: 0
+    high_value: 127
+- path: volumes/Windchest005
+  name: Noises
+  receive:
+  - device: 'winmm: Arturia KeyLab Ess Midi In'
+    event_type: ControlChange
+    channel: 1
+    key: 83
+    low_value: 0
+    high_value: 127
+  - event_type: ControlChange
+    channel: 12
+    key: 6
+    low_value: 0
+    high_value: 127
