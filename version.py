@@ -1,12 +1,13 @@
 """Single source of truth for the version. Bump here, tag `v<version>`, push: the release workflow does the rest.
 
 CHANGELOG
+2026-11-21  Prepare release v2.0.9-32.
 2026-11-21  Version may be X.Y.Z or X.Y.Z-N[letters] (2.0.9, 2.0.9-1, 2.0.9-1a); APP_VERSION_NUMERIC gives the four-number form Windows executables need.
 2026-11-20  Prepare release v2.0.9.
 2026-11-10  Prepare release v2.0.8.
 """
 APP_NAME = "KeyLab GrandOrgue Bridge"
-APP_VERSION = "2.0.9"              # X.Y.Z, or X.Y.Z-N with optional letters: 2.0.9-1, 2.0.9-1a, 2.0.9-2b
+APP_VERSION = "2.0.9-32"              # X.Y.Z, or X.Y.Z-N with optional letters: 2.0.9-1, 2.0.9-1a, 2.0.9-2b
 
 import re as _re
 

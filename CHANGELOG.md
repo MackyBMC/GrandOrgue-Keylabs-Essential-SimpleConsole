@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.9-32 (2026-11-21)
 
 ### Fixed
 - A setter saved by the bridge could be rejected by GrandOrgue ("Wrong name ... instead of ..."): the bridge wrote its 16-character LCD stop names. Setter files now use the full names from the organ file, and setter files already saved with cut-short names are repaired silently (folder backed up first).
