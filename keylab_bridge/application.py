@@ -1,6 +1,7 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-21  Setter files use the organ's full GrandOrgue names (not the 16-character LCD names); cut-short names in saved setters are repaired.
 2026-11-21  Saving a setter file presses GrandOrgue's RefreshFiles so a new file appears in its list; the Friesach MIDI settings yamls now carry the Sequencer/RefreshFiles route (CC 16 on ch 16), which was missing.
 2026-11-20  Setter tick: shown as soon as GrandOrgue's file/step and stops are confirmed (no wait for the baseline quiet time); the setter GrandOrgue remembered at bridge start is adopted and ticked (status "F+ S?/n": stops cannot be proven, GrandOrgue only reports changes).
 2026-11-20  Fix: the setter-name repair report is logged in start(), not __init__ (self.recent did not exist yet: AttributeError at launch when files were renamed).
@@ -113,6 +114,7 @@ from .go_settings import build_go_settings, compare_with_export, merge_settings_
 from .combination_transfer import (
     _contains_combinations, load_transfer_aliases, transfer_combinations, write_transfer_alias_template,
 )
+from . import setter_format
 from .odf_scan import compare_with_builtin, scan_odf, spec_from_profile, summarize
 from .organ_layout import ACTIVE_LAYOUT, STOP_CHANNELS
 from .tempo import TempoSession
@@ -136,6 +138,7 @@ class BridgeApp:
         self._go_tempo_target = self.tempo.bpm
         self._go_bpm = None                  # GrandOrgue metronome BPM as last known / last driven
         self._go_sent_at = 0.0
+        setter_format.use_organ_file(str(raw.get("organ_path", "")).strip().strip('"'))   # full GrandOrgue labels, before the first setter repair
         self.combinations = load_combinations(cfg_path, raw)
         self.selected_combination_index = None
         self.loaded_combination_index = None
@@ -441,6 +444,7 @@ class BridgeApp:
             return
         self.organ_path = path
         self.organ_profile = profile
+        setter_format.set_organ_profile(profile)
         self.organ_problems = compare_with_builtin(profile)
         self.organ_summary = summarize(profile, self.organ_problems)
         try:

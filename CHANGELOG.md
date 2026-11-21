@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- A setter saved by the bridge could be rejected by GrandOrgue ("Wrong name ... instead of ..."): the bridge wrote its 16-character LCD stop names. Setter files now use the full names from the organ file, and setter files already saved with cut-short names are repaired silently (folder backed up first).
+- Release versions can be `X.Y.Z` or `X.Y.Z-N` with optional letters (`2.0.9-1`, `2.0.9-1a`); the Windows executable gets a four-number file version (`2.0.9.101`) and only `-linux.N` tags are marked pre-release.
+
 ## 2.0.9 (2026-11-20)
 
 ### GrandOrgue: tempo, setters and names

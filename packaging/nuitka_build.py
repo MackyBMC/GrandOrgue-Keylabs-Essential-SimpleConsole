@@ -13,7 +13,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from version import APP_NAME, APP_VERSION  # noqa: E402
+from version import APP_NAME, APP_VERSION, APP_VERSION_NUMERIC  # noqa: E402
 
 onefile = "--onefile" in sys.argv
 args = [
@@ -23,7 +23,7 @@ args = [
     "--assume-yes-for-downloads",
     "--output-dir=" + os.path.join(ROOT, "dist"),
     "--output-filename=KeyLabGrandOrgueBridge" + (".exe" if sys.platform == "win32" else ""),
-    f"--product-name={APP_NAME}", f"--product-version={APP_VERSION}", f"--file-version={APP_VERSION}",
+    f"--product-name={APP_NAME}", f"--product-version={APP_VERSION_NUMERIC}", f"--file-version={APP_VERSION_NUMERIC}",
     "--company-name=MackyBMC",
     # the program imports its stave-editor modules by bare name: tell Nuitka about them
     "--include-package=keylab_bridge",

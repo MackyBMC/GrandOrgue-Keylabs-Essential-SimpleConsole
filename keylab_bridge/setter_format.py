@@ -23,6 +23,32 @@ STEP_CATEGORIES = ("tremulants", "switches")               # per step (organ wid
 _PADDED_KEY = re.compile(r"^\s+\d{1,2}\s*:", re.MULTILINE)
 
 
+_ODF_LABELS = {}                  # (manual number, category) -> {full label: id}, from the organ's own ODF
+
+
+def set_organ_profile(profile):
+    """Full GrandOrgue labels from the scanned organ (the layout only holds 16-character LCD names, which GrandOrgue
+    rejects: 'Wrong name "HW  Spitzflöte 4" instead of "HW  Spitzflöte 4\'"'). Idempotent; an empty profile clears them."""
+    _ODF_LABELS.clear()
+    for manual in (profile or {}).get("manuals", []):
+        number = int(manual["number"])
+        for category, key in (("switches", "switches"), ("stops", "stops"), ("couplers", "couplers")):
+            labels = _ODF_LABELS.setdefault((number, category), {})
+            for entry in manual.get(key, []):
+                label = str(entry.get("name", "")).strip()
+                if label and label not in labels:
+                    labels[label] = int(entry["index"])
+
+
+def use_organ_file(path):
+    """Read the labels straight from an .organ file (before the application has scanned it)."""
+    try:
+        from .odf_scan import scan_odf
+        set_organ_profile(scan_odf(path)) if path and os.path.isfile(path) else None
+    except (OSError, ValueError):
+        pass
+
+
 def _pad(key):
     try:
         return f"{int(str(key)):03d}"
@@ -91,6 +117,13 @@ def label_dictionary(folder, skip=()):
                 step_template = {int(k): str(v) for k, v in _entries(sequence["switches"]).items()}
     dictionary = {key: {label: next(iter(ids)) for label, ids in labels.items() if len(ids) == 1}
                   for key, labels in seen.items()}
+    for key, labels in _ODF_LABELS.items():                  # the organ's full names fill in what no intact file shows
+        target = dictionary.setdefault(key, {})
+        for label, oid in labels.items():
+            target.setdefault(label, oid)
+    for key, labels in dictionary.items():                   # a label cut short by the old bridge is not a label: drop it when the same id has a longer one
+        for label in [l for l in labels if len(l) >= 8 and any(o != l and o.startswith(l) and labels[o] == labels[l] for o in labels)]:
+            del labels[label]
     offsets = {}                                       # switch id - stop id of the same label, per manual (3 / 2 / 1 / 0 in Friesach)
     for (mid, category), labels in dictionary.items():
         if category == "switches" and mid != "step":
@@ -228,16 +261,35 @@ def write_combination_file(path, data, folder=None):
         stream.write(text)
 
 
-def damaged_files(folder):
-    """Files whose keys are not zero-padded text (written by the old bridge)."""
+def _short_labels(data, dictionary):
+    """True when an entry carries a label cut short (16-character LCD name) that the organ knows in full."""
+    for sequence in _entries(data.get("sequencer")).values():
+        if not isinstance(sequence, dict):
+            continue
+        groups = [(dictionary["ids"].get(("step", c), {}), _entries(sequence.get(c))) for c in STEP_CATEGORIES]
+        for manual_id, manual in _entries(sequence.get("manuals")).items():
+            if isinstance(manual, dict):
+                groups += [(dictionary["ids"].get((int(manual_id), c), {}), _entries(manual.get(c))) for c in CATEGORIES]
+        for known, entries in groups:
+            for oid, label in entries.items():
+                if str(label) not in known and _complete(known, label, oid) != str(label):
+                    return True
+    return False
+
+
+def damaged_files(folder, dictionary=None):
+    """Files whose keys are not zero-padded text (written by the old bridge) or whose labels were cut short."""
     found = []
     for name in sorted(os.listdir(folder), key=str.casefold):
         if name.lower().endswith((".yaml", ".yml")):
             try:
-                with open(os.path.join(folder, name), encoding="utf-8") as stream:
+                path = os.path.join(folder, name)
+                with open(path, encoding="utf-8") as stream:
                     if _PADDED_KEY.search(stream.read()):
                         found.append(name)
-            except OSError:
+                    elif dictionary is not None and dictionary["ids"] and _short_labels(_read(path), dictionary):
+                        found.append(name)
+            except (OSError, yaml.YAMLError, ValueError):
                 pass
     return found
 
@@ -247,11 +299,11 @@ def repair_folder_format(folder, log=None):
     result = {"repaired": [], "backup": ""}
     if not os.path.isdir(folder):
         return result
-    damaged = damaged_files(folder)
+    dictionary = label_dictionary(folder)
+    damaged = damaged_files(folder, dictionary)
     if not damaged:
         return result
     log = log or (lambda text: None)
-    dictionary = label_dictionary(folder)
     if not dictionary["ids"]:
         log("Setter repair skipped: no intact setter file to learn the ids from")
         return result
