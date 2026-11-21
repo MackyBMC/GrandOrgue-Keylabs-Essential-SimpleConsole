@@ -1,6 +1,7 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-21  Saving a setter file presses GrandOrgue's RefreshFiles so a new file appears in its list; the Friesach MIDI settings yamls now carry the Sequencer/RefreshFiles route (CC 16 on ch 16), which was missing.
 2026-11-20  Setter tick: shown as soon as GrandOrgue's file/step and stops are confirmed (no wait for the baseline quiet time); the setter GrandOrgue remembered at bridge start is adopted and ticked (status "F+ S?/n": stops cannot be proven, GrandOrgue only reports changes).
 2026-11-20  Fix: the setter-name repair report is logged in start(), not __init__ (self.recent did not exist yet: AttributeError at launch when files were renamed).
 2026-11-20  Setter names matrix: snapshot combinations carry "file_names" (display by language); a silent setter-name repair is reported once in the log.
@@ -1057,6 +1058,7 @@ class BridgeApp:
         except OSError as exc:
             self.log(f"Could not update setter: {exc}", level="ERROR")
             return
+        self.emit(self.br._press("refresh_files"))         # GrandOrgue re-reads its setter file list
         self.combinations = load_combinations(self.cfg_path, self.raw)
         saved_index = next(
             (index for index, preset in enumerate(self.combinations)
@@ -1158,6 +1160,7 @@ class BridgeApp:
         except OSError as exc:
             self.log(f"Could not save setter: {exc}", level="ERROR")
             return
+        self.emit(self.br._press("refresh_files"))         # a new file must show up in GrandOrgue's list
         self.combinations = load_combinations(self.cfg_path, self.raw)
         self.selected_combination_index = next(
             (index for index, preset in enumerate(self.combinations)

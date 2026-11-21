@@ -1,10 +1,24 @@
 # Changelog
 
 ## 2.0.9 (2026-11-20)
+
+### GrandOrgue: tempo, setters and names
+- One session BPM for everything (default 80 like GrandOrgue, range 1-500): the bridge, Stave Station, Piano Roll and the GrandOrgue metronome follow it. The metronome is driven through GrandOrgue's own BPM +1/-1/+10/-10 buttons; the MIDI file player shows whether GrandOrgue's BPM is in sync. New takes are stamped with the BPM they were recorded at, so they play back at the speed you played them.
+- The GrandOrgue metronome BPM label path is "Metronome/Metronome BPM" (the Friesach MIDI settings were updated; re-import them in GrandOrgue).
+- Setter tick you can trust: a setter is ticked only when GrandOrgue itself reports the same file and step and every stop the setter switches on. The tick appears as soon as that is confirmed, and the setter GrandOrgue remembered is ticked when the bridge starts ("F+ S?/n": file/step proven, stops assumed, because GrandOrgue only reports changes).
+- Setter list "Status" column in short hand: "F+ S5/7" (F+ file/step confirmed, F? settling or cued, Fx another file/step; S = stops confirmed ON of those the setter switches on); the tooltip names the stops not confirmed. The console says why a setter is not verified.
+- Setter files are read with decimal ids (PyYAML's octal reading turned 010 into 8 and 011 into 9) and compared with GrandOrgue's 7-bit, 32-character file label (accents become "_", so "Récit doux" matched nothing).
+- Names matrix (`Settings/<organ>.names.yaml`): every setter file gets a GrandOrgue-safe ASCII name of at most 32 characters while the nice, multilingual display names live in the matrix. Older setter folders are repaired silently on load (renamed files, original names kept as aliases, folder backed up to `Combinations/_backup/`); saved MIDI markers and projects that name an old file follow the rename.
+- Setter file format: files are written the way GrandOrgue writes them (zero-padded text keys, every step complete, Blower / Ambient, switch entries next to stop entries). Files the older bridge saved in a broken format are rebuilt by label, silently, with a backup.
+- GrandOrgue sorts its setter files case-sensitively; the bridge now uses the same order, so jumping to a setter after a rename lands on the right file.
+- GrandOrgue MIDI settings are read with leading-zero paths kept as text ("047" no longer becomes 39), which fixed the "Unused MIDI object path" warnings and the unconfirmed Tremulant 2 / 3 Man items.
+- Saving a setter presses GrandOrgue's RefreshFiles so a new file appears in its list. The Friesach MIDI settings carry the Sequencer/RefreshFiles route (CC 16, channel 16); re-import them in GrandOrgue.
 - Selecting a setter refreshes GrandOrgue's cached combination-file list before loading it.
 - Record-button MIDI takes now capture and use the session BPM when recording starts.
 - Type the optional GrandOrgue metronome BPM feedback value.
 - File > "Export for GrandOrgue (native MIDI)...": writes the loaded MIDI (with stave / roll edits, setters and registrations) as a GrandOrgue-format recording whose stop on / off events are inside the file, so GrandOrgue's own MIDI player switches the stops without the bridge.
+
+### New
 - Pylance fixes in Stave Station MusicXML parsing: optional stave fields, Score/Part/Opus narrowing, and explicit Note/Chord handling.
 - Shared MIDI transport Play / Pause now resumes from the saved file position; Stop rewinds and the Stave / Piano Roll edited-score controls use the same pause state.
 - Registration bank: pads scale with the text and stay centred; the marks are gone; the bank is a list; Cat/Char starts the jog on it (then on to the Active registrations, buttons and tick boxes, cycling); click an active registration to switch it off, again to switch it on.
@@ -12,10 +26,10 @@
 - Fluid columns in every list/table; Ctrl+M toggles the Mixer reliably (Piano Roll import is Ctrl+Shift+I); sheet music folders of page images convert to a PDF.
 - Docked LCD height is fluid: it shares the window height with the tabs and shrinks with the window (minimum 90 px instead of 260).
 - Help > Licenses shows the full THIRD_PARTY_NOTICES.md inside the app; Help > About carries the visible Verovio / Qt / music21 credits.
-
-## Unreleased
-
-### New
+- Recording a MIDI that has unsaved stave / piano-roll edits asks first: Save edited MIDI / Don't save / Cancel. Recording shows as a red "Recording..." on every transport, and the controller's record button starts it.
+- "Quantised" toggle on every transport (one shared setting, the stave's "Play what the stave shows"): Play on a MIDI with note edits plays the stave version (on) or the notes as played (off); unedited files still play the file itself.
+- A small piano roll of the loaded MIDI (colour = MIDI channel) shows under "Loaded: <name>" in the MIDI player; double-click opens it in the Piano Roll tab.
+- Stop Selection Grid popup stays inside the screen and no longer overshoots (fixes the endless setGeometry warnings).
 - VS Code task "11. Answer Claude chat questions" launches the dev-only Claude question-answering tool with the repository's build virtual environment.
 - Stave Station project file (`.ss`, plain YAML) saved next to the MIDI as you work: every setting, bar lines and per-bar grids, track / manual mapping, setters, division labels, pedal marks, words and (only if you edited them) the piano-roll notes. Reopening the MIDI or the `.ss` brings it all back. The MIDI is linked (relative path, absolute path, size, SHA-1), never changed. Open project... / Save project as... in the Recording box. Words moved from `<file>.lyrics.json` into the project (old files are still read).
 
