@@ -137,6 +137,9 @@ def repair_folder(folder, matrix_file, organ="", log=None):
     backup = os.path.join(parent, "_backup", f"{os.path.basename(os.path.abspath(folder))}-{stamp}")
     try:
         os.makedirs(os.path.dirname(backup), exist_ok=True)
+        original, counter = backup, 2
+        while os.path.exists(backup):                   # a second repair within the same second
+            backup, counter = f"{original}-{counter}", counter + 1
         shutil.copytree(folder, backup)
         result["backup"] = backup
     except OSError as exc:

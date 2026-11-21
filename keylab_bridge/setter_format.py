@@ -134,7 +134,8 @@ def label_dictionary(folder, skip=()):
                     counts[switch_id - stop_id] = counts.get(switch_id - stop_id, 0) + 1
             if counts:
                 offsets[mid] = max(counts, key=lambda k: counts[k])
-    return {"ids": dictionary, "manual_names": manual_names, "info": info, "step_switches": step_template, "offsets": offsets}
+    by_id = {key: {oid: label for label, oid in labels.items()} for key, labels in _ODF_LABELS.items()}
+    return {"by_id": by_id, "ids": dictionary, "manual_names": manual_names, "info": info, "step_switches": step_template, "offsets": offsets}
 
 
 def _always_on(dictionary, mid, category="stops"):
@@ -194,6 +195,9 @@ def _repair_step(sequence, dictionary, add_missing=True):
                     fixed["switches"].setdefault(known_switches[label], label)
                 elif mid in dictionary.get("offsets", {}):
                     fixed["switches"].setdefault(stop_id + dictionary["offsets"][mid], label)
+        for category in CATEGORIES:                                 # GrandOrgue checks every entry against the organ's own name for that id
+            names = dictionary.get("by_id", {}).get((mid, category), {})
+            fixed[category] = {oid: names.get(oid, label) for oid, label in fixed[category].items()}
         entry = {}
         name = manual.get("name") or dictionary["manual_names"].get(mid)
         if name:
@@ -255,24 +259,27 @@ def write_combination_file(path, data, folder=None):
     try:
         dictionary = label_dictionary(folder, skip=(os.path.basename(path),))
     except OSError:
-        dictionary = {"ids": {}, "manual_names": {}, "info": {}, "step_switches": {}, "offsets": {}}
+        dictionary = {"ids": {}, "manual_names": {}, "info": {}, "step_switches": {}, "offsets": {}, "by_id": {}}
     text = dump_text(canonical_data(data, dictionary))
     with open(path, "w", encoding="utf-8", newline="\n") as stream:
         stream.write(text)
 
 
 def _short_labels(data, dictionary):
-    """True when an entry carries a label cut short (16-character LCD name) that the organ knows in full."""
+    """True when an entry carries a label GrandOrgue would reject: cut short (16-character LCD name) or not the organ's name for that id."""
     for sequence in _entries(data.get("sequencer")).values():
         if not isinstance(sequence, dict):
             continue
-        groups = [(dictionary["ids"].get(("step", c), {}), _entries(sequence.get(c))) for c in STEP_CATEGORIES]
+        groups = [(dictionary["ids"].get(("step", c), {}), _entries(sequence.get(c)), {}) for c in STEP_CATEGORIES]
         for manual_id, manual in _entries(sequence.get("manuals")).items():
             if isinstance(manual, dict):
-                groups += [(dictionary["ids"].get((int(manual_id), c), {}), _entries(manual.get(c))) for c in CATEGORIES]
-        for known, entries in groups:
+                groups += [(dictionary["ids"].get((int(manual_id), c), {}), _entries(manual.get(c)),
+                            dictionary.get("by_id", {}).get((int(manual_id), c), {})) for c in CATEGORIES]
+        for known, entries, by_id in groups:
             for oid, label in entries.items():
                 if str(label) not in known and _complete(known, label, oid) != str(label):
+                    return True
+                if by_id.get(int(oid), str(label)) != str(label):
                     return True
     return False
 
@@ -312,6 +319,9 @@ def repair_folder_format(folder, log=None):
                           f"{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}")
     try:
         os.makedirs(os.path.dirname(backup), exist_ok=True)
+        original, counter = backup, 2
+        while os.path.exists(backup):                   # a second repair within the same second
+            backup, counter = f"{original}-{counter}", counter + 1
         shutil.copytree(folder, backup)
         result["backup"] = backup
     except OSError as exc:

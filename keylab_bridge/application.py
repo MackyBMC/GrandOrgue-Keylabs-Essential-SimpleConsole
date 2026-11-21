@@ -1,6 +1,7 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-21  Snapshot "busy": what the bridge is waiting for (GrandOrgue still loading, loading a setter, confirming), shown with an animation in the setter list header.
 2026-11-21  Setter files use the organ's full GrandOrgue names (not the 16-character LCD names); cut-short names in saved setters are repaired.
 2026-11-21  Saving a setter file presses GrandOrgue's RefreshFiles so a new file appears in its list; the Friesach MIDI settings yamls now carry the Sequencer/RefreshFiles route (CC 16 on ch 16), which was missing.
 2026-11-20  Setter tick: shown as soon as GrandOrgue's file/step and stops are confirmed (no wait for the baseline quiet time); the setter GrandOrgue remembered at bridge start is adopted and ticked (status "F+ S?/n": stops cannot be proven, GrandOrgue only reports changes).
@@ -964,6 +965,19 @@ class BridgeApp:
             return ""
         flag = {"ok": "F+", "settling": "F?", "cued": "F?", "mismatch": "Fx"}[state]
         return f"{flag} S{'?' if status.get('assumed') else status['confirmed']}/{status['total']}"
+
+    def _busy_text(self):
+        """What the bridge is waiting for, in plain words ("" = nothing): shown with an animation in the setter list header."""
+        if not self.combinations:
+            return ""
+        if not str(self.br.text).strip() and self.loaded_combination_index is None:
+            return "Waiting for GrandOrgue to report its setter (still loading the organ?)"
+        state = self._combination_status()["state"]
+        if time.time() < getattr(self, "_activation_until", 0.0):
+            return "Loading setter..."
+        if state == "settling":
+            return "Confirming with GrandOrgue..."
+        return ""
 
     def _combination_unproven(self):
         """What is still unproven about the loaded setter, as a list of short reasons ([] = verified).
@@ -1939,6 +1953,7 @@ class BridgeApp:
             "active_combination_status": dict(self._combination_status(), text=self._status_text(self._combination_status())),
             "active_combination_pending": self._combination_unproven() if active_combination_index is not None else [],
             "active_combination_verified": active_combination_index is not None and not self._combination_unproven(),
+            "busy": self._busy_text(),
             "internal_position": br.pos.strip(),
             "go_setter_feedback": {"text": br.text.strip(), "pos": br.pos.strip(),
                                    "matched": self._combination_index_from_feedback()},

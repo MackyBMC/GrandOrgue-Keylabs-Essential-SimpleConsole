@@ -1,6 +1,7 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-21  Setter list header shows an animated hourglass and what the bridge is waiting for (snapshot "busy").
 2026-11-20  Setter list shows the setter file's display name from the names matrix (language, then default) instead of the raw file stem.
 2026-11-20  Setter list: Status column (short hand "F+ S5/7": F+ GrandOrgue shows this file/step, F? settling / cued, Fx another file/step; S = stops confirmed ON / stops the setter switches on); tooltip names the unconfirmed stops.
 2026-11-20  Setter list: a loaded-but-unconfirmed setter shows "..." in the Active column (the partial tick was invisible in the dark theme).
@@ -1620,6 +1621,9 @@ class BridgeWindow(QMainWindow):
         self.main_tabs.addTab(live_scroll, "Live / Main")
 
         self.setter_box = QGroupBox()
+        self._busy_text = ""
+        self._busy_frame = 0
+        self._busy_timer: QTimer | None = None
         setter_layout = QVBoxLayout(self.setter_box)
         self._text_labels["presets"] = QLabel()
         setter_layout.addWidget(self._text_labels["presets"])
@@ -2129,6 +2133,35 @@ class BridgeWindow(QMainWindow):
         else:
             self._active_ghosts[cc] = item.text()
         self.bridge.post_ui_event("toggle_item", cc)
+
+    def _set_busy(self, text):
+        """Setter list header: an animated hourglass and what the bridge is waiting for; the plain title when idle."""
+        self._busy_text = text
+        timer = self._busy_timer
+        if text and timer is None:
+            timer = self._busy_timer = QTimer(self)
+            timer.setInterval(250)
+            timer.timeout.connect(self._busy_tick)
+        if text and timer is not None and not timer.isActive():
+            self._busy_frame = 0
+            timer.start()
+        if not text and timer is not None and timer.isActive():
+            timer.stop()
+        self._busy_tick()
+
+    def _busy_tick(self):
+        header = self.combination_list.headerItem()
+        if header is None:
+            return
+        text = self._busy_text
+        if not text:
+            header.setText(0, "Setter combination / focused step")
+            header.setToolTip(0, "")
+            return
+        frames = "\u231b\u23f3"
+        self._busy_frame += 1
+        header.setText(0, f"{frames[self._busy_frame % 2]} {text}")
+        header.setToolTip(0, text)
 
     def _combination_selected(self):
         items = self.combination_list.selectedItems()
@@ -3569,6 +3602,7 @@ class BridgeWindow(QMainWindow):
         signature = tuple((item["filename"], item["internal_id"], item["name"])
                           for item in snapshot["combinations"])
         self._combination_snapshot = list(snapshot["combinations"])
+        self._set_busy(str(snapshot.get("busy") or ""))
         self._available_stops = list(snapshot.get("available_stops", []))
         self._active_stop_paths = list(snapshot.get("active_stop_paths", []))
         self._sync_stop_grid_popup(snapshot)
