@@ -2174,6 +2174,8 @@ class BridgeWindow(QMainWindow):
             page_layout.setContentsMargins(0, 0, 0, 0)
             self._tab_pages[key] = (page, page_layout)
             self.top_tabs.addTab(page, title)
+        from record_center import RecordCenter
+        self.record_center = RecordCenter(self.bridge)
         self.top_tabs.currentChanged.connect(self._on_top_tab)
         self.setCentralWidget(self.top_tabs)
         self._build_menus()
@@ -3815,6 +3817,10 @@ class BridgeWindow(QMainWindow):
                 placeholder.deleteLater()
             widget.setWindowFlags(Qt.WindowType.Widget)
             page_layout.addWidget(widget)
+            if key == "roll" and getattr(self, "record_center", None) is not None and not hasattr(widget, "_record_dock"):
+                from dock_helper import dock_in
+                setattr(widget, "_record_dock", dock_in(widget, self.record_center, "Record center", "dockRecord",
+                                                         Qt.DockWidgetArea.BottomDockWidgetArea, "roll"))
         widget.show()
         self.top_tabs.blockSignals(True)
         self.top_tabs.setCurrentWidget(page)

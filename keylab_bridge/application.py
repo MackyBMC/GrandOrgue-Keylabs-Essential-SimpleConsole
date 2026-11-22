@@ -163,6 +163,15 @@ class BridgeApp:
         self.midi_dir = midi_dir
         self._voice_regs = {}                   # manual name -> (setter file, step, name) from REG markers during playback
         self.midi_rec = None                    # explicit Record-button session
+        self.record_input = "live"             # Record center: "live" or "step"
+        self.record_target = "new"             # "new" file or a new "part" in the loaded MIDI
+        self.record_step_beats = 1.0
+        self._part_base = ""
+        self.rec_lcd_done = (0.0, "", "")       # (until, line 1, line 2) of the "REC stopped" message on the LCD
+        self.record_count_beats = 0            # count-in before a take: 0, 4 or 8 beats
+        self.count_in_end = 0.0                # wall clock the running count-in ends (0 = none)
+        self._count_done = False
+        self._count_metro_on = False
         self.before_record = None               # GUI hook: called before a new recording starts; returns False to cancel (unsaved edits)
         self.take_to_play = None
         self.take_length, self.take_info = 0.0, ""                # last recorded take: the next Play button press plays it
@@ -1574,6 +1583,28 @@ class BridgeApp:
                 self.toggle_take_playback()
             else:
                 self.post_ui_event("transport", "play")
+        elif event == "take_play_file":
+            path = str(value)
+            if self.take_player.active and self.take_to_play and os.path.normcase(os.path.abspath(path)) == os.path.normcase(os.path.abspath(self.take_to_play)):
+                self.take_player.stop()
+                self.log("Playback stopped", notify=False)
+            elif os.path.isfile(path):
+                self.set_take(path)
+                self.take_player.stop()
+                self._start_take(path)
+        elif event == "record":
+            self.toggle_record()
+        elif event == "record_options" and isinstance(value, dict):
+            self.record_input = "step" if value.get("input") == "step" else "live"
+            self.record_target = "part" if value.get("target") == "part" else "new"
+            self.record_step_beats = max(0.0625, float(value.get("step", 1.0) or 1.0))
+            self.record_count_beats = max(0, min(16, int(value.get("count", 0) or 0)))
+            if hasattr(self.midi_rec, "step_beats"):
+                setattr(self.midi_rec, "step_beats", self.record_step_beats)
+        elif event in ("step_rest", "step_back"):
+            action = getattr(self.midi_rec, "rest" if event == "step_rest" else "back", None)
+            if callable(action):
+                action()
         elif event == "take_open":
             self.set_take(str(value))
         elif event == "take_saveas":
@@ -1611,10 +1642,13 @@ class BridgeApp:
     def toggle_record(self, now=None):
         """Record button: first press starts a take, second saves it into the midi folder in two versions:
         'Take ....mid' (GrandOrgue: exactly as played) and 'Take .... (stave).mid' (Stave Friendly: bars straightened)."""
-        from .take_recorder import make_midi_recorder, write_stave_friendly
+        from .take_recorder import make_midi_recorder, merge_part, write_stave_friendly
         now = time.time() if now is None else now
         if self.midi_rec is None:
-            hook = self.before_record
+            if self.count_in_end:                       # Record pressed during the count-in: cancel it
+                self._cancel_count_in()
+                return
+            hook = None if self._count_done else self.before_record
             if hook is not None:
                 try:
                     if hook() is False:
@@ -1622,10 +1656,19 @@ class BridgeApp:
                         return
                 except Exception as exc:
                     self.log(f"before-record check failed: {exc}", notify=False)
+            if self.record_count_beats > 0 and not self._count_done:
+                self._start_count_in(now)
+                return
             if self.recorder is not None:
                 self.recorder.close()
             self.take_player.stop()
-            self.midi_rec = make_midi_recorder(self.midi_dir, log=lambda t, **k: self.log(t, notify=False))
+            self.midi_rec = make_midi_recorder(self.midi_dir, log=lambda t, **k: self.log(t, notify=False), mode=self.record_input)
+            if hasattr(self.midi_rec, "step_beats"):
+                setattr(self.midi_rec, "step_beats", self.record_step_beats)
+            base = self.take_to_play if self.record_target == "part" else ""
+            self._part_base = base if base and os.path.isfile(base) and not os.path.basename(base).startswith("_preview") else ""
+            if self.record_target == "part" and not self._part_base:
+                self.log("No MIDI is loaded: recording a new file")
             self.midi_rec.bpm_source = lambda: self.tempo.bpm
             self.midi_rec._begin(now)
             if self.midi_rec.path is not None:
@@ -1635,10 +1678,28 @@ class BridgeApp:
                 start = self._combination_index_from_feedback()
             self.record_setter(start if start is not None else -1)
             self.log("Recording started (Record button again to stop)")
+            if self._part_base and self.record_input == "live":
+                self.toggle_take_playback()            # the loaded MIDI plays along while the new part is played
             return
         rec, self.midi_rec = self.midi_rec, None
         path = rec.path
         rec.close()
+        self.rec_lcd_done = (time.time() + 3.0, "REC stopped", os.path.splitext(os.path.basename(path or ""))[0][-16:])
+        base, self._part_base = self._part_base, ""
+        if base:
+            self.take_player.stop()
+        if base and path and os.path.isfile(base) and os.path.isfile(path):
+            stem = re.sub(r" \+part \d+$", "", os.path.splitext(os.path.basename(base))[0])
+            number = 1
+            while os.path.exists(os.path.join(os.path.dirname(base), f"{stem} +part {number}.mid")):
+                number += 1
+            merged = os.path.join(os.path.dirname(base), f"{stem} +part {number}.mid")
+            channel = merge_part(base, path, merged)
+            if channel:
+                self.set_take(merged)
+                self.log(f"New part saved on channel {channel}: {os.path.basename(merged)} (the recording itself is kept too)")
+                return
+            self.log("The part could not be added to the loaded MIDI; the recording is kept as its own file")
         if path and os.path.isfile(path):
             stave = path[:-4] + " (stave).mid"
             ok = write_stave_friendly(path, stave, self.tempo.bpm)
@@ -1647,6 +1708,54 @@ class BridgeApp:
                      + ". Press Play to hear it through GrandOrgue.")
         else:
             self.log("Recording was empty and not kept")
+
+    def _rec_lcd(self, now):
+        """The recording state on the KeyLab LCD and the LCD in the window (the floating LCD reads the transport state)."""
+        rec = self.midi_rec
+        lines = None
+        if self.count_in_end:
+            lines = (f"COUNT-IN {int(max(0.0, self.count_in_end - now)) + 1}", "Record: cancel")
+        elif rec is not None:
+            started = getattr(rec, "started", None)
+            elapsed = int(max(0.0, now - float(started))) if started else 0
+            mode = " STEP" if hasattr(rec, "cursor") else (" PART" if self._part_base else "")
+            lines = (f"REC {elapsed // 60}:{elapsed % 60:02d}{mode}", f"{int(getattr(rec, 'notes', 0))} notes")
+        elif self.rec_lcd_done[0] > now:
+            lines = (self.rec_lcd_done[1][:16], self.rec_lcd_done[2][:16])
+        if lines != self.br.override_lines:
+            self.br.override_lines = lines
+            self.br.dirty = True
+
+    def _count_metro(self, on):
+        br = self.br
+        current = br.metro_lit if br.metro_target is None else br.metro_target
+        if bool(current) != on:
+            self.emit(br.toggle_metro())
+        return bool(current)
+
+    def _start_count_in(self, now):
+        bpm = max(1.0, float(self.tempo.bpm))
+        self.count_in_end = now + self.record_count_beats * 60.0 / bpm
+        self._count_metro_on = not self._count_metro(True)
+        self.log(f"Count-in: {self.record_count_beats} beats at {bpm:.0f} BPM (Record again to cancel)")
+
+    def _cancel_count_in(self):
+        self.count_in_end = 0.0
+        if self._count_metro_on:
+            self._count_metro(False)
+        self._count_metro_on = False
+        self.log("Count-in cancelled")
+
+    def _finish_count_in(self, now):
+        self.count_in_end = 0.0
+        if self._count_metro_on:
+            self._count_metro(False)
+        self._count_metro_on = False
+        self._count_done = True
+        try:
+            self.toggle_record(now)
+        finally:
+            self._count_done = False
 
     def apply_setter_marker(self, text):
         """Markers from a playing MIDI file. SETTER|file|step|name: put the organ on that file + step (000-0xx).
@@ -1912,6 +2021,10 @@ class BridgeApp:
                      "Buttons such as Part 1/Part 2 will not be recognised. Switch the keyboard back to Mackie Control "
                      "(Map Select / DAW mode setting, see KeyLab_GrandOrgue_HardwareSettings.md). Encoders are accepted "
                      "in HUI form as a stopgap.", level="WARN")
+        if (message.type == "note_on" and message.channel == 0 and message.velocity > 0 and message.note == N_STOP
+                and (self.midi_rec is not None or self.count_in_end)):
+            self.toggle_record(now)                  # Stop ends a recording / cancels the count-in
+            return
         if getattr(self.br, "daw_trace", False):
             channel = f"ch{message.channel + 1}" if hasattr(message, "channel") else "-"
             self.pad_trace_sink(f"DAW  {message.type:<15} {channel:>4} {' '.join(f'{b:02X}' for b in message.bytes())}")
@@ -2385,6 +2498,8 @@ class BridgeApp:
             "go_playing": bool(br.play_lit), "go_paused": bool(br.pause_lit),
             "loop": bool(br.loop), "metro_on": bool(br.metro_lit),
             "recording": rec is not None,
+            "count_in": max(0.0, self.count_in_end - time.time()) if self.count_in_end else 0.0,
+            "rec_mode": (("step" if hasattr(rec, "cursor") else ("part" if self._part_base else "live")) if rec is not None else ""),
             "rec_started": started, "rec_notes": int(getattr(rec, "notes", 0)) if rec is not None else 0,
             "rec_file": os.path.basename(getattr(rec, "path", "") or "") if rec is not None else "",
             "now": time.time(),
@@ -2806,6 +2921,9 @@ class BridgeApp:
                 now = time.time()
                 self.poll_midi(now)
                 self.emit(self.br.tick(now))
+                if self.count_in_end and now >= self.count_in_end:
+                    self._finish_count_in(now)
+                self._rec_lcd(now)
                 if self.midi_rec is not None:
                     self.midi_rec.poll(now)
                 elif self.recorder is not None:

@@ -297,6 +297,7 @@ class Bridge:
         self.play_start_pending_until = None
         self.pending_sequence_steps = 0
         self.play_lit = self.pause_lit = self.metro_lit = False
+        self.override_lines: tuple[str, str] | None = None     # LCD lines that replace the idle status (recording state)
         self.dirty = True
         self.last_activity = None
         self.last_kl = 0.0                    # time of the last message of any kind to the keyboard
@@ -808,6 +809,8 @@ class Bridge:
 
     # ---------------------------------------------------------------- display
     def _idle_lines(self):
+        if self.override_lines is not None:
+            return self.override_lines
         if self.menu_shows:
             page = MENU_PAGES[self.menu_tab]
             header = "Control Nav" if self.menu_override else f"{self.menu_tab}/{len(MENU_PAGES) - 1} {page['abbr']}"

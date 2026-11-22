@@ -184,9 +184,103 @@ class TakeRecorder:
             self.log(f"Take save failed: {exc}")
 
 
+# ---------------------------------------------------------------------- step-by-step recording and extra parts (Record Center)
+class StepRecorder(TakeRecorder):
+    """Step-by-step input: the chord held on the keyboard is written at the cursor with the chosen step length when the keys are
+    released, then the cursor moves on. rest() skips a step, back() takes the last chord (or rest) away again."""
+
+    def __init__(self, folder, gap=1e12, min_notes=1, autosave=10, log=None):
+        super().__init__(folder, gap=gap, min_notes=min_notes, autosave=autosave, log=log)
+        self.step_beats = 1.0                 # length of one step in quarter-note beats (1.0 = quarter, 0.5 = eighth ...)
+        self.cursor = 0.0                     # seconds from the start of the take
+        self.pressed = {}                     # note -> velocity of the chord being played
+        self.down = set()                     # keys held right now
+        self.stack = []                       # (events, cursor, notes) before each step, for back()
+
+    def step_seconds(self):
+        return max(0.01, self.step_beats * 60.0 / max(1.0, self.take_bpm))
+
+    def feed(self, message, now):
+        kind = getattr(message, "type", "")
+        if kind not in ("note_on", "note_off") or message.channel != 0 or self.started is None:
+            return
+        self.last_activity = now
+        if kind == "note_on" and message.velocity > 0:
+            self.pressed[message.note] = message.velocity
+            self.down.add(message.note)
+        else:
+            self.down.discard(message.note)
+            if self.pressed and not self.down:
+                self._commit()                      # the last key of the chord came up
+
+    def _commit(self):
+        length = self.step_seconds()
+        self.stack.append((len(self.events), self.cursor, self.notes))
+        for note, velocity in sorted(self.pressed.items()):
+            self.events.append((self.cursor, "on", note, velocity))
+            self.events.append((self.cursor + length * 0.92, "off", note, 0))
+            self.notes += 1
+        self.cursor += length
+        self.pressed = {}
+        self.down = set()
+        self.dirty = True
+
+    def rest(self):
+        self.stack.append((len(self.events), self.cursor, self.notes))
+        self.cursor += self.step_seconds()
+
+    def back(self):
+        if self.stack:
+            count, self.cursor, self.notes = self.stack.pop()
+            del self.events[count:]
+            self.pressed = {}
+            self.down = set()
+            self.dirty = True
+
+
+def merge_part(base_path, part_path, out_path):
+    """The recorded take as a new track (and the next free channel) of the base MIDI file; written to out_path. Returns the channel
+    used (1-16) or 0 when it could not be done. Times follow the base file's own tempo map in ticks, so a take recorded at the session
+    tempo lines up when the base plays at that tempo."""
+    try:
+        import mido
+        base = mido.MidiFile(base_path)
+        part = mido.MidiFile(part_path)
+        used = {m.channel for track in base.tracks for m in track if hasattr(m, "channel")}
+        free = [c for c in range(16) if c != 9 and c not in used]
+        channel = free[0] if free else 0
+        scale = base.ticks_per_beat / float(part.ticks_per_beat or 480)
+        names = [m.name for track in base.tracks for m in track if m.type == "track_name"]
+        track = mido.MidiTrack()
+        track.append(mido.MetaMessage("track_name", name=f"Part {sum(1 for n in names if str(n).startswith('Part ')) + 1}", time=0))
+        absolute_in = absolute_out = 0
+        for track_in in part.tracks:
+            absolute_in = absolute_out = 0
+            for message in track_in:
+                absolute_in += message.time
+                if message.type in ("set_tempo", "track_name", "end_of_track", "time_signature"):
+                    continue
+                tick = int(round(absolute_in * scale))
+                copy = message.copy(time=tick - absolute_out)
+                absolute_out = tick
+                if hasattr(copy, "channel"):
+                    copy = copy.copy(channel=channel)
+                track.append(copy)
+        track.append(mido.MetaMessage("end_of_track", time=0))
+        if base.type == 0:
+            base.type = 1
+        base.tracks.append(track)
+        base.save(out_path)
+        return channel + 1
+    except Exception:
+        return 0
+
+
 # ---------------------------------------------------------------------- explicit recording (Record button)
-def make_midi_recorder(folder, log=None):
-    """Explicit recorder for the Record button: starts at once, never ends on silence, keeps even a short take."""
+def make_midi_recorder(folder, log=None, mode="live"):
+    """Explicit recorder for the Record button: starts at once, never ends on silence, keeps even a short take. mode "step" = step-by-step."""
+    if mode == "step":
+        return StepRecorder(folder, log=log)
     return TakeRecorder(folder, gap=1e12, min_notes=1, autosave=10, log=log)
 
 

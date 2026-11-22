@@ -191,7 +191,7 @@ class LcdFloat(QWidget):
             self._analyse()
             moving = True
         t = self.snap.get("transport") or {}
-        if moving or t.get("recording") or t.get("metro_on") or t.get("take_playing") or self.show_["transport"] \
+        if moving or t.get("recording") or t.get("count_in") or t.get("metro_on") or t.get("take_playing") or self.show_["transport"] \
                 or self.snap.get("cue_diff") or self.snap.get("manual_diff") or getattr(self, "_marquee_on", False):
             self.update()
 
@@ -309,14 +309,22 @@ class LcdFloat(QWidget):
             cx += small * 1.9
             self._text(p, cx, y, small * 5, row_h, "PLAY" if playing else ("PAUSE" if paused else "STOP"))
             cx += small * 5.6
-            rec = t.get("recording")
+            counting = float(t.get("count_in") or 0.0)
+            rec = t.get("recording") or counting > 0
             blink = rec and int(now * 2) % 2 == 0
             p.setPen(QPen(ink if rec else dim, 1)); p.setBrush(QBrush(ink if blink else Qt.BrushStyle.NoBrush))
             p.drawEllipse(r.translated(cx - x, 0))
             cx += small * 1.6
             p.setPen(QPen(ink if rec else dim, 1))
-            self._text(p, cx, y, small * 7, row_h, ("REC " + fmt_clock(now - t["rec_started"]) if rec and t.get("rec_started") else "REC") if rec else "REC")
-            cx += small * 9
+            tag = {"step": " STEP", "part": " PART"}.get(str(t.get("rec_mode") or ""), "")
+            if counting > 0:
+                label = f"COUNT {int(counting) + 1}"
+            elif rec and t.get("rec_started"):
+                label = "REC " + fmt_clock(now - t["rec_started"]) + tag
+            else:
+                label = "REC"
+            self._text(p, cx, y, small * 9, row_h, label)
+            cx += small * 10
             loop = t.get("loop")
             p.setPen(QPen(ink if loop else dim, 1.4)); self._icon_loop(p, r.translated(cx - x, 0).adjusted(0, -1, 2, 1))
             cx += small * 2.2

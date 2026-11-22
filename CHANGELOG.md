@@ -3,6 +3,9 @@
 ## 2.0.9-32 (2026-11-21)
 
 ### New
+- Record center: a selected take is plotted above the list (each channel / part in its own colour, play position) and a finished take is selected for checking. The KeyLab LCD, the LCD in the window and the floating LCD all show the recording state (REC time, notes, STEP / PART, COUNT-IN, REC stopped); the KeyLab Stop button ends a recording or cancels the count-in.
+- Piano Roll: the Record center is a dock (drag, float, resize, close; View menu brings it back; layout remembered), has a count-in (1 or 2 bars of metronome clicks) and Play / Stop for a listed take. dock_helper.dock_in() is the standard way to dock a panel.
+- Piano Roll: Record center under the roll - Record / Stop, a live plot of the running take, step-by-step input (Rest / Back), new parts added to the loaded MIDI on the next free channel (a live part plays the loaded MIDI along) and a list of takes (open, play, rename, delete to _trash). One record engine: the same one as the KeyLab Record key.
 - Organ Setter Wiki: "Apply to organ" draws the stops of the edited step on the live organ (only stops that differ are toggled) so it can be heard before saving.
 - Organ Setter Wiki: the empty PAD MAP strip is hidden above the stop editor.
 - Copyright: Basil Mc Helm is named as the copyright holder in LICENSE, Help > About, the README, the Windows executable properties and the installer publisher.
