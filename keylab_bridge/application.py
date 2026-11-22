@@ -1495,6 +1495,14 @@ class BridgeApp:
             self.br.set_menu_tab(int(value))
         elif event == "toggle_switch":
             self.emit(self.br.toggle_cc(int(value), time.time()))
+        elif event == "apply_paths":
+            wanted = set(value or ())
+            changed = 0
+            for item in self.br.stop_grid.items:
+                if bool(self.br.state.get(item.cc)) != (item.path in wanted):
+                    self.emit(self.br.toggle_cc(item.cc, time.time()))
+                    changed += 1
+            self.log(f"Wiki: applied a step to the organ ({changed} stops changed)", notify=False)
         elif event == "toggle_grid_switch":
             item = next((item for item in self.br.stop_grid.items if item.path == value), None)
             if item is not None:

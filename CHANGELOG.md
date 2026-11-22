@@ -3,6 +3,7 @@
 ## 2.0.9-32 (2026-11-21)
 
 ### New
+- Organ Setter Wiki: "Apply to organ" draws the stops of the edited step on the live organ (only stops that differ are toggled) so it can be heard before saving.
 - Organ Setter Wiki: the empty PAD MAP strip is hidden above the stop editor.
 - Copyright: Basil Mc Helm is named as the copyright holder in LICENSE, Help > About, the README, the Windows executable properties and the installer publisher.
 - **Organ Setter Wiki** (the former Setter Editing tab) in four frames that remember their sizes: setter-file dropdown with previous / next and the guide top left, the organ's picture top right, the stop editor of the chosen step bottom left, the heuristic reading bottom right.

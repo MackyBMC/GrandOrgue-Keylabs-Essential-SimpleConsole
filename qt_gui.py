@@ -1,6 +1,7 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-22  Organ Setter Wiki: "Apply to organ" draws the stops of the edited step on the live organ (only stops that differ are toggled) so it can be heard before saving.
 2026-11-22  Organ Setter Wiki: the empty PAD MAP strip is hidden above the stop editor.
 2026-11-22  Guide ratings are five clickable stars (click the current rating again to clear); "Organ FAQ..." opens docs/ORGAN_FAQ.md (eras, regions, liturgy, registration).
 2026-11-22  Organ FAQ is an editable Markdown window (opens as plain reading; the Edit button shows the toolbar, live preview, saved as a copy in the data folder, Reset to the shipped text); stars are painted in the theme accent colour; the Organ Setter Wiki frames remember their sizes.
@@ -1753,9 +1754,11 @@ class SetterWikiPage(QWidget):
         step_row.addWidget(self.step_combo, 1)
         self.save_steps_button = QPushButton("Save setter")
         self.revert_button = QPushButton("Revert")
+        self.apply_button = QPushButton("Apply to organ")
+        self.apply_button.setToolTip("Draw these stops on the organ now, to hear the selection")
         self.live_button = QPushButton("Take live stops")
         self.live_button.setToolTip("Copy the stops drawn on the organ right now into this step")
-        for button in (self.live_button, self.revert_button, self.save_steps_button):
+        for button in (self.apply_button, self.live_button, self.revert_button, self.save_steps_button):
             step_row.addWidget(button)
         editor_layout.addLayout(step_row)
         self.grid = StopGridWidget(draft=True)
@@ -1790,6 +1793,7 @@ class SetterWikiPage(QWidget):
         self.save_steps_button.clicked.connect(self._save)
         self.revert_button.clicked.connect(self._revert)
         self.live_button.clicked.connect(self._take_live)
+        self.apply_button.clicked.connect(self._apply_to_organ)
 
     def _remember_layout(self, name):
         QSettings("KeyLabGrandOrgue", "LiveLayout").setValue(name, self._splitters[name].saveState())
@@ -1849,6 +1853,10 @@ class SetterWikiPage(QWidget):
         self._edits[self._step_id] = paths
         self.grid.set_selected_paths(paths)
         self._update_heuristic()
+
+    def _apply_to_organ(self):
+        if self._step_id:
+            self._w.bridge.post_ui_event("apply_paths", sorted(self.grid.selected_paths()))
 
     def _take_live(self):
         if self._step_id:
