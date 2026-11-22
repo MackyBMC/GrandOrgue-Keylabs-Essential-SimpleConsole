@@ -2,6 +2,7 @@
 strip, a keyboard and a velocity lane that all share two scroll bars (one horizontal, one vertical).
 
 CHANGELOG
+2026-11-23  Tool bar: compact tempo control (one row), 18 px icons; a new file scrolls so bar 1 sits at the keys (no empty lead-in).
 2026-11-15  Import MIDI / MusicXML is Ctrl+Shift+I (Ctrl+M now belongs to the main window's Mixer).
 2026-11-13  FL-style snapping: snap is ON by default and new option "Note length" (snap to the New note length); placing, moving and both ends of a note
             snap live while you drag; hold Alt for free (unsnapped) placing / moving / resizing. Status line says so.
@@ -204,7 +205,7 @@ class RollWindow(QMainWindow):
         bar = QToolBar("Tools")
         bar.setObjectName("rollTools")
         bar.setMovable(False)
-        bar.setIconSize(QSize(22, 22))
+        bar.setIconSize(QSize(18, 18))
         self.addToolBar(bar)
         self.tool_group = QActionGroup(self)
         self.tool_actions = {}
@@ -247,6 +248,7 @@ class RollWindow(QMainWindow):
         bar.addSeparator()
         from tempo_control import TempoControl
         self.tempo_control = TempoControl(st.tempo_controller, self)
+        self.tempo_control.set_compact(str(QSettings("KeyLabGrandOrgue", "Tempo").value("compact_roll", "true")) == "true", save=False)
         bar.addWidget(self.tempo_control)
         bar.addWidget(QLabel(" Keys "))
         self.v_zoom = QSlider(Qt.Orientation.Horizontal)
@@ -411,7 +413,14 @@ class RollWindow(QMainWindow):
         if st.notes:
             end = max(n.end for n in st.notes) + 0.5
             self.h_zoom.setValue(max(8, min(600, int(self.stave.roll.viewport().width() / end))))
-            self.stave.roll.horizontalScrollBar().setValue(0)
+            self.stave.roll.horizontalScrollBar().setValue(self._bar1_scroll())
+
+    def _bar1_scroll(self):
+        st = self.stave
+        try:
+            return max(0, int(st.barmap.anchors[0] * st.roll.pps) - 8)
+        except Exception:
+            return 0
 
     def fit_selection(self):
         notes = self.stave.selected_notes()

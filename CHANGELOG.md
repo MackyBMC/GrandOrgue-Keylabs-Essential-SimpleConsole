@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### New
+- Theme choices: the floating LCD colour schemes ("LCD ...") are app themes too.
+- Tracks: per-column alignment (right-click the header); Instrument is editable; Organ column shows the registration in short form, full names on hover.
+- Piano Roll: compact tempo control (one row, options under the ... menu).
+- KeyLab Record key LED (id 95) lights while recording or counting in.
+
+### Fixed
+- Piano Roll: a loaded file scrolls to bar 1 (no empty gap after the keys). Dock resize grip sits 3 px further in.
+- Floating dock: the dotted resize grip sits in the real bottom-right corner.
+- Record center: Open in roll loads the take into the roll at once; Play / Stop shows what is playing, or why it could not start.
+
+### Changed
+- Docks use the floating LCD's frame (grey, thin accent line, darker panel, small margin, corner grip when floating); the Record center is a plain widget with tight margins and the main-window dock separators are thin, so no space is wasted around the Velocity lane and the Record center.
+- Compact frames, in the style of the floating LCD: group boxes, dock titles and tabs use much less space (the Density setting drives it; Compact is the new default, Appearance... changes it). Docks get a slim title bar (float and close buttons, double-click floats / docks) and a floating dock can be made translucent from its right-click menu (remembered).
+- The one-off apply scripts used while the tree diverged (add_record_center, record_center_v2 / v3, apply_copyright, fix_about, hide_padmap, wiki_apply_to_organ) are removed from the repository; their changes are in the code.
+
 ## 2.0.9-32 (2026-11-21)
 
 ### New

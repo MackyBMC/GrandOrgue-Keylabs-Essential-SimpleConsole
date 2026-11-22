@@ -12,6 +12,7 @@ Settings (family, accent override, radius, density, font size, Qt style, icons) 
 "KeyLabGrandOrgue / Appearance" and shared by all windows.
 
 CHANGELOG
+2026-11-23  The floating LCD colour schemes (Amber, Green, Ice blue, Red, Grey-green) are also app themes ("LCD ...").
 2026-11-12  "Text size %" now scales the whole look: paddings, tab / menu / header spacing, scroll bars, slider handles, check marks, title and LCD fonts
             (not only the text), so a smaller setting gives the room back; range 60-160 %.
 2026-10-25  New: replaces the per-window style sheets (polish.py still provides the seek slider).
@@ -59,10 +60,26 @@ FAMILIES = {
         "dark": dict(window="#1e1e2e", base="#181825", alt="#313244", text="#cdd6f4", muted="#a6adc8", border="#45475a", accent="#cba6f7"),
     },
 }
+def _lcd_family(ink, back):
+    """An app theme in the colours of a floating-LCD scheme (ink on the LCD background); the same in light and dark mode."""
+    colours = dict(window=_mix(back, "#808080", 0.12), base=back, alt=_mix(back, ink, 0.10), text=ink,
+                   muted=_mix(ink, back, 0.45), border=_mix(ink, back, 0.55), accent=ink)
+    return {"light": dict(colours), "dark": dict(colours)}
+
+
+def add_lcd_families():
+    try:
+        from lcd_float import SCHEMES
+    except Exception:
+        return
+    for name, (ink, back) in SCHEMES.items():
+        FAMILIES["LCD " + name] = _lcd_family(ink, back)
+
+
 CONTRAST = dict(window="#ffffff", base="#ffffff", alt="#f0f0f0", text="#000000", muted="#1a1a1a", border="#000000", accent="#004c9a")
 ACCENTS = {"Blue": "#3584e4", "Sky": "#3daee9", "Teal": "#14b8a6", "Green": "#30a46c", "Amber": "#e5a50a",
            "Orange": "#f97316", "Red": "#e5484d", "Pink": "#ec4899", "Purple": "#8b5cf6", "Slate": "#64748b"}
-DEFAULTS = dict(family="Console", mode="dark", accent="", radius=6, density=1, font=100, style="Fusion", detailed=True)
+DEFAULTS = dict(family="Console", mode="dark", accent="", radius=6, density=0, font=100, style="Fusion", detailed=True)
 
 
 class _Bus(QObject):
@@ -158,6 +175,8 @@ def stylesheet(st=None, mode=None):
     k = max(0.5, float(st["font"]) / 100.0)
     S = lambda n: max(1, round(n * k))                       # a size in px that follows the text size
     pad = max(2, round({0: 3, 1: 5, 2: 8}.get(int(st["density"]), 5) * k))
+    # frame metrics follow the density: Compact (0) is the floating-LCD look - thin titles, tight group boxes, small tabs
+    g_top, g_in, g_left, d_title, t_side = {0: (13, 5, 7, 2, 9), 1: (18, 9, 10, 4, 12), 2: (22, 12, 12, 6, 14)}.get(int(st["density"]), (18, 9, 10, 4, 12))
     win, base, alt, text, muted, border, accent = (t[k] for k in KEYS)
     soft = _mix(border, win, 0.45)
     hover = _mix(alt, accent, 0.18)
@@ -172,8 +191,8 @@ def stylesheet(st=None, mode=None):
         QLabel#windowTitle {{ color: {accent}; font-size: {S(18)}px; font-weight: 600; }}
         QLabel#lcdText {{ background: {alt}; color: {text}; font-size: {S(17)}px; font-weight: 600; border-radius: {r}px; }}
         QLabel#statusLabel {{ background: {alt}; padding: {S(7)}px; color: {text}; border-radius: {r}px; }}
-        QGroupBox {{ background: {alt}; border: 1px solid {soft}; border-radius: {r + 2}px; margin-top: {S(20)}px; padding: {S(12)}px {S(8)}px {S(8)}px {S(8)}px; }}
-        QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: {S(12)}px; top: 0px; padding: 0 {S(5)}px; color: {accent}; font-weight: 600; }}
+        QGroupBox {{ background: {alt}; border: 1px solid {soft}; border-radius: {r + 2}px; margin-top: {S(g_top)}px; padding: {S(g_in)}px {S(g_in)}px {S(g_in - 1)}px {S(g_in)}px; }}
+        QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: {S(g_left)}px; top: 0px; padding: 0 {S(4)}px; color: {accent}; font-weight: 600; font-size: {S(11 if int(st["density"]) == 0 else 12)}px; }}
         QPushButton, QToolButton {{ background: {alt}; color: {text}; border: 1px solid {soft}; border-radius: {r}px; padding: {pad}px {pad * 2 + S(2)}px; }}
         QPushButton:hover, QToolButton:hover {{ background: {hover}; border-color: {_mix(accent, win, 0.35)}; }}
         QPushButton:pressed, QToolButton:pressed {{ background: {pressed}; border-color: {accent}; }}
@@ -225,12 +244,14 @@ def stylesheet(st=None, mode=None):
         QToolBar::handle {{ background: {soft}; width: 6px; height: 6px; margin: 4px; border-radius: 3px; }}
         QToolBar::separator {{ background: {soft}; width: 1px; height: 1px; margin: 5px; }}
         QDockWidget {{ border: 1px solid {soft}; }}
-        QDockWidget::title {{ background: {alt}; padding: {S(6)}px {S(8)}px; border-bottom: 1px solid {soft}; }}
+        QDockWidget::title {{ background: {alt}; padding: {S(d_title)}px {S(6)}px; border-bottom: 1px solid {soft}; }}
         QStatusBar {{ background: {alt}; border-top: 1px solid {soft}; }}
         QSplitter::handle {{ background: {soft}; }}
+        QMainWindow::separator {{ background: {soft}; width: {S(3)}px; height: {S(3)}px; }}
+        QMainWindow::separator:hover {{ background: {accent}; }}
         QSplitter::handle:hover {{ background: {accent}; }}
         QTabWidget::pane {{ border: 1px solid {soft}; border-radius: {r}px; top: -1px; }}
-        QTabBar::tab {{ background: {alt}; padding: {pad + 1}px {S(14)}px; border: 1px solid {soft}; border-bottom: none; border-top-left-radius: {r}px; border-top-right-radius: {r}px; margin-right: 2px; }}
+        QTabBar::tab {{ background: {alt}; padding: {pad + 1}px {S(t_side)}px; border: 1px solid {soft}; border-bottom: none; border-top-left-radius: {r}px; border-top-right-radius: {r}px; margin-right: 2px; }}
         QTabBar::tab:selected {{ background: {tint}; color: {accent}; border-color: {_mix(accent, win, 0.4)}; }}
         QTabBar::tab:hover:!selected {{ background: {hover}; }}
         QSvgWidget, QGraphicsView {{ border: none; }}
@@ -265,3 +286,6 @@ def apply(mode=None, app=None):
 
 def mode_from_console(theme):
     return theme if theme in ("light", "dark", "contrast") else "dark"
+
+
+add_lcd_families()

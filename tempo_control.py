@@ -1,6 +1,7 @@
 """Reusable, session-synchronized BPM fader with major/minor ticks and tempo undo/redo.
 
 CHANGELOG
+2026-11-23  Compact mode (one row, options in a menu); the piano roll tool bar uses it. "Full tempo panel" in the menu goes back.
 2026-11-19  Engine sync indicator: "GrandOrgue 80 ✓" (confirmed by GrandOrgue), "GrandOrgue 80 ..." (sent, not yet confirmed), "GrandOrgue ?" (unknown).
 2026-11-10  "Keep BPM" (default on: the BPM you set stays when you open files; off: each file sets its own), "file: NN" shows the
             opened file's written tempo, "= file" plays it as written. Until you set a BPM yourself, opened files still set it.
@@ -8,7 +9,7 @@ CHANGELOG
 
 from PySide6.QtCore import QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import QPainter, QPen
-from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSlider, QSpinBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QMenu, QPushButton, QSlider, QSpinBox, QToolButton, QVBoxLayout, QWidget
 
 from keylab_bridge.tempo import MAX_BPM, MIN_BPM, TempoSession
 
@@ -41,6 +42,7 @@ class TempoControl(QWidget):
         self.controller = None
         self._listener = self._controller_changed
         self.setFixedWidth(370)
+        self.compact = str(QSettings("KeyLabGrandOrgue", "Tempo").value("compact", "false")) == "true"
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -63,6 +65,15 @@ class TempoControl(QWidget):
         self.spin.setToolTip("Global tempo target, applied to all playback windows.")
         row.addWidget(self.spin)
         ticks = TempoTicks(self)
+        self.ticks = ticks
+        self.more = QToolButton()
+        self.more.setText("\u22ef")
+        self.more.setToolTip("Tempo options: = file, Keep BPM, Undo, Redo, compact bar")
+        self.more.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.more_menu = QMenu(self.more)
+        self.more_menu.aboutToShow.connect(self._fill_menu)
+        self.more.setMenu(self.more_menu)
+        row.addWidget(self.more)
         layout.addLayout(row)
         tick_row = QHBoxLayout()
         tick_row.setContentsMargins(0, 0, 0, 0)
@@ -101,9 +112,43 @@ class TempoControl(QWidget):
         self.redo_button.clicked.connect(self._redo)
         self.tempoChanged.connect(self._sync_controls)
         self.set_controller(controller or TempoSession())
+        self.set_compact(self.compact, save=False)
         self._file_timer = QTimer(self)                      # the written tempo of the opened file changes without a BPM change
         self._file_timer.timeout.connect(self._refresh_file_label)
         self._file_timer.start(500)
+
+    def set_compact(self, on, save=True):
+        """Compact: one row (label, fader, BPM, menu). The file / Keep / Undo / Redo / engine items move into the menu."""
+        self.compact = bool(on)
+        self.ticks.setVisible(not on)
+        for w in (self.file_label, self.go_label, self.file_button, self.keep_box, self.undo_button, self.redo_button):
+            w.setVisible(not on)
+        self.more.setVisible(bool(on))
+        self.setFixedWidth(300 if on else 370)
+        if save:
+            QSettings("KeyLabGrandOrgue", "Tempo").setValue("compact", "true" if on else "false")
+
+    def _fill_menu(self):
+        menu = self.more_menu
+        menu.clear()
+        file_bpm = getattr(self.controller, "file_bpm", None)
+        menu.addAction(self.file_label.text() or "file: -").setEnabled(False)
+        menu.addAction(self.go_label.text()).setEnabled(False)
+        act = menu.addAction("= file tempo")
+        act.setEnabled(bool(file_bpm))
+        act.triggered.connect(self._use_file_tempo)
+        keep = menu.addAction("Keep BPM when opening files")
+        keep.setCheckable(True)
+        keep.setChecked(self.keep_box.isChecked())
+        keep.toggled.connect(self.keep_box.setChecked)
+        undo = menu.addAction("Undo tempo")
+        undo.setEnabled(self.undo_button.isEnabled())
+        undo.triggered.connect(self._undo)
+        redo = menu.addAction("Redo tempo")
+        redo.setEnabled(self.redo_button.isEnabled())
+        redo.triggered.connect(self._redo)
+        menu.addSeparator()
+        menu.addAction("Full tempo panel").triggered.connect(lambda: self.set_compact(False))
 
     def set_controller(self, controller):
         if self.controller is not None:

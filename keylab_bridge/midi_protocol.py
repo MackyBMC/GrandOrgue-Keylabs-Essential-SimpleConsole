@@ -123,7 +123,7 @@ TEXT_WIDTH = 13            # 2 status characters + 1 spacer + 13 text characters
 MIN_INTERVAL_S = 0.04      # default gap between LCD writes; the KeyLab LCD can lock up if flooded (--live to change)
 
 
-LED_IDS = {"loop": 90, "metro": 89, "play": 94, "cat_char": 22}   # cat_char: sysex id from go_interface.yaml, UNVERIFIED on hardware
+LED_IDS = {"loop": 90, "metro": 89, "play": 94, "record": 95, "cat_char": 22}   # cat_char: sysex id from go_interface.yaml, UNVERIFIED on hardware
 
 
 # This unit's pad LEDs take their three values in blue, green, red order (red and blue appeared swapped on
@@ -297,6 +297,7 @@ class Bridge:
         self.play_start_pending_until = None
         self.pending_sequence_steps = 0
         self.play_lit = self.pause_lit = self.metro_lit = False
+        self.rec_lit = False                    # Record key LED: recording or counting in
         self.override_lines: tuple[str, str] | None = None     # LCD lines that replace the idle status (recording state)
         self.dirty = True
         self.last_activity = None
@@ -715,7 +716,7 @@ class Bridge:
 
     def _desired_leds(self):
         want = {LED_IDS["loop"]: 127 if self.loop else 0, LED_IDS["metro"]: 127 if self.metro_lit else 0,
-                LED_IDS["play"]: 127 if self.player == "playing" else 0}
+                LED_IDS["play"]: 127 if self.player == "playing" else 0, LED_IDS["record"]: 127 if self.rec_lit else 0}
         if self.cat_led_enabled:
             want[LED_IDS["cat_char"]] = 127 if self.menu_override else 0
         if self.pads_enabled:

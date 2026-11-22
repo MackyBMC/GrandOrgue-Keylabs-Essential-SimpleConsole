@@ -2176,6 +2176,7 @@ class BridgeWindow(QMainWindow):
             self.top_tabs.addTab(page, title)
         from record_center import RecordCenter
         self.record_center = RecordCenter(self.bridge)
+        self.record_center.open_hook = self._record_open
         self.top_tabs.currentChanged.connect(self._on_top_tab)
         self.setCentralWidget(self.top_tabs)
         self._build_menus()
@@ -4025,6 +4026,12 @@ class BridgeWindow(QMainWindow):
         finally:
             self._stave_syncing = False
 
+    def _record_open(self, path):
+        """Record center > Open in roll: make it the loaded MIDI and open it in the roll at once."""
+        self._last_take_path = path
+        self.bridge.post_ui_event("take_open", path)
+        self._follow_take()
+
     def _stave_loaded(self, path):
         """The stave editor opened a file or project: make its MIDI the main window's file."""
         if (self._stave_syncing or not path.lower().endswith((".mid", ".midi", ".kar"))
@@ -4303,7 +4310,7 @@ class BridgeWindow(QMainWindow):
         if take != self._last_take_path:
             self._last_take_path = take
             stave = getattr(self, "stave_window", None)
-            if stave is not None and stave.isVisible():
+            if stave is not None and (stave.isVisible() or self.top_tabs.currentIndex() in (1, 2)):      # the roll tab hides the stave page
                 self._follow_timer.start(900)                         # not on every file a fast jog passes
         lcd = self.lcd_float
         if lcd is not None and lcd.isVisible():

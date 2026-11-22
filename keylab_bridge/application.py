@@ -168,6 +168,7 @@ class BridgeApp:
         self.record_step_beats = 1.0
         self._part_base = ""
         self.rec_lcd_done = (0.0, "", "")       # (until, line 1, line 2) of the "REC stopped" message on the LCD
+        self.record_notice = ""                 # why a take could not be played (shown in the Record center)
         self.record_count_beats = 0            # count-in before a take: 0, 4 or 8 beats
         self.count_in_end = 0.0                # wall clock the running count-in ends (0 = none)
         self._count_done = False
@@ -1591,7 +1592,10 @@ class BridgeApp:
             elif os.path.isfile(path):
                 self.set_take(path)
                 self.take_player.stop()
+                self.record_notice = ""
                 self._start_take(path)
+                if not self.take_player.active:
+                    self.record_notice = "Could not play: is the GrandOrgue output (Bridge2GO) connected? See the log."
         elif event == "record":
             self.toggle_record()
         elif event == "record_options" and isinstance(value, dict):
@@ -1722,6 +1726,7 @@ class BridgeApp:
             lines = (f"REC {elapsed // 60}:{elapsed % 60:02d}{mode}", f"{int(getattr(rec, 'notes', 0))} notes")
         elif self.rec_lcd_done[0] > now:
             lines = (self.rec_lcd_done[1][:16], self.rec_lcd_done[2][:16])
+        self.br.rec_lit = bool(self.count_in_end or rec is not None)
         if lines != self.br.override_lines:
             self.br.override_lines = lines
             self.br.dirty = True

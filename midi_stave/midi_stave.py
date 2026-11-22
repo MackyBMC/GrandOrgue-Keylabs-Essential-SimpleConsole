@@ -1,5 +1,6 @@
 """
 CHANGELOG
+2026-11-23  A loaded file scrolls to bar 1 (no empty lead-in between the keys and the first bar).
 2026-11-20  Setter file names saved before the names repair (markers, projects) are mapped to the renamed files (sessionmeta.canonical_filename).
 2026-11-19  write_organ_file(path): the file the organ plays (notes on the manual channels, setter and registration markers), for the GrandOrgue-native export.
 2026-11-17  The score follows the music again after Pause / Play from any window (a still playhead re-arms the follow; a redraw while paused no longer restarts playback).
@@ -2148,7 +2149,10 @@ class Stave(QMainWindow):
         self.roll.set_playhead(None)
         self._to_top = True
         self.preview.verticalScrollBar().setValue(0)
-        self.roll.horizontalScrollBar().setValue(0)
+        try:
+            self.roll.horizontalScrollBar().setValue(max(0, int(self.barmap.anchors[0] * self.roll.pps) - 8))      # bar 1 at the keys
+        except Exception:
+            self.roll.horizontalScrollBar().setValue(0)
         name = os.path.basename(path or proj)
         self.loaded_label.setText(f"  Loaded: {name}" + (f"  (project {os.path.basename(proj)})" if state else "") + "  ")
         self.hidden_tracks = set()

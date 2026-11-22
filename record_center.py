@@ -6,6 +6,8 @@ One record engine (the bridge's Record button / the KeyLab Record key); this pan
 The live plot shows what has been played so far; when the take stops it opens in the Piano Roll as usual.
 
 CHANGELOG
+2026-11-23  Open in roll goes through the main window (loads the take into the roll at once); the status shows what is playing or why playback did not start.
+2026-11-23  A plain widget with tight margins (no group box), so the dock around it wastes no space.
 2026-11-22  Selecting a take plots it in the area above the list (each channel / part in its own colour, play position); a finished take is selected automatically.
 2026-11-22  Count-in, Play / Stop of a listed take, no collapse box (the dock around it floats / resizes).
 2026-11-22  New.
@@ -17,7 +19,7 @@ from typing import Any
 
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import (QComboBox, QGroupBox, QHBoxLayout, QInputDialog, QLabel, QMessageBox, QPushButton, QTreeWidget,
+from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QInputDialog, QLabel, QMessageBox, QPushButton, QTreeWidget,
                                QTreeWidgetItem, QVBoxLayout, QWidget)
 
 STEPS = (("Whole", 4.0), ("Half", 2.0), ("Quarter", 1.0), ("Eighth", 0.5), ("Sixteenth", 0.25), ("32nd", 0.125))
@@ -149,11 +151,14 @@ class LiveTakeView(QWidget):
         painter.end()
 
 
-class RecordCenter(QGroupBox):
+class RecordCenter(QWidget):
     def __init__(self, bridge: Any):
-        super().__init__("")
+        super().__init__()
         self.bridge = bridge
+        self.open_hook: Any = None                 # set by the main window: opens a file in the Piano Roll
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(2, 1, 2, 1)
+        layout.setSpacing(3)
         self.body = QWidget()
         body = QVBoxLayout(self.body)
         body.setContentsMargins(0, 0, 0, 0)
@@ -262,7 +267,12 @@ class RecordCenter(QGroupBox):
             where = f"step {float(getattr(rec, 'cursor', 0.0)):.1f}s" if hasattr(rec, "cursor") else f"{int(elapsed) // 60}:{int(elapsed) % 60:02d}"
             self.status.setText(f"Recording {where}  ·  {int(getattr(rec, 'notes', 0))} notes")
         else:
-            self.status.setText("")
+            player = getattr(self.bridge, "take_player", None)
+            notice = str(getattr(self.bridge, "record_notice", "") or "")
+            if player is not None and getattr(player, "active", False):
+                self.status.setText("Playing " + os.path.basename(str(getattr(self.bridge, "take_to_play", "") or "")))
+            else:
+                self.status.setText(notice)
         self._enable()
         self.view.update()
         self._maybe_refresh()
@@ -323,7 +333,10 @@ class RecordCenter(QGroupBox):
     def _open(self):
         path = self._current()
         if path:
-            self.bridge.post_ui_event("take_open", path)
+            if self.open_hook is not None:
+                self.open_hook(path)
+            else:
+                self.bridge.post_ui_event("take_open", path)
 
     def _play(self):
         path = self._current()

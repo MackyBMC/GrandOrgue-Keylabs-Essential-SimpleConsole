@@ -5,6 +5,8 @@ channel (re-channels the voice's notes), instrument and note count. Tracks can b
 Everything edited here goes through the stave editor, so the engraved score follows.
 
 CHANGELOG
+2026-11-23  Per-column text alignment (right-click a column header, remembered); the Instrument column is editable; the Organ column shows the
+            registration in short form ([S3 name, Principal 8] ...) with the full names in the tooltip.
 2026-11-12  Fix: OrganDialog uses the module its Stave came from (same "no attribute" error as the piano roll inside the bridge).
 2026-10-26  New.
 2026-10-27  Manuals shown by the organ's own names (Great / Swell / Choir, German, French, custom) in the Organ dialog,
@@ -12,9 +14,9 @@ CHANGELOG
 2026-10-26  Organ column + "Organ..." dialog: each track chooses the manual(s) (MIDI channel) it plays on and its registration changes
             (setters / stops, bar by bar), whatever the stave layout is. Like choosing an instrument for a track in a DAW.
 """
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QDialog, QDialogButtonBox, QDockWidget, QHBoxLayout, QHeaderView,
+from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QDialog, QDialogButtonBox, QDockWidget, QHBoxLayout, QHeaderView, QMenu,
                                QLabel, QMessageBox, QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 
@@ -145,6 +147,9 @@ class TrackPanel(QDockWidget):
             head.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setToolTip("Click a row to make it the active track: new notes and the piano keys use it.\n"
                               "Double-click the name to rename (the stave title follows). Edit Ch to move the track to another channel.")
+        head.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        head.customContextMenuRequested.connect(self._align_menu)
+        self._aligns = self._load_aligns()
         self.table.itemSelectionChanged.connect(self._row_selected)
         self.table.itemChanged.connect(self._item_changed)
         self.table.cellDoubleClicked.connect(lambda r, c: self.map_organ() if c == 5 else None)
@@ -180,7 +185,8 @@ class TrackPanel(QDockWidget):
         out = []
         for k in sorted(keys):
             m = meta.get(k, {})
-            out.append((k, names.get(k) or m.get("name") or f"Track {k[0] + 1}", m.get("instrument", ""), counts.get(k, 0)))
+            inst = info.get("instrument_names", {}).get(k, m.get("instrument", ""))
+            out.append((k, names.get(k) or m.get("name") or f"Track {k[0] + 1}", inst, counts.get(k, 0)))
         return out
 
     def _organ_text(self, key):
@@ -191,7 +197,60 @@ class TrackPanel(QDockWidget):
         text = "+".join(self.stave.manual_label(n, short=True) for n in m["manuals"])
         if m.get("bass_split"):
             text = f"bass {self.stave.manual_label('Pedal', short=True)} / " + text
-        return text + (f"  ({len(m['reg'])} reg)" if m.get("reg") else "")
+        return text + (("  [" + self._reg_short(m["reg"]) + "]") if m.get("reg") else "")
+
+    @staticmethod
+    def _reg_one(e, full=False):
+        if e.get("kind") == "setter":
+            return f'S{e.get("id", "")} {e.get("name", "")}'.strip() if not full else f'Setter {e.get("id", "")} {e.get("name", "")}  [{e.get("filename", "")}]'
+        paths = e.get("paths") or []
+        label = str(e.get("label") or "")
+        if full:
+            return f"Stops: {label} ({len(paths)}): " + ", ".join(str(p) for p in paths)
+        return label if len(paths) == 1 or label else f"{len(paths)} stops"
+
+    def _reg_short(self, reg):
+        items = [self._reg_one(e) for e in sorted(reg, key=lambda e: e.get("bar", 0))]
+        return ", ".join(items[:3]) + (f" +{len(items) - 3}" if len(items) > 3 else "")
+
+    def _reg_tip(self, key):
+        m = self.stave.track_map.get(key) or {}
+        lines = [f'Bar {e.get("bar", 0) + 1}: ' + self._reg_one(e, True) for e in sorted(m.get("reg", []), key=lambda e: e.get("bar", 0))]
+        return "\n".join(lines) if lines else "Double-click (or Organ...) to choose the manual and registration for this track"
+
+    # ---- column alignment
+    def _load_aligns(self):
+        s = QSettings("KeyLabGrandOrgue", "Tracks")
+        return {c: str(s.value(f"align/{c}", "left")) for c in range(len(COLS))}
+
+    def _align_menu(self, pos):
+        col = self.table.horizontalHeader().logicalIndexAt(pos)
+        if col < 0:
+            return
+        menu = QMenu(self)
+        for name in ("Left", "Centre", "Right"):
+            act = menu.addAction(f"Align {COLS[col] or 'column'}: {name}")
+            act.setCheckable(True)
+            act.setChecked(self._aligns.get(col) == name.lower())
+            act.triggered.connect(lambda _=False, c=col, n=name.lower(): self._set_align(c, n))
+        menu.exec(self.table.horizontalHeader().mapToGlobal(pos))
+
+    def _set_align(self, col, name):
+        self._aligns[col] = name
+        QSettings("KeyLabGrandOrgue", "Tracks").setValue(f"align/{col}", name)
+        self._apply_aligns()
+
+    def _apply_aligns(self):
+        flags = {"left": Qt.AlignmentFlag.AlignLeft, "centre": Qt.AlignmentFlag.AlignHCenter, "right": Qt.AlignmentFlag.AlignRight}
+        for c in range(self.table.columnCount()):
+            flag = flags.get(self._aligns.get(c, "left"), Qt.AlignmentFlag.AlignLeft) | Qt.AlignmentFlag.AlignVCenter
+            head = self.table.horizontalHeaderItem(c)
+            if head is not None:
+                head.setTextAlignment(int(flag.value))
+            for r in range(self.table.rowCount()):
+                item = self.table.item(r, c)
+                if item is not None:
+                    item.setTextAlignment(int(flag.value))
 
     def map_organ(self):
         rows = self.table.selectionModel().selectedRows()
@@ -257,14 +316,16 @@ class TrackPanel(QDockWidget):
             label = QTableWidgetItem(name)
             ch = QTableWidgetItem(str(k[1] + 1))
             ins = QTableWidgetItem(inst)
-            ins.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+            ins.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEditable)
+            ins.setToolTip("Double-click to type an instrument name for this track")
             cnt = QTableWidgetItem(str(count))
             cnt.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             organ = QTableWidgetItem(self._organ_text(k))
             organ.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
-            organ.setToolTip("Double-click (or Organ...) to choose the manual and registration for this track")
+            organ.setToolTip(self._reg_tip(k))
             for c, item in enumerate((dot, show, label, ch, ins, organ, cnt)):
                 self.table.setItem(r, c, item)
+        self._apply_aligns()
         if st.active_voice in self.keys:
             self.table.selectRow(self.keys.index(st.active_voice))
         self._busy = False
@@ -297,6 +358,9 @@ class TrackPanel(QDockWidget):
             text = item.text().strip() or f"Track {key[0] + 1}"
             st.info.setdefault("voice_names", {})[key] = text
             st.show_tracks()
+            st.changed()
+        elif item.column() == 4:
+            st.info.setdefault("instrument_names", {})[key] = item.text().strip()
             st.changed()
         elif item.column() == 3:
             try:
