@@ -10,7 +10,7 @@
 AppId={{B6F0C1A2-5D7E-4F3A-9C21-7A6E2D4B8F10}
 AppName={#AppName}
 AppVersion={#AppVersion}
-AppPublisher=MackyBMC
+AppPublisher=Basil Mc Helm
 AppPublisherURL=https://github.com/MackyBMC/GrandOrgue-Keylabs-Essential-SimpleConsole
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}

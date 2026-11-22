@@ -8,7 +8,7 @@
 # their own organ_path and MIDI settings as they are added.
 # Change this to the alternate file if required:
 # C:\Audio\Sound Samples\GrandOrgue\Friesach_GrandOrgue\Friesach.organ
-organ_path: 'C:/Audio/Sound Samples/GrandOrgue/Friesach_GrandOrgue/Friesach FullImageResolution.organ'
+organ_path: 'C:\Audio\Sound Samples\GrandOrgue\Friesach_GrandOrgue\Friesach FullImageResolution.organ'
 language: en                # en, de, fr, or es; installer choice is stored in language.txt
 ui: gui                # textual, simple, gui, both, or none; --ui overrides this at launch
 theme: light             # light, dark, or contrast; GUI/TUI changes are persisted in theme.txt

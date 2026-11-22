@@ -46,6 +46,13 @@ class Item:
     def __init__(self, kind, manual, number, name, cc, bank_code, division, odf_name=""):
         self.kind, self.manual, self.number, self.name, self.cc = kind, manual, number, name, cc
         self.bank_code, self.division, self.odf_name = bank_code, division, odf_name
+        self.go_name = ""                # the organ's exact GrandOrgue name (from the organ map); setter files carry this
+        self.display_name = ""           # the name shown on screen in the chosen language (organ map); name is its LCD form
+
+    @property
+    def label(self):
+        """Name for the screen: the map's display name, else the LCD name."""
+        return self.display_name or self.name
 
     @property
     def channel(self):

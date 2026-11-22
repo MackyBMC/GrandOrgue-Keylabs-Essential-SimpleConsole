@@ -1,0 +1,14 @@
+# Setter guide (DRAFT): ratings 0-5 stars per period and tradition, composers, why this registration, how to layer it.
+period:
+  baroque: 0
+  classical: 0
+  romantic: 3
+  modern: 0
+tradition:
+  catholic: 3
+  early_protestant: 0
+  modern_church: 2
+composers: []
+reason: 'DRAFT generated from the setter''s name and stops; edit freely. Registers
+  used: flutes. Largest step has 2 stops. Uses the tremulant.'
+layering: 'Step ''Fading Finish'': 2 stops (flutes 1) + tremulant'

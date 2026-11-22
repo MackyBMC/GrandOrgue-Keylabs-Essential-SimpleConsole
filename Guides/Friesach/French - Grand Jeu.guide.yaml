@@ -1,0 +1,17 @@
+# Setter guide (DRAFT): ratings 0-5 stars per period and tradition, composers, why this registration, how to layer it.
+period:
+  baroque: 3
+  classical: 4
+  romantic: 2
+  modern: 0
+tradition:
+  catholic: 5
+  early_protestant: 0
+  modern_church: 0
+composers:
+- Couperin
+- Clerambault
+- Boyvin
+reason: 'DRAFT generated from the setter''s name and stops; edit freely. Registers
+  used: principals, reeds, mixtures. Largest step has 9 stops.'
+layering: 'Step ''French - Grand Jeu'': 9 stops (principals 3, reeds 4, mixtures 1)'

@@ -1,6 +1,7 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-21  Organ map (Organs/<organ>.map.yaml): the bridge's keys -> the organ's ids and exact names; setter files take their names from it.
 2026-11-21  Snapshot "busy": what the bridge is waiting for (GrandOrgue still loading, loading a setter, confirming), shown with an animation in the setter list header.
 2026-11-21  Setter files use the organ's full GrandOrgue names (not the 16-character LCD names); cut-short names in saved setters are repaired.
 2026-11-21  Saving a setter file presses GrandOrgue's RefreshFiles so a new file appears in its list; the Friesach MIDI settings yamls now carry the Sequencer/RefreshFiles route (CC 16 on ch 16), which was missing.
@@ -115,7 +116,7 @@ from .go_settings import build_go_settings, compare_with_export, merge_settings_
 from .combination_transfer import (
     _contains_combinations, load_transfer_aliases, transfer_combinations, write_transfer_alias_template,
 )
-from . import setter_format
+from . import organ_map, setter_format, setter_guide, setter_names
 from .odf_scan import compare_with_builtin, scan_odf, spec_from_profile, summarize
 from .organ_layout import ACTIVE_LAYOUT, STOP_CHANNELS
 from .tempo import TempoSession
@@ -139,7 +140,7 @@ class BridgeApp:
         self._go_tempo_target = self.tempo.bpm
         self._go_bpm = None                  # GrandOrgue metronome BPM as last known / last driven
         self._go_sent_at = 0.0
-        setter_format.use_organ_file(str(raw.get("organ_path", "")).strip().strip('"'))   # full GrandOrgue labels, before the first setter repair
+        self._load_organ_map(cfg_path, raw)               # the organ's names, before the first setter repair
         self.combinations = load_combinations(cfg_path, raw)
         self.selected_combination_index = None
         self.loaded_combination_index = None
@@ -171,6 +172,7 @@ class BridgeApp:
                                       on_marker=lambda text: self.post_ui_event("setter_marker", text))
         self.take_player.set_tempo_bpm(self.tempo.bpm)
         self.language = load_language(cfg_path, raw)
+        self._apply_organ_names()
         self.language_path = os.path.join(os.path.dirname(cfg_path), "language.txt") if cfg_path else ""
         self.theme = load_theme(cfg_path, raw)
         self.theme_path = os.path.join(os.path.dirname(cfg_path), "theme.txt") if cfg_path else ""
@@ -250,6 +252,7 @@ class BridgeApp:
             self.message = self.t("language_invalid")
             return
         self.language = language
+        self._apply_organ_names()
         try:
             if self.language_path:
                 with open(self.language_path, "w", encoding="utf-8") as language_file:
@@ -429,6 +432,259 @@ class BridgeApp:
             (current + steps) % len(self.combinations)
         self.request_navigate(target)
 
+    @staticmethod
+    def _load_organ_map(cfg_path, raw):
+        """Before the first setter repair: the saved map of the active organ, else one built from its .organ file."""
+        organ_path = str(raw.get("organ_path", "")).strip().strip('"')
+        if not organ_path:
+            return
+        existing = organ_map.load_map(organ_map.map_path(cfg_path, organ_path))
+        if existing:
+            setter_format.set_organ_labels(organ_map.labels_for_setters(existing))
+            BridgeApp._active_map = existing
+            return
+        if os.path.isfile(organ_path):
+            try:
+                BridgeApp._build_organ_map(cfg_path, raw, scan_odf(organ_path))
+            except (OSError, ValueError):
+                pass
+
+    @staticmethod
+    def _build_organ_map(cfg_path, raw, profile):
+        organ_path = profile["file"]
+        target = organ_map.map_path(cfg_path, organ_path)
+        folder = os.path.join(combination_root(cfg_path, str(raw.get("combination_set", "Friesach"))),
+                              "Combinations", str(raw.get("combination_set", "Friesach")))
+        setter_format.set_organ_labels({})
+        try:
+            fallback = setter_format.label_dictionary(folder)["by_id"] if os.path.isdir(folder) else {}
+        except OSError:
+            fallback = {}
+        mapping = organ_map.build_map(profile.get("name", ""), profile, ITEMS, fallback, organ_map.load_map(target),
+                                     str(raw.get("combination_set", "Friesach")))
+        try:
+            organ_map.save_map(target, mapping)
+        except OSError:
+            pass
+        setter_format.set_organ_labels(organ_map.labels_for_setters(mapping))
+        BridgeApp._active_map = mapping
+        return mapping
+
+    _active_map: dict = {}
+
+    def _apply_organ_names(self):
+        """Organ and display names (chosen language) onto the layout items; lcd_names in the config still win."""
+        organ_map.apply_map(BridgeApp._active_map, self.language, ITEMS, skip=set((self.raw.get("lcd_names") or {})))
+
+    def organ_maps(self):
+        return organ_map.list_maps(self._organs_folder())
+
+    def use_organ_map(self, stem):
+        """Make the organ of a map the active one (organ file and setter set go into the config); GrandOrgue and the bridge load it at the next start."""
+        chosen = next((m for m in self.organ_maps() if m["stem"] == stem), None)
+        if chosen is None or not chosen["organ_file"]:
+            self.message = f"No organ map named {stem}"
+            return False
+        set_config_key(self.cfg_path, "organ_path", chosen["organ_file"])
+        if chosen.get("layout_file"):
+            set_config_key(self.cfg_path, "organ_layout_file", chosen["layout_file"])
+        if chosen["combination_set"]:
+            set_config_key(self.cfg_path, "combination_set", chosen["combination_set"])
+        self.log(f"Organ {chosen['organ'] or stem} selected; restart the bridge to load it", notify=False)
+        return True
+
+    def _refresh_organ_map(self, profile):
+        """The active organ's map follows the live layout; any other scanned organ gets its map from add_organ()."""
+        if self.active_organ_path and os.path.normcase(os.path.abspath(profile["file"])) != os.path.normcase(os.path.abspath(self.active_organ_path)):
+            return
+        self._build_organ_map(self.cfg_path, self.raw, profile)
+
+    def _transfer_default_set(self, profile, mapping, target_set):
+        """Map the active organ's setters (Friesach's default set) onto the new organ as well as the stop names allow;
+        steps are rewritten in GrandOrgue's format with the new organ's names. Never overwrites a populated folder."""
+        source_set = self.combination_set
+        root = combination_root(self.cfg_path, source_set)
+        source = os.path.join(root, "Combinations", source_set)
+        target = os.path.join(combination_root(self.cfg_path, target_set), "Combinations", target_set)
+        if os.path.normcase(os.path.abspath(source)) == os.path.normcase(os.path.abspath(target)):
+            return "The setter set is the active one."
+        try:
+            aliases_path = self._combination_alias_path()
+            write_transfer_alias_template(aliases_path, source_set)
+            report = transfer_combinations(source, target, profile, load_transfer_aliases(aliases_path))
+            if report.get("status") != "ok":
+                return f"Setters not copied ({report.get('status')})."
+            setter_format.set_organ_labels(organ_map.labels_for_setters(mapping))
+            for name in os.listdir(target):
+                if name.lower().endswith((".yaml", ".yml")):
+                    path = os.path.join(target, name)
+                    with open(path, encoding="utf-8") as handle:
+                        write_combination_file(path, read_combination_yaml(handle) or {}, target)
+            return (f"Copied {report['files']} setter files ({report['steps']} steps) from {source_set}; "
+                    f"{len(report['unmatched'])} stop names had no match (see {os.path.basename(aliases_path)}).")
+        except (OSError, ValueError, KeyError) as exc:
+            return f"Setters not copied: {exc}."
+        finally:
+            setter_format.set_organ_labels(organ_map.labels_for_setters(BridgeApp._active_map))
+
+    # ----- setter file tags (tag for deletion; removal goes to a recoverable trash folder)
+    def _setter_folder(self):
+        set_name = str(self.raw.get("combination_set", "Friesach"))
+        return os.path.join(combination_root(self.cfg_path, set_name), "Combinations", set_name)
+
+    def _matrix_file(self):
+        set_name = str(self.raw.get("combination_set", "Friesach"))
+        return setter_names.matrix_file(self.cfg_path, self.raw, combination_root(self.cfg_path, set_name), set_name)
+
+    # ----- setter guide (accompanies each setter file) and the organ's character
+    def _guide_folders(self):
+        """Where guides are read: the GrandOrgue data folder first (where they are saved), then the project folders, so guides
+        shipped or generated next to the program show up too."""
+        set_name = str(self.raw.get("combination_set", "Friesach"))
+        roots = (combination_root(self.cfg_path, set_name), project_root(self.cfg_path), os.path.dirname(os.path.abspath(self.cfg_path)))
+        folders = []
+        for root in roots:
+            folder = os.path.join(root, "Guides", set_name)
+            if os.path.normcase(os.path.abspath(folder)) not in [os.path.normcase(os.path.abspath(f)) for f in folders]:
+                folders.append(folder)
+        return folders
+
+    def _guide_folder(self):
+        return self._guide_folders()[0]
+
+    def _guides(self):
+        """The folder's guides, re-read only when a guide file changed (the snapshot is built many times a second)."""
+        stamp = []
+        for folder in self._guide_folders():
+            try:
+                names = tuple(sorted(os.listdir(folder)))
+                stamp.append((folder, names, tuple(os.stat(os.path.join(folder, n)).st_mtime_ns for n in names)))
+            except OSError:
+                stamp.append((folder,))
+        if getattr(self, "_guides_stamp", None) != stamp:
+            merged = {}
+            for folder in reversed(self._guide_folders()):          # the data folder wins over the project folders
+                merged.update(setter_guide.load_guides(folder))
+            self._guides_stamp, self._guides_cache = stamp, merged
+        return self._guides_cache
+
+    def save_setter_guide(self, filename, guide):
+        try:
+            setter_guide.save_guide(self._guide_folder(), str(filename), guide)
+        except OSError as exc:
+            self.log(f"Could not save the guide of {filename}: {exc}", level="ERROR")
+            return
+        self.message = f"Saved guide for {filename}"
+        self.br.dirty = True
+
+    def save_organ_character(self, character):
+        """What the organ was built for: star ratings per period / tradition plus builder, year and notes, kept in the organ map."""
+        mapping = BridgeApp._active_map
+        organ_path = str(self.raw.get("organ_path", "")).strip().strip('"')
+        if not mapping or not organ_path:
+            self.message = "No organ map to hold the organ's character"
+            return
+        cleaned = setter_guide.clean_guide(character)
+        cleaned["built_for"] = str((character or {}).get("built_for", "") or "")
+        mapping["character"] = cleaned
+        try:
+            organ_map.save_map(organ_map.map_path(self.cfg_path, organ_path), mapping)
+        except OSError as exc:
+            self.log(f"Could not save the organ's character: {exc}", level="ERROR")
+            return
+        self.message = "Saved the organ's character"
+        self.br.dirty = True
+
+    def tag_setter_file(self, filename, delete):
+        stem = os.path.splitext(os.path.basename(str(filename)))[0]
+        path = self._matrix_file()
+        matrix = setter_names.load_matrix(path)
+        entry = matrix.setdefault("setters", {}).setdefault(stem, {})
+        if delete:
+            entry["delete"] = True
+        else:
+            entry.pop("delete", None)
+        try:
+            setter_names.save_matrix(path, matrix, str(self.raw.get("combination_set", "")))
+        except OSError as exc:
+            self.log(f"Could not tag {filename}: {exc}", level="ERROR")
+            return
+        self.combinations = load_combinations(self.cfg_path, self.raw)
+        self.br.dirty = True
+
+    def remove_tagged_setters(self):
+        """Move every setter file tagged for deletion to Combinations/_trash/<set>-<time>/ (recoverable) and refresh GrandOrgue."""
+        path = self._matrix_file()
+        matrix = setter_names.load_matrix(path)
+        tagged = [stem for stem, entry in matrix.get("setters", {}).items() if entry.get("delete")]
+        folder = self._setter_folder()
+        moved = []
+        trash = os.path.join(os.path.dirname(folder), "_trash", f"{os.path.basename(folder)}-{time.strftime('%Y%m%d-%H%M%S')}")
+        for stem in tagged:
+            for extension in (".yaml", ".yml"):
+                source = os.path.join(folder, stem + extension)
+                if os.path.isfile(source):
+                    try:
+                        os.makedirs(trash, exist_ok=True)
+                        os.replace(source, os.path.join(trash, stem + extension))
+                        moved.append(stem)
+                    except OSError as exc:
+                        self.log(f"Could not remove {stem}: {exc}", level="ERROR")
+            matrix["setters"][stem].pop("delete", None)
+        if tagged:
+            try:
+                setter_names.save_matrix(path, matrix, str(self.raw.get("combination_set", "")))
+            except OSError:
+                pass
+        self.combinations = load_combinations(self.cfg_path, self.raw)
+        self.selected_combination_index = 0 if self.combinations else None
+        self.loaded_combination_index = None
+        self.emit(self.br._press("refresh_files"))
+        self.message = f"Removed {len(moved)} setter file(s); kept in {trash}" if moved else "Nothing was tagged for deletion"
+        self.br.dirty = True
+
+    def add_organ(self, organ_path):
+        """Bring in another organ from its .organ file alone: layout file, organ map, setter folder and the GrandOrgue MIDI settings
+        to import. The organ then shows in "Known organs"; the active organ is not touched."""
+        import yaml
+        organ_path = str(organ_path).strip().strip('"')
+        if not os.path.isfile(organ_path):
+            self.organ_summary = "Choose the organ's .organ file first."
+            return False
+        prior = (self.organ_profile, self.organ_spec, self.organ_selection, self.organ_path)
+        try:
+            self._scan_organ_file(organ_path)
+            profile, spec = self.organ_profile, self.organ_spec
+            if profile is None or spec is None:
+                return False
+            if spec.get("problems"):
+                self.organ_summary = "Not added, the layout would be incomplete: " + "; ".join(spec["problems"]) + "."
+                return False
+            try:
+                layout_path = self._write_layout_file()
+                stem, folder = self._organ_stem(), self._safe_name(profile["name"])
+                root = combination_root(self.cfg_path, folder)
+                os.makedirs(os.path.join(root, "Combinations", folder), exist_ok=True)
+                target = organ_map.map_path(self.cfg_path, organ_path)
+                mapping = organ_map.build_map(profile["name"], profile, organ_map.items_from_spec(spec), {}, organ_map.load_map(target), folder)
+                mapping["layout_file"] = os.path.relpath(layout_path, project_root(self.cfg_path)).replace(os.sep, "/")
+                organ_map.save_map(target, mapping)
+                settings_path = os.path.join(self._settings_folder(), f"{stem} midi import.yaml")
+                with open(settings_path, "w", encoding="utf-8") as out:
+                    yaml.safe_dump(self._go_settings_for(profile, spec), out, sort_keys=False, allow_unicode=True)
+                transfer_note = self._transfer_default_set(profile, mapping, folder)
+            except (OSError, ValueError) as exc:
+                self.organ_summary = f"Could not add the organ: {exc}"
+                return False
+            self.organ_summary = (f"Added {profile['name']}: organ map {os.path.basename(target)}, setter folder Combinations/{folder}. "
+                                  f"{transfer_note} Import {os.path.basename(settings_path)} in GrandOrgue (MIDI settings), then pick the organ under Known organs.")
+            self.organ_settings_path = settings_path                 # shown (with a copy button) in the Organ Selection tab
+            self.log(f"Organ added: {profile['name']}; GrandOrgue MIDI settings to import: {settings_path}", notify=False)
+            return True
+        finally:
+            self.organ_profile, self.organ_spec, self.organ_selection, self.organ_path = prior
+        self._apply_organ_names()
+
     def _organs_folder(self):
         folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(self.cfg_path))), "Organs")
         os.makedirs(folder, exist_ok=True)
@@ -445,7 +701,7 @@ class BridgeApp:
             return
         self.organ_path = path
         self.organ_profile = profile
-        setter_format.set_organ_profile(profile)
+        self._refresh_organ_map(profile)
         self.organ_problems = compare_with_builtin(profile)
         self.organ_summary = summarize(profile, self.organ_problems)
         try:
@@ -1175,8 +1431,8 @@ class BridgeApp:
                 _write_managed_switches(sequence, step["stops"])
         try:
             write_combination_file(path, data, folder)
-        except OSError as exc:
-            self.log(f"Could not save setter: {exc}", level="ERROR")
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            self.log(f"Could not save setter {filename}: {type(exc).__name__}: {exc}", level="ERROR")
             return
         self.emit(self.br._press("refresh_files"))         # a new file must show up in GrandOrgue's list
         self.combinations = load_combinations(self.cfg_path, self.raw)
@@ -1259,6 +1515,18 @@ class BridgeApp:
             self.br.dirty = True
         elif event == "organ_path":
             self.organ_path = str(value)
+        elif event == "guide_save":
+            self.save_setter_guide(str(value[0]), value[1])
+        elif event == "character_save":
+            self.save_organ_character(value)
+        elif event == "setter_tag":
+            self.tag_setter_file(str(value[0]), bool(value[1]))
+        elif event == "setter_remove_tagged":
+            self.remove_tagged_setters()
+        elif event == "organ_add":
+            self.add_organ(str(value))
+        elif event == "organ_use":
+            self.use_organ_map(str(value))
         elif event == "organ_import":
             self.import_organ(value.get("organ_path", ""), value.get("midi_export", ""))
         elif event == "organ_confirm":
@@ -1853,7 +2121,7 @@ class BridgeApp:
             active = (item.path in br.stop_grid_draft_paths if draft_grid
                       else bool(br.state.get(item.cc)))
             pads.append({
-                "number": index + 1, "name": item.name, "division": item.division,
+                "number": index + 1, "name": item.label, "division": item.division,
                 "cc": item.cc, "path": item.path, "active": active,
                 "lines": self.pad_lines(index + 1, item, active),
                 "color": pad_screen_color(item, br.pad_colors, active, br.pad_dim, br.pad_off_grey),
@@ -1869,7 +2137,7 @@ class BridgeApp:
             "division": row["division"],
             "grid_row": row["grid_row"],
             "focus_x": row["focus_x"],
-            "cells": ([{"path": item.path, "name": item.name, "cc": item.cc,
+            "cells": ([{"path": item.path, "name": item.label, "cc": item.cc,
                         "division": item.division}
                        if item is not None else None for item in row["cells"]]),
         } for row in br.stop_grid.window_rows()]
@@ -1924,7 +2192,7 @@ class BridgeApp:
                               "internal_id": preset["internal_id"], "file_names": preset.get("file_names") or {},
                               "switch_paths": sorted(preset["switch_paths"])}
                              for preset in self.combinations],
-            "available_stops": [{"path": item.path, "name": item.name, "division": item.division,
+            "available_stops": [{"path": item.path, "name": item.label, "division": item.division,
                                   "kind": item.kind, "cc": item.cc} for item in br.stop_grid.items],
             "active_stop_paths": sorted(self._current_registration_paths()),
             "stop_grid": {
@@ -1954,6 +2222,7 @@ class BridgeApp:
             "active_combination_pending": self._combination_unproven() if active_combination_index is not None else [],
             "active_combination_verified": active_combination_index is not None and not self._combination_unproven(),
             "busy": self._busy_text(),
+            "organ_maps": self.organ_maps(),
             "internal_position": br.pos.strip(),
             "go_setter_feedback": {"text": br.text.strip(), "pos": br.pos.strip(),
                                    "matched": self._combination_index_from_feedback()},
@@ -1975,10 +2244,13 @@ class BridgeApp:
             "volumes": {key: br.vol_sent.get(key, br.vol[key]) for key in VOLS},
             "volume_active": self._volume_activity(),
             "menu": {"tab": br.menu_tab, "active": br.menu_override, "pages": [dict(page) for page in MENU_PAGES]},
-            "couplings": [{"cc": item.cc, "name": item.name, "division": item.division,
+            "couplings": [{"cc": item.cc, "name": item.label, "division": item.division,
                            "active": bool(br.state.get(item.cc))}
                           for item in ITEMS if item.kind in ("coupler", "tremulant")],
             "combination_files": list(dict.fromkeys(preset["filename"] for preset in self.combinations)),
+            "guides": self._guides(),
+            "organ_character": dict(BridgeApp._active_map.get("character") or {}),
+            "combination_file_tags": {preset["filename"]: bool(preset.get("tagged_delete")) for preset in self.combinations},
             "organ_path": self.organ_path,
             "organ_summary": self.organ_summary,
             "organ_settings_path": self.organ_settings_path,

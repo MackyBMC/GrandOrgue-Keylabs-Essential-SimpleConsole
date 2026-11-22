@@ -82,6 +82,28 @@ def matrix_path(root, set_name):
     return os.path.join(root, "Settings", f"{set_name}.names.yaml")
 
 
+def matrix_file(cfg_path, raw, root, set_name):
+    """Where the names matrix lives: the active organ's map (Organs/<organ>.map.yaml); the older Settings/<organ>.names.yaml
+    is merged into it once and then left alone."""
+    legacy = matrix_path(root, set_name)
+    organ_path = str((raw or {}).get("organ_path", "")).strip().strip('"')
+    if not organ_path:
+        return legacy
+    from . import organ_map
+    target = organ_map.map_path(cfg_path, organ_path)
+    if os.path.isfile(legacy):
+        current = organ_map.load_map(target)
+        old = load_matrix(legacy)
+        if old.get("setters") and not (current.get("setters") if current else None):
+            current = current or {"organ": set_name, "organ_file": organ_path, "combination_set": set_name, "items": {}}
+            current["setters"] = old["setters"]
+            try:
+                organ_map.save_map(target, current)
+            except OSError:
+                return legacy
+    return target
+
+
 def load_matrix(path):
     """{"setters": {stem: {"display": {lang: name}, "aliases": [old file names]}}}; empty when missing or unreadable."""
     try:
@@ -97,6 +119,12 @@ def load_matrix(path):
 
 def save_matrix(path, matrix, organ=""):
     import yaml
+    if str(path).endswith(".map.yaml"):                  # the matrix is a section of the organ map
+        from . import organ_map
+        mapping = organ_map.load_map(path) or {"organ": organ, "organ_file": "", "combination_set": organ, "items": {}}
+        mapping["setters"] = matrix.get("setters", {})
+        organ_map.save_map(path, mapping)
+        return
     os.makedirs(os.path.dirname(path), exist_ok=True)
     document = {"organ": organ or matrix.get("organ", ""), "setters": matrix.get("setters", {})}
     with open(path, "w", encoding="utf-8") as handle:

@@ -2,6 +2,12 @@
 
 See [CHANGELOG.md](../CHANGELOG.md) for the itemized history. The sections below on 2.0.8 and earlier follow.
 
+## Unreleased (after 2.0.9)
+
+- **Organ Setter Wiki.** The Setter Editing tab became a wiki: pick any setter file, read its guide (star ratings for baroque, classical, romantic, modern and for catholic, early protestant and modern church use, composers, reason, layering), see the organ's picture, edit the stops of a step and read a heuristic hint of what the stops lean towards. Friesach's and Cracow's own character is filled in from the sample makers' pages.
+- **Organ FAQ.** A short history of organs, regions, liturgy and registration, editable in a Markdown window.
+- **Organs and setters.** Add an organ from its `.organ` file, map the default setters onto it, and tag setter files for deletion (moved to `Combinations/_trash/`).
+
 ## For players
 
 - **One tempo everywhere.** The session BPM starts at 80 (as in GrandOrgue) and ranges from 1 to 500. Changing it changes the GrandOrgue metronome in step, and the MIDI file player shows when GrandOrgue agrees. Recorded takes remember their BPM and play back at the speed you played them.

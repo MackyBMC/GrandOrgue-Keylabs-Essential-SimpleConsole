@@ -83,7 +83,7 @@ def canonical_filename(filename, scripts_dir=None):
         with open(config, encoding="utf-8") as handle:
             raw = yaml.safe_load(handle) or {}
         set_name = str(raw.get("combination_set", "Friesach"))
-        matrix = setter_names.load_matrix(setter_names.matrix_path(combination_root(config, set_name), set_name))
+        matrix = setter_names.load_matrix(setter_names.matrix_file(config, raw, combination_root(config, set_name), set_name))
         return setter_names.canonical_filename(matrix, filename)
     except Exception:
         return filename

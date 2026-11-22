@@ -1,0 +1,27 @@
+# Setter guide (DRAFT): ratings 0-5 stars per period and tradition, composers, why this registration, how to layer it.
+period:
+  baroque: 0
+  classical: 0
+  romantic: 5
+  modern: 2
+tradition:
+  catholic: 0
+  early_protestant: 0
+  modern_church: 2
+composers:
+- Elgar
+reason: 'DRAFT generated from the setter''s name and stops; edit freely. Registers
+  used: principals, flutes, strings, reeds, mixtures. Largest step has 13 stops.'
+layering: 'Step ''Opening - pianissimo strings'': 3 stops (strings 2)
+
+  Step ''Rising - foundations'': 8 stops (flutes 4, strings 2, reeds 1)
+
+  Step ''Building - diapasons'': 9 stops (principals 4, flutes 3, strings 1, reeds
+  1)
+
+  Step ''Climax - full chorus'': 13 stops (principals 6, flutes 3, strings 1, reeds
+  1, mixtures 2)
+
+  Step ''Decrescendo - foundations'': 8 stops (flutes 4, strings 2, reeds 1)
+
+  Step ''Ending - pianissimo'': 3 stops (strings 2)'

@@ -33,6 +33,7 @@ Windows `loopMIDI` port names and sample configuration are not Linux defaults. S
 - Controls master and division volume with the master fader and encoders.
 - Controls MIDI playback, looping, stopping, panic, saving, and the metronome.
 - Keeps one session BPM (default 80) in sync with the GrandOrgue metronome, and ticks a setter only once GrandOrgue itself confirms its file, step and stops.
+- Organ Setter Wiki: a guide for every setter (period and tradition ratings, composers, reason, layering), the organ's picture and character, a stop editor and a heuristic reading of the stops; an editable Organ FAQ explains the background.
 - Keeps setter files GrandOrgue-safe (ASCII names, GrandOrgue's own file format); multilingual display names live in `Settings/<organ>.names.yaml`.
 - Shows the active file, step, stop state, volume, and cue/navigation context on the KeyLab LCD; long messages scroll.
 - Provides a floating LCD for transport, recording, metronome, clocks, setter/stop state, file progress, draggable volume controls, and an optional output spectrum or oscilloscope (Windows capture requires NumPy and PyAudioWPatch).
@@ -334,7 +335,7 @@ Thanks also to:
 
 ## License and disclaimer
 
-This project is MIT licensed; see [LICENSE](LICENSE). It is provided as-is, without
+Copyright (c) 2026 Basil Mc Helm (GitHub: MackyBMC). This project is MIT licensed; see [LICENSE](LICENSE). It is provided as-is, without
 warranty or support guarantees. Back up your GrandOrgue settings and organ data.
 This project is not affiliated with or endorsed by Arturia, GrandOrgue, Piotr
 Grabowski, or Anthropic. KeyLab and Arturia are trademarks of Arturia SA; Claude is

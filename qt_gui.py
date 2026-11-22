@@ -1,6 +1,14 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-22  Guide ratings are five clickable stars (click the current rating again to clear); "Organ FAQ..." opens docs/ORGAN_FAQ.md (eras, regions, liturgy, registration).
+2026-11-22  Organ FAQ is an editable Markdown window (opens as plain reading; the Edit button shows the toolbar, live preview, saved as a copy in the data folder, Reset to the shipped text); stars are painted in the theme accent colour; the Organ Setter Wiki frames remember their sizes.
+2026-11-22  "Setter Editing" is now "Organ Setter Wiki": setter-file dropdown with previous / next (independent of the live setter, follows the filters), guide top left, organ picture top right (first image the .organ refers to, or Choose picture...), stop editor of the chosen step bottom left (Save setter / Revert / Take live stops) and a heuristic reading of the selected stops (family counts, 0-5 stars per period / tradition beside the guide ratings) bottom right.
+2026-11-22  Setter Editing tab: setter guide panel (0-5 stars per period and tradition, composers, reason, layering; the organ's own character) and list filters (period, tradition, composer, stars, suits this organ).
+2026-11-22  Combination Files tab: Tag for deletion / Untag / Remove tagged files (tagged files are struck through; removal moves them to Combinations/_trash).
+2026-11-21  Organ Selection tab: the GrandOrgue MIDI settings file to import is shown in a box with a "Copy path" button.
+2026-11-21  Organ Selection tab: the GrandOrgue MIDI settings file to import is shown in a box with a "Copy path" button.
+2026-11-21  Organ Selection tab: "Known organs" list (every organ with an organ map) and "Use this organ" (sets the organ file and setter set; effective at the next start).
 2026-11-21  Setter list header shows an animated hourglass and what the bridge is waiting for (snapshot "busy").
 2026-11-20  Setter list shows the setter file's display name from the names matrix (language, then default) instead of the raw file stem.
 2026-11-20  Setter list: Status column (short hand "F+ S5/7": F+ GrandOrgue shows this file/step, F? settling / cued, Fx another file/step; S = stops confirmed ON / stops the setter switches on); tooltip names the unconfirmed stops.
@@ -116,7 +124,7 @@ if TYPE_CHECKING:
 from PySide6.QtCore import (
     QEvent, QEasingCurve, QObject, QParallelAnimationGroup, QPoint, QPointF, QPropertyAnimation, QRect, QSettings, QSize, Qt, QTimer, Signal,
 )
-from PySide6.QtGui import QBrush, QColor, QImage, QPen, QKeySequence, QPainter, QPixmap, QShortcut
+from PySide6.QtGui import QBrush, QColor, QFontDatabase, QImage, QPen, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtPdfWidgets import QPdfView
 from PySide6.QtWidgets import (
@@ -137,6 +145,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QPlainTextEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -1446,6 +1455,625 @@ class _MiniRoll(QWidget):
         p.end()
 
 
+class StarRating(QWidget):
+    """Five painted stars in the theme's accent colour; click star n for n stars, click the current rating again to clear."""
+    valueChanged = Signal(int)
+    _SIZE = 26
+
+    def __init__(self):
+        super().__init__()
+        self._value = 0
+        self.setFixedSize(self._SIZE * 5 + 4, self._SIZE + 2)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+
+    def value(self):
+        return self._value
+
+    def setValue(self, value, emit=False):
+        value = max(0, min(5, int(value)))
+        if value != self._value:
+            self._value = value
+            self.update()
+        if emit:
+            self.valueChanged.emit(value)
+
+    def mousePressEvent(self, event):
+        number = max(1, min(5, int(event.position().x() // self._SIZE) + 1))
+        self.setValue(0 if number == self._value else number, True)
+        self.setFocus()
+
+    def paintEvent(self, event):
+        import math
+        import themes
+        from PySide6.QtCore import QPointF
+        from PySide6.QtGui import QPolygonF
+        accent = QColor(themes.tokens().get("accent", "#0b6f5c"))
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        half = self._SIZE / 2
+        for n in range(5):
+            centre = QPointF(n * self._SIZE + half + 2, half + 1)
+            points = QPolygonF()
+            for k in range(10):
+                radius = half - 2 if k % 2 == 0 else (half - 2) * 0.42
+                angle = -math.pi / 2 + k * math.pi / 5
+                points.append(QPointF(centre.x() + radius * math.cos(angle), centre.y() + radius * math.sin(angle)))
+            painter.setPen(QPen(accent, 1.4))
+            painter.setBrush(QBrush(accent) if n < self._value else Qt.BrushStyle.NoBrush)
+            painter.drawPolygon(points)
+        painter.end()
+
+    def hasFocus(self):
+        return super().hasFocus()
+
+
+class OrganFaqDialog(QDialog):
+    """The Organ FAQ as a small Markdown editor: toolbar, source on the left, live preview on the right. Saved to the user's data folder
+    (a copy of the shipped docs/ORGAN_FAQ.md); "Reset" goes back to the shipped text."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from PySide6.QtWidgets import QTextBrowser
+        self.setWindowTitle("Organ FAQ (editable)")
+        self.resize(1100, 720)
+        self._saved = ""
+        layout = QVBoxLayout(self)
+        top_row = QHBoxLayout()
+        self.edit_button = QPushButton("Edit")
+        self.edit_button.setCheckable(True)
+        self.edit_button.setToolTip("Show the Markdown editor beside the text")
+        top_row.addWidget(self.edit_button)
+        top_row.addStretch(1)
+        layout.addLayout(top_row)
+        self.toolbar = QWidget()
+        bar = QHBoxLayout(self.toolbar)
+        bar.setContentsMargins(0, 0, 0, 0)
+        for label, tip, before, after in (
+                ("B", "Bold", "**", "**"), ("I", "Italic", "*", "*"), ("H", "Heading", "## ", ""), ("\u2022", "Bullet", "- ", ""),
+                ("1.", "Numbered", "1. ", ""), ("\u275d", "Quote", "> ", ""), ("</>", "Code", "`", "`"),
+                ("\U0001F517", "Link", "[", "](https://)"), ("\u2014", "Rule", "\n---\n", "")):
+            button = QPushButton(label)
+            button.setToolTip(tip)
+            button.setFixedWidth(40)
+            button.clicked.connect(lambda checked=False, b=before, a=after: self._wrap(b, a))
+            bar.addWidget(button)
+        bar.addStretch(1)
+        self.status = QLabel()
+        bar.addWidget(self.status)
+        layout.addWidget(self.toolbar)
+        split = QSplitter(Qt.Orientation.Horizontal)
+        self.editor = QPlainTextEdit()
+        self.editor.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+        self.preview = QTextBrowser()
+        self.preview.setOpenExternalLinks(True)
+        split.addWidget(self.editor)
+        split.addWidget(self.preview)
+        split.setSizes([550, 550])
+        layout.addWidget(split, 1)
+        self.actions = QWidget()
+        row = QHBoxLayout(self.actions)
+        row.setContentsMargins(0, 0, 0, 0)
+        self.reset_button = QPushButton("Reset to shipped text")
+        self.save_button = QPushButton("Save")
+        self.close_button = QPushButton("Close")
+        row.addWidget(self.reset_button)
+        row.addWidget(self.save_button)
+        layout.addWidget(self.actions)
+        close_row = QHBoxLayout()
+        close_row.addStretch(1)
+        close_row.addWidget(self.close_button)
+        layout.addLayout(close_row)
+        self._split = split
+        self.editor.setPlainText(self._load(self._user_path()) or self._load(self._shipped_path()))
+        self._saved = self.editor.toPlainText()
+        self.editor.textChanged.connect(self._changed)
+        self.save_button.clicked.connect(self._save)
+        self.edit_button.toggled.connect(self._edit_toggled)
+        self._edit_toggled(False)
+        self.close_button.clicked.connect(self.close)
+        self.reset_button.clicked.connect(self._reset)
+        self._changed()
+
+    def _edit_toggled(self, editing):
+        self.edit_button.setText("Hide editor" if editing else "Edit")
+        for widget in (self.toolbar, self.editor, self.actions):
+            widget.setVisible(editing)
+        if editing:
+            self._split.setSizes([550, 550])
+
+    @staticmethod
+    def _user_path():
+        from keylab_bridge import paths
+        return os.path.join(paths.data_dir(), "docs", "ORGAN_FAQ.md")
+
+    @staticmethod
+    def _shipped_path():
+        from keylab_bridge import paths
+        for folder in (paths.app_dir(), os.path.dirname(os.path.abspath(__file__))):
+            path = os.path.join(folder, "docs", "ORGAN_FAQ.md")
+            if os.path.isfile(path):
+                return path
+        return ""
+
+    @staticmethod
+    def _load(path):
+        try:
+            with open(path, encoding="utf-8") as handle:
+                return handle.read()
+        except OSError:
+            return ""
+
+    def _wrap(self, before, after):
+        cursor = self.editor.textCursor()
+        text = cursor.selectedText()
+        cursor.insertText(before + text + after)
+        self.editor.setTextCursor(cursor)
+        self.editor.setFocus()
+
+    def _changed(self):
+        self.preview.setMarkdown(self.editor.toPlainText())
+        self.status.setText("Unsaved changes" if self.editor.toPlainText() != self._saved else "Saved")
+
+    def _save(self):
+        path = self._user_path()
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(self.editor.toPlainText())
+            self._saved = self.editor.toPlainText()
+            self._changed()
+        except OSError as error:
+            QMessageBox.warning(self, "Organ FAQ", f"Could not save: {error}")
+
+    def _reset(self):
+        if QMessageBox.question(self, "Organ FAQ", "Replace the text with the shipped version? Your edits stay in the saved copy until you Save.") \
+                == QMessageBox.StandardButton.Yes:
+            self.editor.setPlainText(self._load(self._shipped_path()))
+
+    def closeEvent(self, event):
+        if self.editor.toPlainText() != self._saved:
+            choice = QMessageBox.question(self, "Organ FAQ", "Save your changes before closing?",
+                                          QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                                          QMessageBox.StandardButton.Save)
+            if choice == QMessageBox.StandardButton.Cancel:
+                event.ignore()
+                return
+            if choice == QMessageBox.StandardButton.Save:
+                self._save()
+        event.accept()
+
+
+class OrganImageLabel(QLabel):
+    """The organ's picture, scaled to the frame with its aspect kept."""
+
+    def __init__(self):
+        super().__init__("No picture of this organ found")
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setMinimumSize(160, 120)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self._pixmap = QPixmap()
+        self._path = ""
+
+    def set_image(self, path):
+        if path == self._path:
+            return
+        self._path = path
+        self._pixmap = QPixmap(path) if path else QPixmap()
+        self._rescale()
+
+    def _rescale(self):
+        if self._pixmap.isNull():
+            self.setPixmap(QPixmap())
+            self.setText("No picture of this organ found")
+        else:
+            self.setPixmap(self._pixmap.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not self._pixmap.isNull():
+            self._rescale()
+
+
+class SetterWikiPage(QWidget):
+    """Organ Setter Wiki: top left the guide (with a setter-file dropdown that is independent of the live setter), top right the
+    organ's picture, along the bottom the stop editor of the chosen step with the heuristic reading on its right."""
+
+    def __init__(self, window):
+        super().__init__()
+        self._w = window
+        self._filename = ""
+        self._edits = {}                      # step id -> set of switch paths edited here but not saved yet
+        self._steps = []
+        self._step_id = ""
+        self._grid_signature = None
+        self._image_organ = None
+        root = QVBoxLayout(self)
+        root.setContentsMargins(4, 4, 4, 4)
+        self.vertical = QSplitter(Qt.Orientation.Vertical)
+        self.vertical.setChildrenCollapsible(False)
+        root.addWidget(self.vertical, 1)
+
+        top = QSplitter(Qt.Orientation.Horizontal)
+        top.setChildrenCollapsible(False)
+        left = QWidget()
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        pick = QHBoxLayout()
+        self.previous_button = QPushButton("\u25c0")
+        self.next_button = QPushButton("\u25b6")
+        for button in (self.previous_button, self.next_button):
+            button.setFixedWidth(34)
+        self.file_combo = QComboBox()
+        self.file_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.file_combo.setMinimumContentsLength(18)
+        pick.addWidget(QLabel("Setter file"))
+        pick.addWidget(self.previous_button)
+        pick.addWidget(self.file_combo, 1)
+        pick.addWidget(self.next_button)
+        left_layout.addLayout(pick)
+        self.guide_panel = SetterGuidePanel(window.bridge.post_ui_event)
+        self.guide_panel.on_filter_changed = self.rebuild_files
+        left_layout.addWidget(self.guide_panel, 1)
+        top.addWidget(left)
+        right = QWidget()
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        self.image = OrganImageLabel()
+        right_layout.addWidget(self.image, 1)
+        picture_row = QHBoxLayout()
+        self.image_button = QPushButton("Choose picture...")
+        self.image_button.clicked.connect(self._choose_image)
+        picture_row.addWidget(self.image_button)
+        self.history_button = QPushButton("Organ FAQ...")
+        self.history_button.clicked.connect(self._show_history)
+        picture_row.addWidget(self.history_button)
+        right_layout.addLayout(picture_row)
+        top.addWidget(right)
+        top.setStretchFactor(0, 3)
+        top.setStretchFactor(1, 2)
+        self.vertical.addWidget(top)
+
+        bottom = QSplitter(Qt.Orientation.Horizontal)
+        bottom.setChildrenCollapsible(False)
+        editor = QWidget()
+        editor_layout = QVBoxLayout(editor)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        step_row = QHBoxLayout()
+        step_row.addWidget(QLabel("Step"))
+        self.step_combo = QComboBox()
+        step_row.addWidget(self.step_combo, 1)
+        self.save_steps_button = QPushButton("Save setter")
+        self.revert_button = QPushButton("Revert")
+        self.live_button = QPushButton("Take live stops")
+        self.live_button.setToolTip("Copy the stops drawn on the organ right now into this step")
+        for button in (self.live_button, self.revert_button, self.save_steps_button):
+            step_row.addWidget(button)
+        editor_layout.addLayout(step_row)
+        self.grid = StopGridWidget(draft=True)
+        editor_layout.addWidget(self.grid, 1)
+        bottom.addWidget(editor)
+        from PySide6.QtWidgets import QTextBrowser
+        self.heuristic = QTextBrowser()
+        self.heuristic.setMinimumWidth(240)
+        bottom.addWidget(self.heuristic)
+        bottom.setStretchFactor(0, 3)
+        bottom.setStretchFactor(1, 1)
+        self.vertical.addWidget(bottom)
+        self.vertical.setStretchFactor(0, 1)
+        self.vertical.setStretchFactor(1, 1)
+
+        self._splitters = {"wiki_v": self.vertical, "wiki_top": top, "wiki_bottom": bottom}
+        memory = QSettings("KeyLabGrandOrgue", "LiveLayout")
+        for key, splitter in self._splitters.items():
+            try:
+                saved = memory.value(key)
+                if saved:
+                    splitter.restoreState(saved)
+            except Exception:
+                pass
+            splitter.splitterMoved.connect(lambda _pos=0, _index=0, name=key: self._remember_layout(name))
+        self.file_combo.currentIndexChanged.connect(self._file_changed)
+        self.step_combo.currentIndexChanged.connect(self._step_changed)
+        self.previous_button.clicked.connect(lambda: self._move(-1))
+        self.next_button.clicked.connect(lambda: self._move(1))
+        self.grid.toggle_requested.connect(self._toggled)
+        self.save_steps_button.clicked.connect(self._save)
+        self.revert_button.clicked.connect(self._revert)
+        self.live_button.clicked.connect(self._take_live)
+
+    def _remember_layout(self, name):
+        QSettings("KeyLabGrandOrgue", "LiveLayout").setValue(name, self._splitters[name].saveState())
+
+    # -- files
+    def rebuild_files(self):
+        names = [n for n in self._w._combination_files() if self.guide_panel.allows(n)]
+        shown = [self.file_combo.itemData(i) for i in range(self.file_combo.count())]
+        if names == shown:
+            return
+        self.file_combo.blockSignals(True)
+        self.file_combo.clear()
+        for name in names:
+            self.file_combo.addItem(os.path.splitext(name)[0], name)
+        index = self.file_combo.findData(self._filename)
+        self.file_combo.setCurrentIndex(index if index >= 0 else (0 if names else -1))
+        self.file_combo.blockSignals(False)
+        self._file_changed()
+
+    def _move(self, delta):
+        count = self.file_combo.count()
+        if count:
+            self.file_combo.setCurrentIndex((self.file_combo.currentIndex() + delta) % count)
+
+    def _file_changed(self, _=0):
+        filename = self.file_combo.currentData() or ""
+        if filename != self._filename:
+            self._edits = {}
+        self._filename = filename
+        self.guide_panel.set_setter(filename)
+        self._steps = [s for s in self._w._combination_snapshot if s["filename"] == filename]
+        self.step_combo.blockSignals(True)
+        self.step_combo.clear()
+        for step in self._steps:
+            self.step_combo.addItem(f"{step['internal_id']}  {step['name']}", step["internal_id"])
+        self.step_combo.blockSignals(False)
+        self._step_changed()
+
+    def _paths_of(self, step_id):
+        if step_id in self._edits:
+            return set(self._edits[step_id])
+        for step in self._steps:
+            if step["internal_id"] == step_id:
+                return set(step.get("switch_paths", []))
+        return set()
+
+    def _step_changed(self, _=0):
+        self._step_id = self.step_combo.currentData() or ""
+        self.grid.set_selected_paths(self._paths_of(self._step_id))
+        self._update_heuristic()
+
+    def _toggled(self, path, selected):
+        if not self._step_id:
+            return
+        paths = self.grid.selected_paths()
+        (paths.add if selected else paths.discard)(path)
+        self._edits[self._step_id] = paths
+        self.grid.set_selected_paths(paths)
+        self._update_heuristic()
+
+    def _take_live(self):
+        if self._step_id:
+            self._edits[self._step_id] = set(self._w._active_stop_paths)
+            self.grid.set_selected_paths(self._edits[self._step_id])
+            self._update_heuristic()
+
+    def _revert(self):
+        self._edits.pop(self._step_id, None)
+        self._step_changed()
+
+    def _save(self):
+        if not self._filename:
+            return
+        steps = [{"id": s["internal_id"], "name": s["name"], "stops": sorted(self._paths_of(s["internal_id"]))} for s in self._steps]
+        self._w.bridge.post_ui_event("save_combination", {"filename": os.path.splitext(self._filename)[0],
+                                                          "selected_id": self._step_id or "000", "steps": steps})
+        self._edits = {}
+
+    # -- heuristic reading
+    def _update_heuristic(self):
+        from keylab_bridge import registration_heuristic, setter_guide
+        names = {s["path"]: (s["division"], s["name"]) for s in self._w._available_stops}
+        chosen = [names[p] for p in sorted(self.grid.selected_paths()) if p in names]
+        result = registration_heuristic.analyse(chosen)
+        guide = self.guide_panel._guides.get(os.path.splitext(self._filename)[0], {})
+        star = lambda n: "\u2605" * n + "\u2606" * (5 - n)
+        html = [f"<h4>Heuristic reading: {result['count']} stops</h4><table>"]
+        for group, rows in (("period", self.guide_panel.PERIOD_NAMES), ("tradition", self.guide_panel.TRADITION_NAMES)):
+            for key, label in rows:
+                written = int((guide.get(group) or {}).get(key, 0) or 0)
+                note = f" &nbsp;<small>guide {star(written)}</small>" if written else ""
+                html.append(f"<tr><td>{label}</td><td>{star(result[group][key])}{note}</td></tr>")
+        html.append("</table>")
+        best = max(result["period"], key=lambda k: result["period"][k]) if result["count"] else ""
+        if best:
+            html.append(f"<p><b>Leans {best}</b> ({result['period'][best]}\u2605)</p>")
+        if result.get("notes"):
+            html.append("<p>" + "<br>".join("\u2022 " + n for n in result["notes"]) + "</p>")
+        if result["families"]:
+            html.append("<p><small>" + ", ".join(f"{k} {v}" for k, v in sorted(result["families"].items())) + "</small></p>")
+        html.append("<p><small>" + "<br>".join(result["lines"]) + "</small></p>")
+        organ = self.guide_panel._character
+        if organ and result["count"]:
+            html.append(f"<p>Suits this organ: {star(setter_guide.fit({'period': result['period'], 'tradition': result['tradition']}, organ))}</p>")
+        self.heuristic.setHtml("".join(html))
+
+    # -- snapshot / picture
+    def update_snapshot(self, snapshot):
+        self.guide_panel.update_snapshot(snapshot)
+        self.rebuild_files()
+        stops = self._w._available_stops
+        signature = tuple((s["path"], s["division"], s["name"]) for s in stops)
+        if signature != self._grid_signature:
+            self._grid_signature = signature
+            self.grid.set_grid_data(stops, [], [], [], draft_paths=None)
+            self._update_heuristic()
+        organ = snapshot.get("organ_path") or ""
+        if organ != self._image_organ:
+            self._image_organ = organ
+            from keylab_bridge.organ_image import organ_image
+            chosen = ""
+            try:
+                chosen = str(QSettings("KeyLabGrandOrgue", "OrganPictures").value(organ, "") or "")
+            except Exception:
+                chosen = ""
+            self.image.set_image(chosen if chosen and os.path.isfile(chosen) else organ_image(organ))
+
+    def _show_history(self):
+        OrganFaqDialog(self).exec()
+
+    def _choose_image(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Picture of the organ", os.path.dirname(self._image_organ or ""),
+                                              "Images (*.png *.jpg *.jpeg *.bmp *.gif)")
+        if path and self._image_organ:
+            QSettings("KeyLabGrandOrgue", "OrganPictures").setValue(self._image_organ, path)
+            self.image.set_image(path)
+
+
+class SetterGuidePanel(QWidget):
+    """Filters for the setter list plus the guide that accompanies a setter (or the organ's character): 0-5 stars per
+    period and tradition, composers, the reason for the registration and layering notes."""
+
+    PERIOD_NAMES = (("baroque", "Baroque"), ("classical", "Classical"), ("romantic", "Romantic"), ("modern", "Modern"))
+    TRADITION_NAMES = (("catholic", "Catholic"), ("early_protestant", "Early protestant"), ("modern_church", "Modern church"))
+
+    def __init__(self, post_event):
+        super().__init__()
+        self._post = post_event
+        self._filename = ""
+        self._guides = {}
+        self._character = {}
+        self.on_filter_changed = lambda: None
+        layout = QVBoxLayout(self)
+        filters = QHBoxLayout()
+        filters.addWidget(QLabel("Filter"))
+        self.period_filter = QComboBox()
+        self.period_filter.addItem("Any period", "")
+        for key, name in self.PERIOD_NAMES:
+            self.period_filter.addItem(name, key)
+        self.tradition_filter = QComboBox()
+        self.tradition_filter.addItem("Any tradition", "")
+        for key, name in self.TRADITION_NAMES:
+            self.tradition_filter.addItem(name, key)
+        self.composer_filter = QLineEdit()
+        self.composer_filter.setPlaceholderText("Composer")
+        self.stars_filter = QSpinBox()
+        self.stars_filter.setRange(1, 5)
+        self.stars_filter.setValue(3)
+        self.stars_filter.setSuffix(" \u2605 or more")
+        self.suits_filter = QCheckBox("Suits this organ")
+        for widget in (self.period_filter, self.tradition_filter):
+            widget.currentIndexChanged.connect(lambda _=0: self.on_filter_changed())
+            filters.addWidget(widget)
+        self.composer_filter.textChanged.connect(lambda _="": self.on_filter_changed())
+        self.stars_filter.valueChanged.connect(lambda _=0: self.on_filter_changed())
+        self.suits_filter.toggled.connect(lambda _=False: self.on_filter_changed())
+        filters.addWidget(self.composer_filter, 1)
+        filters.addWidget(self.stars_filter)
+        filters.addWidget(self.suits_filter)
+        layout.addLayout(filters)
+        self.target_combo = QComboBox()
+        self.target_combo.addItem("Guide of the selected setter", "setter")
+        self.target_combo.addItem("The organ: what it was built for", "organ")
+        self.target_combo.currentIndexChanged.connect(lambda _=0: self._load_fields())
+        self.title_label = QLabel()
+        target_row = QHBoxLayout()
+        target_row.addWidget(self.target_combo, 1)
+        target_row.addWidget(self.title_label)
+        layout.addLayout(target_row)
+        grid = QGridLayout()
+        self.stars = {}
+        names = self.PERIOD_NAMES + self.TRADITION_NAMES
+        for position, (key, name) in enumerate(names):
+            spin = StarRating()
+            self.stars[key] = spin
+            grid.addWidget(QLabel(name), position % 4, 0 if position < 4 else 2)
+            grid.addWidget(spin, position % 4, 1 if position < 4 else 3)
+        layout.addLayout(grid)
+        self.composers_edit = QLineEdit()
+        self.composers_edit.setPlaceholderText("Composers (comma separated)")
+        layout.addWidget(self.composers_edit)
+        notes_row = QHBoxLayout()
+        self.reason_edit = QPlainTextEdit()
+        self.reason_edit.setPlaceholderText("Why this registration (for the organ: what it was built for, builder, year)")
+        notes_row.addWidget(self.reason_edit, 1)
+        self.layering_edit = QPlainTextEdit()
+        self.layering_edit.setPlaceholderText("Layering: which stop families, in which order to add them")
+        notes_row.addWidget(self.layering_edit, 1)
+        layout.addLayout(notes_row, 1)
+        self.fit_label = QLabel()
+        layout.addWidget(self.fit_label)
+        self.save_button = QPushButton("Save guide")
+        self.save_button.clicked.connect(self._save)
+        layout.addWidget(self.save_button)
+
+    # -- data in
+    def update_snapshot(self, snapshot):
+        guides = snapshot.get("guides") or {}
+        character = snapshot.get("organ_character") or {}
+        changed = guides != self._guides or character != self._character
+        self._guides, self._character = guides, character
+        if changed and not self._has_focus():
+            self._load_fields()
+
+    def set_setter(self, filename):
+        if filename != self._filename:
+            self._filename = filename
+            self._load_fields()
+
+    def _has_focus(self):
+        return any(w.hasFocus() for w in (self.composers_edit, self.reason_edit, self.layering_edit, *self.stars.values()))
+
+    def _stem(self):
+        return os.path.splitext(self._filename)[0]
+
+    def _current(self):
+        if self.target_combo.currentData() == "organ":
+            data = dict(self._character)
+            data["reason"] = str(data.get("built_for", "") or "")
+            return data
+        return self._guides.get(self._stem(), {})
+
+    def _load_fields(self):
+        organ = self.target_combo.currentData() == "organ"
+        data = self._current()
+        for key, spin in self.stars.items():
+            group = data.get("period" if key in dict(self.PERIOD_NAMES) else "tradition") or {}
+            spin.setValue(int(group.get(key, 0) or 0))
+        self.composers_edit.setText(", ".join(data.get("composers", [])))
+        self.reason_edit.setPlainText(str(data.get("reason", "") or ""))
+        self.layering_edit.setPlainText(str(data.get("layering", "") or ""))
+        enabled = organ or bool(self._filename)
+        for widget in (*self.stars.values(), self.composers_edit, self.reason_edit, self.layering_edit, self.save_button):
+            widget.setEnabled(enabled)
+        self.title_label.setText("The organ's character" if organ else (self._filename or "Select a setter in the list"))
+        self.save_button.setText("Save organ character" if organ else "Save guide")
+        self.fit_label.setText("" if organ or not self._filename else "Suits this organ: " + self._fit_text())
+
+    def _fit_text(self):
+        from keylab_bridge import setter_guide
+        stars = setter_guide.fit(self._guides.get(self._stem(), {}), self._character)
+        return "not rated yet" if not stars else "\u2605" * stars + "\u2606" * (5 - stars)
+
+    def _fields(self):
+        return {"period": {k: self.stars[k].value() for k, _ in self.PERIOD_NAMES},
+                "tradition": {k: self.stars[k].value() for k, _ in self.TRADITION_NAMES},
+                "composers": self.composers_edit.text(), "reason": self.reason_edit.toPlainText(),
+                "layering": self.layering_edit.toPlainText()}
+
+    def _save(self):
+        data = self._fields()
+        if self.target_combo.currentData() == "organ":
+            data["built_for"] = data["reason"]
+            self._post("character_save", data)
+        elif self._filename:
+            self._post("guide_save", (self._filename, data))
+
+    # -- filter
+    def allows(self, filename):
+        """True when a setter file passes the filters (all off = everything)."""
+        from keylab_bridge import setter_guide
+        period, tradition = self.period_filter.currentData() or "", self.tradition_filter.currentData() or ""
+        composer = self.composer_filter.text().strip()
+        guide = self._guides.get(os.path.splitext(filename)[0], {})
+        if not (period or tradition or composer or self.suits_filter.isChecked()):
+            return True
+        if not setter_guide.matches(guide, period, tradition, composer, self.stars_filter.value()):
+            return False
+        if self.suits_filter.isChecked() and setter_guide.fit(guide, self._character) < self.stars_filter.value():
+            return False
+        return True
+
+
 class BridgeWindow(QMainWindow):
     sheet_music_navigation_requested = Signal(int)
     _record_check = Signal(object)
@@ -1772,21 +2400,10 @@ class BridgeWindow(QMainWindow):
         live_grid.addWidget(self.live_splitter, 0, 0, 2, 3)
         live_grid.setRowStretch(1, 1)
 
-        setter_page = QWidget()
-        setter_tools_layout = QVBoxLayout(setter_page)
-        self.setter_edit_summary = QLabel()
-        setter_tools_layout.addWidget(self.setter_edit_summary)
-        setter_buttons = QGridLayout()
-        for position, (label, action) in enumerate((
-                ("Previous step", "previous_step"), ("Next step", "next_step"),
-                ("Load", "load"), ("Save", "save"))):
-            button = QPushButton(label)
-            button.clicked.connect(lambda checked=False, name=action: self._transport_action(name))
-            setter_buttons.addWidget(button, position // 2, position % 2)
-        setter_tools_layout.addLayout(setter_buttons)
-        setter_tools_layout.addStretch(1)
-        setter_tools_layout.addWidget(self.edit_combination_button)
-        self.main_tabs.addTab(setter_page, "Setter Editing")
+        self.setter_edit_summary = QLabel()           # kept for the status text code; not shown on the wiki page
+        self.wiki_page = SetterWikiPage(self)
+        self.guide_panel = self.wiki_page.guide_panel
+        self.main_tabs.addTab(self.wiki_page, "Organ Setter Wiki")
 
         files_page = QWidget()
         files_layout = QVBoxLayout(files_page)
@@ -1800,6 +2417,16 @@ class BridgeWindow(QMainWindow):
         self.open_combinations_button = QPushButton("Open combination folder")
         self.open_combinations_button.clicked.connect(self._open_combination_folder)
         file_actions.addWidget(self.open_combinations_button)
+        self.tag_delete_button = QPushButton("Tag for deletion")
+        self.tag_delete_button.clicked.connect(lambda: self._tag_setter_file(True))
+        file_actions.addWidget(self.tag_delete_button)
+        self.untag_delete_button = QPushButton("Untag")
+        self.untag_delete_button.clicked.connect(lambda: self._tag_setter_file(False))
+        file_actions.addWidget(self.untag_delete_button)
+        self.remove_tagged_button = QPushButton("Remove tagged files")
+        self.remove_tagged_button.setToolTip("Moves tagged files to Combinations/_trash (recoverable) and refreshes GrandOrgue")
+        self.remove_tagged_button.clicked.connect(self._remove_tagged_setters)
+        file_actions.addWidget(self.remove_tagged_button)
         files_layout.addLayout(file_actions)
         self.main_tabs.addTab(files_page, "Combination Files")
 
@@ -1853,6 +2480,17 @@ class BridgeWindow(QMainWindow):
 
         organ_page = QWidget()
         organ_layout = QVBoxLayout(organ_page)
+        known_row = QHBoxLayout()
+        known_row.addWidget(QLabel("Known organs"))
+        self.organ_known_combo = QComboBox()
+        self.organ_known_combo.setToolTip("Organs that have an organ map (Organs/<organ>.map.yaml)")
+        known_row.addWidget(self.organ_known_combo, 1)
+        self.organ_use_button = QPushButton("Use this organ")
+        self.organ_use_button.setToolTip("Sets the organ file and setter set in config.yaml; takes effect at the next start")
+        self.organ_use_button.clicked.connect(
+            lambda: self.bridge.post_ui_event("organ_use", self.organ_known_combo.currentData() or ""))
+        known_row.addWidget(self.organ_use_button)
+        organ_layout.addLayout(known_row)
         organ_path_row = QHBoxLayout()
         self.organ_path_edit = QLineEdit(self.bridge.organ_path)
         self.organ_path_edit.setPlaceholderText("GrandOrgue .organ file")
@@ -1863,6 +2501,10 @@ class BridgeWindow(QMainWindow):
         self.organ_browse_button = QPushButton("Browse...")
         self.organ_browse_button.clicked.connect(self._browse_organ)
         organ_path_row.addWidget(self.organ_browse_button)
+        self.organ_add_button = QPushButton("Add organ")
+        self.organ_add_button.setToolTip("Builds the layout, organ map, setter folder and GrandOrgue MIDI settings from the .organ file alone")
+        self.organ_add_button.clicked.connect(lambda: self.bridge.post_ui_event("organ_add", self.organ_path_edit.text().strip()))
+        organ_path_row.addWidget(self.organ_add_button)
         self.organ_import_button = QPushButton("Import organ")
         self.organ_import_button.clicked.connect(self._import_organ)
         organ_path_row.addWidget(self.organ_import_button)
@@ -1874,9 +2516,17 @@ class BridgeWindow(QMainWindow):
         self.organ_summary_label = QLabel()
         self.organ_summary_label.setWordWrap(True)
         organ_layout.addWidget(self.organ_summary_label)
-        self.organ_settings_label = QLabel()
-        self.organ_settings_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        organ_layout.addWidget(self.organ_settings_label)
+        settings_row = QHBoxLayout()
+        settings_row.addWidget(QLabel("GrandOrgue MIDI settings file to import"))
+        self.organ_settings_label = QLineEdit()
+        self.organ_settings_label.setReadOnly(True)
+        self.organ_settings_label.setPlaceholderText("shown after Add organ / Import organ")
+        settings_row.addWidget(self.organ_settings_label, 1)
+        self.organ_settings_copy = QPushButton("Copy path")
+        self.organ_settings_copy.setToolTip("Copies the file's full path: paste it into GrandOrgue's file dialog (MIDI settings > Import)")
+        self.organ_settings_copy.clicked.connect(self._copy_organ_settings_path)
+        settings_row.addWidget(self.organ_settings_copy)
+        organ_layout.addLayout(settings_row)
         organ_layout.addStretch(1)
         self.main_tabs.addTab(organ_page, "Organ Selection")
 
@@ -2005,6 +2655,11 @@ class BridgeWindow(QMainWindow):
             lastdir.put("organ", path)
             self.organ_path_edit.setText(path)
             self.bridge.post_ui_event("organ_path", path)
+
+    def _copy_organ_settings_path(self):
+        clipboard = QApplication.clipboard()
+        if clipboard is not None and self.organ_settings_label.text():
+            clipboard.setText(os.path.normpath(self.organ_settings_label.text()))
 
     def _import_organ(self):
         if getattr(self, "_organ_import_pending", False):
@@ -2730,6 +3385,22 @@ class BridgeWindow(QMainWindow):
     # The jog walks every enabled, visible control on the active tab in creation order:
     # buttons, checkboxes, combo boxes, and each row of every list. Anything added to a
     # tab later is picked up automatically. Jog press activates the focused control.
+    def _combination_files(self):
+        return getattr(self, "_wiki_files", [])
+
+    def _tag_setter_file(self, delete):
+        item = self.setter_files_list.currentItem()
+        if item is not None:
+            self.bridge.post_ui_event("setter_tag", (item.text(), delete))
+
+    def _remove_tagged_setters(self):
+        tagged = [self.setter_files_list.item(i).text() for i in range(self.setter_files_list.count())
+                  if self.setter_files_list.item(i).data(Qt.ItemDataRole.UserRole)]
+        if tagged and QMessageBox.question(
+                self, "Remove tagged setter files",
+                f"Move {len(tagged)} tagged file(s) to the trash folder?\n\n" + "\n".join(tagged[:12])) == QMessageBox.StandardButton.Yes:
+            self.bridge.post_ui_event("setter_remove_tagged")
+
     def _edit_setter_file(self, item):
         """Open the editor on a setter file. Selects its first step WITHOUT signalling the backend,
         so merely opening the editor never cues or loads anything on the organ."""
@@ -2984,7 +3655,7 @@ class BridgeWindow(QMainWindow):
         ask.setTextFormat(Qt.TextFormat.RichText)
         ask.setText(
             f"<b>GrandOrgue KeyLab bridge {APP_VERSION}</b><br>Stave Station: MIDI to sheet music for organ.<br>"
-            "Application code: MIT License.<br><br>"
+            f"&copy; {COPYRIGHT.split('(c) ', 1)[-1]}. Application code: MIT License.<br><br>"
             "<b>Credits</b><br>"
             "Music engraving: <a href='https://www.verovio.org'>Verovio</a> (LGPL-3.0), "
             "&copy; RISM Digital Center and the Verovio contributors.<br>"
@@ -3531,18 +4202,38 @@ class BridgeWindow(QMainWindow):
         self.couplings_list.setEnabled(snapshot.get("organ_routes_ready", True))
         if self.organ_path_edit.text() != snapshot.get("organ_path", "") and not self.organ_path_edit.hasFocus():
             self.organ_path_edit.setText(snapshot.get("organ_path", ""))
+        known = [(f"{m['organ'] or m['stem']}  ({m['stem']})", m["stem"]) for m in snapshot.get("organ_maps", [])]
+        if known != [(self.organ_known_combo.itemText(i), self.organ_known_combo.itemData(i)) for i in range(self.organ_known_combo.count())]:
+            self.organ_known_combo.blockSignals(True)
+            self.organ_known_combo.clear()
+            for text, stem in known:
+                self.organ_known_combo.addItem(text, stem)
+            self.organ_known_combo.blockSignals(False)
+        self.organ_use_button.setEnabled(bool(known))
         self.organ_summary_label.setText(snapshot.get("organ_summary", "No organ profile loaded"))
         self.organ_settings_label.setText(snapshot.get("organ_settings_path", ""))
+        self.organ_settings_copy.setEnabled(bool(self.organ_settings_label.text()))
         self._organ_import_pending = bool(snapshot.get("organ_import_pending"))
         self.organ_path_edit.setEnabled(not self._organ_import_pending)
         self.organ_browse_button.setEnabled(not self._organ_import_pending)
+        self.organ_add_button.setEnabled(bool(self.organ_path_edit.text().strip()) and not self._organ_import_pending)
         self.organ_cancel_button.setVisible(self._organ_import_pending)
         self.organ_import_button.setText(
             "Confirm MIDI import" if self._organ_import_pending else "Import organ"
         )
         self.organ_import_button.setEnabled(bool(self.organ_path_edit.text().strip()) or self._organ_import_pending)
         setter_files = snapshot.get("combination_files", [])
+        tags = snapshot.get("combination_file_tags", {})
         current_files = [self.setter_files_list.item(index).text() for index in range(self.setter_files_list.count())]
+        for index in range(self.setter_files_list.count()):          # tagged files: struck through, with a tooltip
+            entry = self.setter_files_list.item(index)
+            if entry is not None:
+                tagged = bool(tags.get(entry.text()))
+                entry.setData(Qt.ItemDataRole.UserRole, tagged)
+                font = entry.font()
+                font.setStrikeOut(tagged)
+                entry.setFont(font)
+                entry.setToolTip("Tagged for deletion" if tagged else "")
         if current_files != setter_files:
             self.setter_files_list.clear()
             self.setter_files_list.addItems(setter_files)
@@ -3605,6 +4296,8 @@ class BridgeWindow(QMainWindow):
         self._set_busy(str(snapshot.get("busy") or ""))
         self._available_stops = list(snapshot.get("available_stops", []))
         self._active_stop_paths = list(snapshot.get("active_stop_paths", []))
+        self._wiki_files = list(snapshot.get("combination_files", []))
+        self.wiki_page.update_snapshot(snapshot)
         self._sync_stop_grid_popup(snapshot)
         if self.sheet_music_window is not None and self.sheet_music_window.isVisible():
             self.sheet_music_window.update_setters(

@@ -13,7 +13,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from version import APP_NAME, APP_VERSION, APP_VERSION_NUMERIC  # noqa: E402
+from version import APP_NAME, APP_VERSION, APP_VERSION_NUMERIC, COPYRIGHT  # noqa: E402
 
 onefile = "--onefile" in sys.argv
 args = [
@@ -24,7 +24,8 @@ args = [
     "--output-dir=" + os.path.join(ROOT, "dist"),
     "--output-filename=KeyLabGrandOrgueBridge" + (".exe" if sys.platform == "win32" else ""),
     f"--product-name={APP_NAME}", f"--product-version={APP_VERSION_NUMERIC}", f"--file-version={APP_VERSION_NUMERIC}",
-    "--company-name=MackyBMC",
+    "--company-name=Basil Mc Helm",
+    f"--copyright={COPYRIGHT}",
     # the program imports its stave-editor modules by bare name: tell Nuitka about them
     "--include-package=keylab_bridge",
     *[f"--include-module={m}" for m in ("translations", "flow_layout", "fluid_columns", "sheet_images", "take_preview", "audio_mixer", "mixer_panel", "polish", "themes", "themes_ui", "lastdir", "go_midi_setup", "solfa",
@@ -47,6 +48,8 @@ elif sys.platform == "darwin":
 for name in ("config.yaml", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md"):
     if os.path.exists(os.path.join(ROOT, name)):
         args += [f"--include-data-files={os.path.join(ROOT, name)}={name}"]
+if os.path.exists(os.path.join(ROOT, "docs", "ORGAN_FAQ.md")):
+    args += [f"--include-data-files={os.path.join(ROOT, 'docs', 'ORGAN_FAQ.md')}=docs/ORGAN_FAQ.md"]
 args.append(os.path.join(ROOT, "keylab_go_bridge.py"))
 print(" ".join(args))
 sys.exit(subprocess.call(args, cwd=ROOT, env={**os.environ, "PYTHONPATH": os.pathsep.join([ROOT, os.path.join(ROOT, "midi_stave")])}))

@@ -7,6 +7,8 @@ ended in setter files GrandOrgue could not use. This module is the one place tha
 repairs the damaged ones by label: a label ("P  Subbaß 16'") has one id per manual and category in an intact file.
 
 CHANGELOG
+2026-11-21  The organ's names come from the organ map (set_organ_labels); the profile / ODF reading moved to organ_map.py.
+2026-11-21  Entry names: the organ's real names (scanner stand-ins like Coupler001 ignored) or the majority of intact files decide the name of an id; docs/FRIESACH_NAMING.md.
 2026-11-20  New: write_combination_file() (zero-padded text keys, plain scalars, "---", ordered like GrandOrgue's own files, steps completed from the
             folder's intact files) and repair_folder_format() (damaged files are rebuilt by label, folder backed up first, silent).
 """
@@ -26,27 +28,12 @@ _PADDED_KEY = re.compile(r"^\s+\d{1,2}\s*:", re.MULTILINE)
 _ODF_LABELS = {}                  # (manual number, category) -> {full label: id}, from the organ's own ODF
 
 
-def set_organ_profile(profile):
-    """Full GrandOrgue labels from the scanned organ (the layout only holds 16-character LCD names, which GrandOrgue
-    rejects: 'Wrong name "HW  Spitzflöte 4" instead of "HW  Spitzflöte 4\'"'). Idempotent; an empty profile clears them."""
+def set_organ_labels(labels):
+    """The loaded organ's names from its organ map (organ_map.labels_for_setters): {(manual or "step", category): {name: id}}.
+    They decide the name of every mapped id; an empty dict clears them."""
     _ODF_LABELS.clear()
-    for manual in (profile or {}).get("manuals", []):
-        number = int(manual["number"])
-        for category, key in (("switches", "switches"), ("stops", "stops"), ("couplers", "couplers")):
-            labels = _ODF_LABELS.setdefault((number, category), {})
-            for entry in manual.get(key, []):
-                label = str(entry.get("name", "")).strip()
-                if label and label not in labels:
-                    labels[label] = int(entry["index"])
-
-
-def use_organ_file(path):
-    """Read the labels straight from an .organ file (before the application has scanned it)."""
-    try:
-        from .odf_scan import scan_odf
-        set_organ_profile(scan_odf(path)) if path and os.path.isfile(path) else None
-    except (OSError, ValueError):
-        pass
+    for key, names in (labels or {}).items():
+        _ODF_LABELS[key] = dict(names)
 
 
 def _pad(key):
@@ -81,6 +68,7 @@ def label_dictionary(folder, skip=()):
     """{(manual or "step", category): {label: id}} from the folder's intact files (zero-padded keys, nothing ambiguous).
     Also returns the manual names, the info block and one set of organ-wide entries."""
     seen = {}
+    id_votes = {}                                       # (manual, category) -> id -> {label: files showing it}
     manual_names, info = {}, {}
     step_template = {}
     skip = {s.casefold() for s in skip}
@@ -110,6 +98,8 @@ def label_dictionary(folder, skip=()):
                 for category in CATEGORIES:
                     for oid, label in _entries(manual.get(category)).items():
                         seen.setdefault((mid, category), {}).setdefault(str(label), set()).add(int(oid))
+                        votes = id_votes.setdefault((mid, category), {}).setdefault(int(oid), {})
+                        votes[str(label)] = votes.get(str(label), 0) + 1
             for category in STEP_CATEGORIES:
                 for oid, label in _entries(sequence.get(category)).items():
                     seen.setdefault(("step", category), {}).setdefault(str(label), set()).add(int(oid))
@@ -134,7 +124,10 @@ def label_dictionary(folder, skip=()):
                     counts[switch_id - stop_id] = counts.get(switch_id - stop_id, 0) + 1
             if counts:
                 offsets[mid] = max(counts, key=lambda k: counts[k])
-    by_id = {key: {oid: label for label, oid in labels.items()} for key, labels in _ODF_LABELS.items()}
+    by_id = {key: {oid: max(labels, key=lambda l: (labels[l], len(l))) for oid, labels in ids.items()}   # most files agree
+             for key, ids in id_votes.items()}
+    for key, labels in _ODF_LABELS.items():                  # the organ's own (real) names win
+        by_id.setdefault(key, {}).update({oid: label for label, oid in labels.items()})
     return {"by_id": by_id, "ids": dictionary, "manual_names": manual_names, "info": info, "step_switches": step_template, "offsets": offsets}
 
 
@@ -230,6 +223,8 @@ def _repair_step(sequence, dictionary, add_missing=True):
         for label in list(step_ids["switches"].values()):
             if label in known_trem:
                 step_ids["tremulants"].setdefault(known_trem[label], label)
+    names = dictionary.get("by_id", {}).get(("step", "switches"), {})
+    step_ids["switches"] = {oid: names.get(oid, label) for oid, label in step_ids["switches"].items()}
     if step_ids["tremulants"]:
         result["tremulants"] = {_pad(k): v for k, v in sorted(step_ids["tremulants"].items())}
     result["switches"] = {_pad(k): v for k, v in sorted(step_ids["switches"].items())}
@@ -270,7 +265,8 @@ def _short_labels(data, dictionary):
     for sequence in _entries(data.get("sequencer")).values():
         if not isinstance(sequence, dict):
             continue
-        groups = [(dictionary["ids"].get(("step", c), {}), _entries(sequence.get(c)), {}) for c in STEP_CATEGORIES]
+        groups = [(dictionary["ids"].get(("step", c), {}), _entries(sequence.get(c)),
+                   dictionary.get("by_id", {}).get(("step", c), {})) for c in STEP_CATEGORIES]
         for manual_id, manual in _entries(sequence.get("manuals")).items():
             if isinstance(manual, dict):
                 groups += [(dictionary["ids"].get((int(manual_id), c), {}), _entries(manual.get(c)),

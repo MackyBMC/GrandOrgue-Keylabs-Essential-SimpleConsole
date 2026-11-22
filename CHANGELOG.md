@@ -2,6 +2,23 @@
 
 ## 2.0.9-32 (2026-11-21)
 
+### New
+- Copyright: Basil Mc Helm is named as the copyright holder in LICENSE, Help > About, the README, the Windows executable properties and the installer publisher.
+- **Organ Setter Wiki** (the former Setter Editing tab) in four frames that remember their sizes: setter-file dropdown with previous / next and the guide top left, the organ's picture top right, the stop editor of the chosen step bottom left, the heuristic reading bottom right.
+- Setter dropdown: move to any setter file, independent of the setter that is live in GrandOrgue; the list follows the filters (period, tradition, composer, stars, "suits this organ").
+- Setter guides: each setter can carry a guide with 0-5 stars for baroque, classical, romantic and modern and for catholic, early protestant and modern church traditions, composers, the reason for the registration and layering notes. Stored as `Guides/<set>/<setter>.guide.yaml` outside the Combinations folder so GrandOrgue never reads them; read from the GrandOrgue data folder and also from the project's `Guides/<set>/`, saved to the data folder.
+- Ratings are five clickable stars drawn in the theme's accent colour (click the current rating again to clear).
+- Organ character: what an organ was built for (builder, year, stop count, ratings, layering) is kept in its organ map and edited in the same panel. Friesach and Cracow are filled in the first time from the sample makers' pages; existing text is kept.
+- Organ picture: the first image the `.organ` file refers to, or "Choose picture..." (remembered per organ).
+- Heuristic reading: for the selected stops, stop-family counts and 0-5 stars per period and tradition (from stop names and footage), shown beside the guide's own ratings and a "suits this organ" rating. A hint, not a verdict.
+- Stop editor on the wiki: edit a step's stops, "Take live stops", "Revert", "Save setter".
+- Organ FAQ (`docs/ORGAN_FAQ.md`): history, regions, liturgy and registration as questions and answers. Opens as plain reading; "Edit" shows a Markdown editor with toolbar and live preview, saved as a copy in the data folder, "Reset" returns to the shipped text.
+- Add organ also maps the active organ's default setters (Friesach's set) onto the new organ as well as the stop names allow, using the combination alias file, and writes them in GrandOrgue's format.
+- Combination Files tab: "Tag for deletion", "Untag" and "Remove tagged files" (tagged files are struck through; removing moves them to `Combinations/_trash/`, recoverable). A failing setter save now logs the reason.
+- "Add organ" (Organ Selection tab): bring in another organ from its `.organ` file alone, no MIDI export needed. It writes the layout file, the organ map, the setter folder and the GrandOrgue MIDI settings to import (`Settings/<organ> midi import.yaml`); the organ then appears under "Known organs", and "Use this organ" also switches the layout file. The active organ is not touched.
+- Organ map, stage 2: screen and snapshot names come from the map's display names in the chosen language (`display: {default, en, de, af ...}`; the LCD takes the first 16 characters; `lcd_names` in the config still win), setter files carry the organ's exact names, the setter names matrix is now a `setters:` section of the map (the old `Settings/<organ>.names.yaml` is merged in once), and the map lists the organs you can switch to (`organ_maps` in the snapshot; selecting one sets the organ file and setter set, effective at the next start).
+- Organ map (`Organs/<organ>.map.yaml`, one per organ): the bridge's own keys (P1, H3, Cp1.2, T1 ...) linked to the organ's ids and its exact GrandOrgue names, with display names per language. Setter files take every name from the map, so names cannot drift; a different organ is a different map. Built from the organ file the first time and kept (display names you edit stay).
+
 ### Fixed
 - A setter saved by the bridge could be rejected by GrandOrgue ("Wrong name ... instead of ..."): the bridge wrote its 16-character LCD stop names. Setter files now use the full names from the organ file, and setter files already saved with cut-short names are repaired silently (folder backed up first).
 - Release versions can be `X.Y.Z` or `X.Y.Z-N` with optional letters (`2.0.9-1`, `2.0.9-1a`); the Windows executable gets a four-number file version (`2.0.9.101`) and only `-linux.N` tags are marked pre-release.

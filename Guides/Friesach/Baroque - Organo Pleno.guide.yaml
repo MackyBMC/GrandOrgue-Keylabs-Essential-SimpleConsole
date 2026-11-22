@@ -1,0 +1,16 @@
+# Setter guide (DRAFT): ratings 0-5 stars per period and tradition, composers, why this registration, how to layer it.
+period:
+  baroque: 5
+  classical: 2
+  romantic: 0
+  modern: 0
+tradition:
+  catholic: 2
+  early_protestant: 3
+  modern_church: 0
+composers:
+- Bach
+- Buxtehude
+reason: 'DRAFT generated from the setter''s name and stops; edit freely. Registers
+  used: principals, mixtures. Largest step has 10 stops.'
+layering: 'Step ''Baroque - Organo Pleno'': 10 stops (principals 6, mixtures 2)'

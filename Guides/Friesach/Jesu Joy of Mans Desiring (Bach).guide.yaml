@@ -1,0 +1,22 @@
+# Setter guide (DRAFT): ratings 0-5 stars per period and tradition, composers, why this registration, how to layer it.
+period:
+  baroque: 5
+  classical: 0
+  romantic: 3
+  modern: 0
+tradition:
+  catholic: 0
+  early_protestant: 5
+  modern_church: 0
+composers:
+- J. S. Bach
+reason: 'DRAFT generated from the setter''s name and stops; edit freely. Registers
+  used: principals, flutes, strings, reeds. Largest step has 9 stops.'
+layering: 'Step ''Opening - flute melody over triplets'': 4 stops (flutes 3)
+
+  Step ''Chorale on Hautbois'': 6 stops (flutes 4, reeds 1)
+
+  Step ''Final chorale - fuller'': 9 stops (principals 5, flutes 3, strings 1, reeds
+  1)
+
+  Step ''Closing - soft'': 4 stops (flutes 3)'

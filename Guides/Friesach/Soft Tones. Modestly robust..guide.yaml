@@ -1,0 +1,14 @@
+# Setter guide (DRAFT): ratings 0-5 stars per period and tradition, composers, why this registration, how to layer it.
+period:
+  baroque: 0
+  classical: 0
+  romantic: 3
+  modern: 4
+tradition:
+  catholic: 0
+  early_protestant: 3
+  modern_church: 5
+composers: []
+reason: 'DRAFT generated from the setter''s name and stops; edit freely. Registers
+  used: principals, flutes. Largest step has 4 stops.'
+layering: 'Step ''Soft'': 4 stops (principals 2, flutes 1)'

@@ -1,0 +1,20 @@
+# Setter guide (DRAFT): ratings 0-5 stars per period and tradition, composers, why this registration, how to layer it.
+period:
+  baroque: 5
+  classical: 0
+  romantic: 3
+  modern: 0
+tradition:
+  catholic: 0
+  early_protestant: 5
+  modern_church: 0
+composers:
+- J. S. Bach
+reason: 'DRAFT generated from the setter''s name and stops; edit freely. Registers
+  used: flutes, strings, reeds. Largest step has 6 stops.'
+layering: 'Step ''Solo Jubalflote'': 5 stops (flutes 3, reeds 1)
+
+  Step ''Solo Englischhorn'': 5 stops (flutes 2, reeds 2)
+
+  Step ''Solo Jubalflote - veiled strings below'': 6 stops (flutes 3, strings 2, reeds
+  1)'

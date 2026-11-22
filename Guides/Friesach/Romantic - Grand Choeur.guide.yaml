@@ -1,0 +1,18 @@
+# Setter guide (DRAFT): ratings 0-5 stars per period and tradition, composers, why this registration, how to layer it.
+period:
+  baroque: 3
+  classical: 3
+  romantic: 5
+  modern: 2
+tradition:
+  catholic: 3
+  early_protestant: 0
+  modern_church: 0
+composers:
+- Franck
+- Vierne
+- Widor
+reason: 'DRAFT generated from the setter''s name and stops; edit freely. Registers
+  used: principals, flutes, strings, reeds, mixtures. Largest step has 18 stops.'
+layering: 'Step ''Romantic - Grand Choeur'': 18 stops (principals 7, flutes 1, strings
+  1, reeds 4, mixtures 2)'

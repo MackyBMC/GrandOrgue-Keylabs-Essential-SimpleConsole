@@ -1,0 +1,20 @@
+# Setter guide (DRAFT): ratings 0-5 stars per period and tradition, composers, why this registration, how to layer it.
+period:
+  baroque: 0
+  classical: 3
+  romantic: 3
+  modern: 4
+tradition:
+  catholic: 0
+  early_protestant: 5
+  modern_church: 5
+composers:
+- Moravian chorale tradition
+reason: 'DRAFT generated from the setter''s name and stops; edit freely. Registers
+  used: principals, flutes, strings, reeds, mixtures. Largest step has 11 stops.'
+layering: 'Step ''Moravian Hymn - Intro'': 3 stops (principals 1, flutes 1)
+
+  Step ''Moravian Hymn - Verse 1-Verse 2'': 6 stops (principals 5, strings 1)
+
+  Step ''Moravian Hymn - Closing'': 11 stops (principals 7, strings 1, reeds 1, mixtures
+  1)'

@@ -1,0 +1,16 @@
+# Setter guide (DRAFT): ratings 0-5 stars per period and tradition, composers, why this registration, how to layer it.
+period:
+  baroque: 2
+  classical: 5
+  romantic: 1
+  modern: 0
+tradition:
+  catholic: 3
+  early_protestant: 2
+  modern_church: 0
+composers:
+- Mozart
+- Haydn
+reason: 'DRAFT generated from the setter''s name and stops; edit freely. Registers
+  used: principals. Largest step has 1 stops.'
+layering: 'Step ''Classical - Solo Principal'': 1 stops (principals 1)'

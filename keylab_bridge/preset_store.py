@@ -167,7 +167,7 @@ def load_combinations(config_path, raw):
         return combinations
     from . import setter_names
     root = combination_root(config_path, set_name)
-    matrix_file = setter_names.matrix_path(root, set_name)
+    matrix_file = setter_names.matrix_file(config_path, raw, root, set_name)
     repair = setter_names.repair_folder(folder, matrix_file, organ=set_name)
     if repair["renamed"]:
         LAST_REPAIR.update(repair)
@@ -213,6 +213,7 @@ def load_combinations(config_path, raw):
                 "internal_id": normalized_id,
                 "switch_paths": switch_paths,
                 "file_names": setter_names.file_names(matrix, filename),
+                "tagged_delete": bool((matrix.get("setters", {}).get(os.path.splitext(filename)[0]) or {}).get("delete")),
             })
     return combinations
 
@@ -249,12 +250,12 @@ def _write_managed_switches(sequence, active_paths):
                 manual = manuals.setdefault(manual_key, {})
             switches = manual.setdefault(category, {})
             _replace_managed_switch(
-                switches, switch_id, item.name if item.path in active_paths else None,
+                switches, switch_id, (item.go_name or item.name) if item.path in active_paths else None,
             )
         else:
             switch_id = int(item.path)
             _replace_managed_switch(
-                global_switches, switch_id, item.name if item.path in active_paths else None,
+                global_switches, switch_id, (item.go_name or item.name) if item.path in active_paths else None,
             )
 
 

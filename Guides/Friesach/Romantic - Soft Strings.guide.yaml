@@ -1,0 +1,17 @@
+# Setter guide (DRAFT): ratings 0-5 stars per period and tradition, composers, why this registration, how to layer it.
+period:
+  baroque: 0
+  classical: 0
+  romantic: 5
+  modern: 2
+tradition:
+  catholic: 3
+  early_protestant: 0
+  modern_church: 0
+composers:
+- Franck
+- Vierne
+- Widor
+reason: 'DRAFT generated from the setter''s name and stops; edit freely. Registers
+  used: flutes, strings. Largest step has 3 stops. Uses the tremulant.'
+layering: 'Step ''Romantic - Soft Strings'': 3 stops (flutes 1, strings 2) + tremulant'

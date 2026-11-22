@@ -7,6 +7,8 @@ CHANGELOG
 2026-11-10  Prepare release v2.0.8.
 """
 APP_NAME = "KeyLab GrandOrgue Bridge"
+AUTHOR = "Basil Mc Helm"
+COPYRIGHT = f"Copyright (c) 2026 {AUTHOR}"
 APP_VERSION = "2.0.9-32"              # X.Y.Z, or X.Y.Z-N with optional letters: 2.0.9-1, 2.0.9-1a, 2.0.9-2b
 
 import re as _re
