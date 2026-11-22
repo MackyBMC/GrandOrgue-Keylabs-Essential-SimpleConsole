@@ -3649,6 +3649,7 @@ class BridgeWindow(QMainWindow):
         dialog.exec()
 
     def show_about(self):
+        from version import COPYRIGHT
         from version import APP_VERSION
         ask = QMessageBox(self)
         ask.setWindowTitle("About")
