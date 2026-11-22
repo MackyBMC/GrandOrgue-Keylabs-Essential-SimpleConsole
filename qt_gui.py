@@ -1,6 +1,7 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-22  Organ Setter Wiki: the empty PAD MAP strip is hidden above the stop editor.
 2026-11-22  Guide ratings are five clickable stars (click the current rating again to clear); "Organ FAQ..." opens docs/ORGAN_FAQ.md (eras, regions, liturgy, registration).
 2026-11-22  Organ FAQ is an editable Markdown window (opens as plain reading; the Edit button shows the toolbar, live preview, saved as a copy in the data folder, Reset to the shipped text); stars are painted in the theme accent colour; the Organ Setter Wiki frames remember their sizes.
 2026-11-22  "Setter Editing" is now "Organ Setter Wiki": setter-file dropdown with previous / next (independent of the live setter, follows the filters), guide top left, organ picture top right (first image the .organ refers to, or Choose picture...), stop editor of the chosen step bottom left (Save setter / Revert / Take live stops) and a heuristic reading of the selected stops (family counts, 0-5 stars per period / tradition beside the guide ratings) bottom right.
@@ -1001,9 +1002,11 @@ class StopGridWidget(QWidget):
         self.mapping_label = QLabel()
         self.mapping_label.setWordWrap(True)
         layout.addWidget(self.mapping_label)
-        self.preview_grid = QGridLayout()
+        self.preview_box = QWidget()
+        self.preview_grid = QGridLayout(self.preview_box)
+        self.preview_grid.setContentsMargins(0, 0, 0, 0)
         self.preview_grid.setSpacing(4)
-        layout.addLayout(self.preview_grid)
+        layout.addWidget(self.preview_box)
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.content = QWidget()
@@ -1061,6 +1064,11 @@ class StopGridWidget(QWidget):
             else:
                 self._selected_paths.discard(path)
         self.toggle_requested.emit(path, checked)
+
+    def set_pad_map_visible(self, visible):
+        """The PAD MAP strip (which stops sit on the KeyLab pads) only means something beside the live pads."""
+        self.mapping_label.setVisible(visible)
+        self.preview_box.setVisible(visible)
 
     def selected_paths(self):
         return set(self._selected_paths)
@@ -1751,6 +1759,7 @@ class SetterWikiPage(QWidget):
             step_row.addWidget(button)
         editor_layout.addLayout(step_row)
         self.grid = StopGridWidget(draft=True)
+        self.grid.set_pad_map_visible(False)             # no pad window here
         editor_layout.addWidget(self.grid, 1)
         bottom.addWidget(editor)
         from PySide6.QtWidgets import QTextBrowser

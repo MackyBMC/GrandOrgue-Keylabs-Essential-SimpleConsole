@@ -3,6 +3,7 @@
 ## 2.0.9-32 (2026-11-21)
 
 ### New
+- Organ Setter Wiki: the empty PAD MAP strip is hidden above the stop editor.
 - Copyright: Basil Mc Helm is named as the copyright holder in LICENSE, Help > About, the README, the Windows executable properties and the installer publisher.
 - **Organ Setter Wiki** (the former Setter Editing tab) in four frames that remember their sizes: setter-file dropdown with previous / next and the guide top left, the organ's picture top right, the stop editor of the chosen step bottom left, the heuristic reading bottom right.
 - Setter dropdown: move to any setter file, independent of the setter that is live in GrandOrgue; the list follows the filters (period, tradition, composer, stars, "suits this organ").
