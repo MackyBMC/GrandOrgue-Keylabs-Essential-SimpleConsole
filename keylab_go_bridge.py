@@ -53,6 +53,7 @@ solution on awkward driver setups - use --kl-main (no relay) whenever direct sha
   (then point GrandOrgue's MIDI input at "KL2GO" instead of the KeyLab MAIN device)
 
 CHANGELOG
+2026-11-24  Load gui_layout metrics from config.yaml before the first Qt theme application.
 2026-11-12  Only one bridge per config folder: a second launch says so and exits (keylab_bridge/instance.py).
 """
 
@@ -117,6 +118,8 @@ def main():
     cfg_defaults, raw = load_config(cfg_path)
     ap.set_defaults(**cfg_defaults)
     a = ap.parse_args()
+    import themes
+    themes.apply_layout_config(raw)
     apply_layout(raw, cfg_path)
     apply_lcd_names(raw)
     br_settings = bridge_settings(raw)

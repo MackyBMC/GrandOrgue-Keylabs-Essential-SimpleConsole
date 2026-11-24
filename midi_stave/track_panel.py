@@ -5,6 +5,8 @@ channel (re-channels the voice's notes), instrument and note count. Tracks can b
 Everything edited here goes through the stave editor, so the engraved score follows.
 
 CHANGELOG
+2026-11-24  Alignment covers the whole column (the cell edits no longer re-enter the table); the Organ column always shows the manual(s) and
+            the registration; Instrument defaults to the registration / setter name and has a right-click menu (also on existing MIDI).
 2026-11-23  Per-column text alignment (right-click a column header, remembered); the Instrument column is editable; the Organ column shows the
             registration in short form ([S3 name, Principal 8] ...) with the full names in the tooltip.
 2026-11-12  Fix: OrganDialog uses the module its Stave came from (same "no attribute" error as the piano roll inside the bridge).
@@ -150,6 +152,8 @@ class TrackPanel(QDockWidget):
         head.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         head.customContextMenuRequested.connect(self._align_menu)
         self._aligns = self._load_aligns()
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._table_menu)
         self.table.itemSelectionChanged.connect(self._row_selected)
         self.table.itemChanged.connect(self._item_changed)
         self.table.cellDoubleClicked.connect(lambda r, c: self.map_organ() if c == 5 else None)
@@ -185,7 +189,7 @@ class TrackPanel(QDockWidget):
         out = []
         for k in sorted(keys):
             m = meta.get(k, {})
-            inst = info.get("instrument_names", {}).get(k, m.get("instrument", ""))
+            inst = info.get("instrument_names", {}).get(k) or m.get("instrument", "") or self._default_instrument(k)
             out.append((k, names.get(k) or m.get("name") or f"Track {k[0] + 1}", inst, counts.get(k, 0)))
         return out
 
@@ -193,11 +197,55 @@ class TrackPanel(QDockWidget):
         import sessionmeta
         m = self.stave.track_map.get(key)
         if not m or not m.get("manuals"):
-            return "stave layout"
+            return self._default_manual(key) + "  (stave layout)"
         text = "+".join(self.stave.manual_label(n, short=True) for n in m["manuals"])
         if m.get("bass_split"):
             text = f"bass {self.stave.manual_label('Pedal', short=True)} / " + text
         return text + (("  [" + self._reg_short(m["reg"]) + "]") if m.get("reg") else "")
+
+    def _default_manual(self, key):
+        """The manual the stave layout / the instrument suggests for a track that has no mapping of its own."""
+        import sessionmeta
+        st = self.stave
+        notes = sorted(n.pitch for n in st.notes if (n.track, n.ch) == key)
+        median = notes[len(notes) // 2] if notes else 60
+        name = (st.info or {}).get("voice_names", {}).get(key, "")
+        manuals = sessionmeta.suggest(name, None, median)[0]
+        return "+".join(st.manual_label(m, short=True) for m in manuals)
+
+    def _default_instrument(self, key):
+        """Registration set + stop / setter name of the track: its own registration, else the organ's current one (new recording)."""
+        m = self.stave.track_map.get(key) or {}
+        reg = sorted(m.get("reg", []), key=lambda e: e.get("bar", 0))
+        if reg:
+            return self._reg_one(reg[0])
+        hint = getattr(self.stave, "registration_hint", None)
+        return str(hint() if callable(hint) else "") if hint else ""
+
+    def _inst_menu(self, row):
+        if not 0 <= row < len(self.keys):
+            return
+        key = self.keys[row]
+        menu = QMenu(self)
+        use = menu.addAction("Use the registration / setter name")
+        typed = menu.addAction("Type a name...")
+        reset = menu.addAction("Reset to the file's own name")
+        menu.addSeparator()
+        organ = menu.addAction("Organ... (choose setter / stops)")
+        chosen = menu.exec(self.table.viewport().mapToGlobal(self.table.visualItemRect(self.table.item(row, 4)).center()))
+        names = self.stave.info.setdefault("instrument_names", {})
+        if chosen is use:
+            names[key] = self._default_instrument(key)
+        elif chosen is typed:
+            self.table.editItem(self.table.item(row, 4))
+            return
+        elif chosen is reset:
+            names.pop(key, None)
+        elif chosen is organ:
+            self.table.selectRow(row)
+            self.map_organ()
+            return
+        self.refresh()
 
     @staticmethod
     def _reg_one(e, full=False):
@@ -217,6 +265,16 @@ class TrackPanel(QDockWidget):
         m = self.stave.track_map.get(key) or {}
         lines = [f'Bar {e.get("bar", 0) + 1}: ' + self._reg_one(e, True) for e in sorted(m.get("reg", []), key=lambda e: e.get("bar", 0))]
         return "\n".join(lines) if lines else "Double-click (or Organ...) to choose the manual and registration for this track"
+
+    def _table_menu(self, pos):
+        item = self.table.itemAt(pos)
+        if item is None:
+            return
+        if item.column() == 4:
+            self._inst_menu(item.row())
+        elif item.column() == 5:
+            self.table.selectRow(item.row())
+            self.map_organ()
 
     # ---- column alignment
     def _load_aligns(self):
@@ -241,6 +299,13 @@ class TrackPanel(QDockWidget):
         self._apply_aligns()
 
     def _apply_aligns(self):
+        was, self._busy = self._busy, True                       # setting a cell's alignment must not run the edit handlers
+        try:
+            self._apply_aligns_now()
+        finally:
+            self._busy = was
+
+    def _apply_aligns_now(self):
         flags = {"left": Qt.AlignmentFlag.AlignLeft, "centre": Qt.AlignmentFlag.AlignHCenter, "right": Qt.AlignmentFlag.AlignRight}
         for c in range(self.table.columnCount()):
             flag = flags.get(self._aligns.get(c, "left"), Qt.AlignmentFlag.AlignLeft) | Qt.AlignmentFlag.AlignVCenter

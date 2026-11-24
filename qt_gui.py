@@ -1,6 +1,10 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-25  Following a take into the editor no longer stops the playback that has just started (Record center Play / Stop, roll Play).
+2026-11-25  Open MIDI: one shared picker (open_midi.py) in the main window, Stave Station and Piano Roll.
+2026-11-25  Playhead of the roll follows the real file time when the take itself plays (no one-bar lead on the visuals).
+2026-11-24  Stave window gets registration_hint (current set + setter name) for the Tracks list default Instrument.
 2026-11-22  Organ Setter Wiki: "Apply to organ" draws the stops of the edited step on the live organ (only stops that differ are toggled) so it can be heard before saving.
 2026-11-22  Organ Setter Wiki: the empty PAD MAP strip is hidden above the stop editor.
 2026-11-22  Guide ratings are five clickable stars (click the current rating again to clear); "Organ FAQ..." opens docs/ORGAN_FAQ.md (eras, regions, liturgy, registration).
@@ -3245,7 +3249,8 @@ class BridgeWindow(QMainWindow):
 
     def _open_midi_file(self):
         folder = lastdir.get("midi", getattr(self.bridge, "midi_dir", "") or "")
-        path, _ = QFileDialog.getOpenFileName(self, "Open MIDI file", folder, "MIDI files (*.mid *.midi *.kar)")
+        from open_midi import pick_midi
+        path = pick_midi(self, getattr(self.bridge, "midi_dir", "") or folder)
         if path:
             lastdir.put("midi", path)
             self.bridge.post_ui_event("take_open", path)
@@ -3981,6 +3986,7 @@ class BridgeWindow(QMainWindow):
                     stave_module = importlib.import_module("midi_stave.midi_stave")
                 getattr(importlib.import_module("render"), "init_verovio")()
                 self.stave_window = getattr(stave_module, "Stave")()
+                self.stave_window.registration_hint = self._registration_hint      # default Instrument text for new tracks
                 self.stave_window.set_tempo_controller(self.bridge.tempo)
                 self.stave_window.play_hook = lambda path, offset=0.0: self.bridge.post_ui_event("preview_play", f"{path}|@{offset}")
                 self.stave_window.seek_hook = lambda t: self.bridge.post_ui_event("take_seek", t)
@@ -3988,6 +3994,7 @@ class BridgeWindow(QMainWindow):
                 self.stave_window.pause_hook = self.bridge.take_player.pause
                 self.stave_window.paused_hook = lambda: self.bridge.take_player.paused
                 self.stave_window.pos_hook = lambda: self.bridge.take_player.position()
+                self.stave_window.raw_playing_hook = lambda: not os.path.basename(str(self.bridge.take_to_play or "")).startswith("_preview")
                 self.stave_window.chord_hook = lambda items, hold: self.bridge.post_ui_event("chord", (items, hold))
                 self.stave_window.gate_hook = lambda on, items: self.bridge.post_ui_event("gate", (on, items))
                 self.bridge.stave_step_hook = self.stave_window.hw_step
@@ -4021,10 +4028,26 @@ class BridgeWindow(QMainWindow):
                 or self._same_file(stave.path, path)):
             return
         self._stave_syncing = True
+        stop_hook, stave.stop_hook = stave.stop_hook, None      # opening the file in the editor must not stop what is playing now
         try:
             stave.load(path)
+        except Exception as exc:
+            self.bridge.log(f"Could not open {os.path.basename(path)} in the editor: {exc}", level="WARN")
         finally:
+            stave.stop_hook = stop_hook
             self._stave_syncing = False
+
+    def _registration_hint(self):
+        """"<set> <setter name>" of the combination the organ has loaded now (the Tracks list's default Instrument)."""
+        app = self.bridge
+        try:
+            index = getattr(app, "loaded_combination_index", None)
+            if index is None:
+                return str(getattr(app, "combination_set", "") or "")
+            name = str(app.combinations[index]["name"])
+            return f'{getattr(app, "combination_set", "")} {name}'.strip()
+        except Exception:
+            return ""
 
     def _record_open(self, path):
         """Record center > Open in roll: make it the loaded MIDI and open it in the roll at once."""

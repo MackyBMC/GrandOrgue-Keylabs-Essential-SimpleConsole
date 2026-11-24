@@ -1,6 +1,7 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-25  A live recording without count-in is trimmed to start at its first note; with a count-in time 0 stays the downbeat after the count-in.
 2026-11-21  Organ map (Organs/<organ>.map.yaml): the bridge's keys -> the organ's ids and exact names; setter files take their names from it.
 2026-11-21  Snapshot "busy": what the bridge is waiting for (GrandOrgue still loading, loading a setter, confirming), shown with an animation in the setter list header.
 2026-11-21  Setter files use the organ's full GrandOrgue names (not the 16-character LCD names); cut-short names in saved setters are repaired.
@@ -1646,7 +1647,7 @@ class BridgeApp:
     def toggle_record(self, now=None):
         """Record button: first press starts a take, second saves it into the midi folder in two versions:
         'Take ....mid' (GrandOrgue: exactly as played) and 'Take .... (stave).mid' (Stave Friendly: bars straightened)."""
-        from .take_recorder import make_midi_recorder, merge_part, write_stave_friendly
+        from .take_recorder import make_midi_recorder, merge_part, trim_leading_silence, write_stave_friendly
         now = time.time() if now is None else now
         if self.midi_rec is None:
             if self.count_in_end:                       # Record pressed during the count-in: cancel it
@@ -1673,6 +1674,7 @@ class BridgeApp:
             self._part_base = base if base and os.path.isfile(base) and not os.path.basename(base).startswith("_preview") else ""
             if self.record_target == "part" and not self._part_base:
                 self.log("No MIDI is loaded: recording a new file")
+            self._rec_counted = bool(self._count_done)         # counted in: time 0 is the downbeat after the count-in, keep it
             self.midi_rec.bpm_source = lambda: self.tempo.bpm
             self.midi_rec._begin(now)
             if self.midi_rec.path is not None:
@@ -1690,6 +1692,14 @@ class BridgeApp:
         rec.close()
         self.rec_lcd_done = (time.time() + 3.0, "REC stopped", os.path.splitext(os.path.basename(path or ""))[0][-16:])
         base, self._part_base = self._part_base, ""
+        if (path and os.path.isfile(path) and not base and not getattr(self, "_rec_counted", False)
+                and self.record_input == "live"):          # no count-in: the wait before the first note is not part of the take
+            try:
+                cut = trim_leading_silence(path)
+                if cut:
+                    self.log(f"Recording starts at the first note ({cut:.1f} s of waiting removed)", notify=False)
+            except Exception as exc:
+                self.log(f"Could not trim the recording: {exc}", notify=False)
         if base:
             self.take_player.stop()
         if base and path and os.path.isfile(base) and os.path.isfile(path):

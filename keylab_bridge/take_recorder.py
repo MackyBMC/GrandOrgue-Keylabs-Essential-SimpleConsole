@@ -6,6 +6,7 @@ silence, so a practice session becomes a row of separate takes. The take in prog
 AUTOSAVE seconds, so a crash or power cut never loses more than that.
 
 CHANGELOG
+2026-11-25  trim_leading_silence(path): a live recording without count-in starts at its first note.
 2026-11-19  Takes are stamped with the session BPM at the start of the take (same real-time timing; tempo meta + tick rate follow it), so playback at the session BPM is speed 1.0.
 2026-11-17  Resume works across the main window and the stave / roll: a paused preview file and the loaded take count as the same place.
 2026-11-16  Pylance: take name from self.path or '' (path is None before the first note).
@@ -236,6 +237,41 @@ class StepRecorder(TakeRecorder):
             self.pressed = {}
             self.down = set()
             self.dirty = True
+
+
+def trim_leading_silence(path, min_seconds=0.05):
+    """Move everything so the first note starts the file (the wait between pressing Record and playing is not part of the recording).
+    Tempo and other time-0 meta events stay at 0. Returns the seconds removed (0 = nothing changed)."""
+    import mido
+    mid = mido.MidiFile(path)
+    firsts = []
+    for track in mid.tracks:
+        tick = 0
+        for msg in track:
+            tick += msg.time
+            if msg.type == "note_on" and msg.velocity > 0:
+                firsts.append(tick)
+                break
+    if not firsts:
+        return 0.0
+    cut = min(firsts)
+    tempo = next((m.tempo for t in mid.tracks for m in t if m.type == "set_tempo"), 500000)
+    seconds = mido.tick2second(cut, mid.ticks_per_beat, tempo)
+    if seconds < min_seconds:
+        return 0.0
+    for track in mid.tracks:
+        tick, events = 0, []
+        for msg in track:
+            tick += msg.time
+            events.append((tick, msg))
+        out, last = [], 0
+        for absolute, msg in events:
+            moved = 0 if (msg.is_meta and absolute <= cut) else max(0, absolute - cut)
+            out.append(msg.copy(time=moved - last))
+            last = moved
+        track[:] = out
+    mid.save(path)
+    return seconds
 
 
 def merge_part(base_path, part_path, out_path):

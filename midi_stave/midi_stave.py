@@ -1,5 +1,10 @@
 """
 CHANGELOG
+2026-11-24  Default stave layout from the notes (auto_layout): solo / grand / organ + pedal / choir / one stave per channel or track.
+2026-11-25  Playhead: when the recorded take itself plays (Play from the shared transport), file time is the roll time. It was read as if bar 1 were time 0,
+            so the playhead ran one lead-in (about a bar) ahead of the audio.
+2026-11-25  Open MIDI uses the shared picker (open_midi.py); the takes folder follows the bridge's MIDI folder (recordings show up here).
+2026-11-25  A loaded file asks the roll to fit and centre its notes.
 2026-11-23  A loaded file scrolls to bar 1 (no empty lead-in between the keys and the first bar).
 2026-11-20  Setter file names saved before the names repair (markers, projects) are mapped to the renamed files (sessionmeta.canonical_filename).
 2026-11-19  write_organ_file(path): the file the organ plays (notes on the manual channels, setter and registration markers), for the GrandOrgue-native export.
@@ -1498,6 +1503,7 @@ class Stave(QMainWindow):
         self.voice_reg = []                          # per stave: [{"bar", "kind": "setter"|"stops", ...}] registration changes
         self.seek_hook = None
         self.lyrics = {}
+        self.raw_playing_hook = None                  # set by the bridge: True while the loaded take file (not _preview.mid) is playing
         self.play_hook = self.stop_hook = self.pause_hook = self.pos_hook = self.paused_hook = None   # set by the bridge: play / stop / pause / position
         self.sel_notes, self.undo_stack, self.redo_stack = set(), [], []
         self.hl_bar, self.page_widgets = None, []
@@ -1810,6 +1816,30 @@ class Stave(QMainWindow):
         self.update_name_hint()
         self.changed(delay=0)
 
+    def auto_layout(self):
+        """Default stave layout from the notes: one voice in one clef -> solo; one voice across both -> grand staff;
+        two or three voices with a pedal-range voice -> organ + pedal; four voices (S A T B) -> choir; more -> one stave per track."""
+        by_voice = {}
+        for n in self.notes:
+            if n.ch != 9:
+                by_voice.setdefault((n.track, n.ch), []).append(n.pitch)
+        if not by_voice:
+            return "grand"
+        count = len(by_voice)
+        if count == 1:
+            pitches = next(iter(by_voice.values()))
+            if min(pitches) >= 57:                                   # all above the bass clef (about A3 up)
+                return "solo"
+            if max(pitches) <= 60:                                   # all in the bass clef
+                return "solo"
+            return "grand"
+        medians = sorted(sorted(p)[len(p) // 2] for p in by_voice.values())
+        if count <= 3 and medians[0] < 48:
+            return "organ"
+        if count == 4:
+            return "choir"
+        return "voices" if count > 4 else "channels"
+
     def manual_label(self, slot, short=False):
         """Display name of a GrandOrgue manual slot (Pedal / Hauptwerk / Schwellwerk / Solowerk) from the organ names in use
         (English Great / Swell / Choir, German, French or custom). The slot itself - and the saved mapping - never change."""
@@ -1846,7 +1876,8 @@ class Stave(QMainWindow):
 
     # ---- files
     def takes_folder(self):
-        return self.settings.value("takes", os.path.join(os.path.dirname(HERE), "midi"))
+        """The takes folder you chose, else the bridge's MIDI folder (where recordings are written), else <app>/midi."""
+        return str(self.settings.value("takes", "") or getattr(self, "default_dir", "") or os.path.join(os.path.dirname(HERE), "midi"))
 
     def choose_takes(self):
         folder = QFileDialog.getExistingDirectory(self, "Takes folder", self.takes_folder())
@@ -1864,8 +1895,8 @@ class Stave(QMainWindow):
                 self.takes_list.item(self.takes_list.count() - 1).setData(Qt.ItemDataRole.UserRole, os.path.join(folder, name))
 
     def open_dialog(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Open MIDI", self.settings.value("last_dir", self.takes_folder()),
-                                              "MIDI, MusicXML and projects (*.mid *.midi *.kar *.musicxml *.xml *.mxl *.ss);;MIDI (*.mid *.midi *.kar);;MusicXML (*.musicxml *.xml *.mxl);;Stave projects (*.ss)")
+        from open_midi import pick_midi                      # the same picker as the main window and the roll
+        path = pick_midi(self, self.takes_folder(), "MIDI, MusicXML and projects (*.mid *.midi *.kar *.musicxml *.xml *.mxl *.ss);;MIDI (*.mid *.midi *.kar);;MusicXML (*.musicxml *.xml *.mxl);;Stave projects (*.ss)")
         if path:
             self.settings.setValue("last_dir", os.path.dirname(path))
             self.load(path)
@@ -2148,6 +2179,8 @@ class Stave(QMainWindow):
         self.load_lyrics()
         self.roll.set_playhead(None)
         self._to_top = True
+        if self.roll_window is not None:
+            QTimer.singleShot(250, self.roll_window.center_on_notes)      # fit the new file's notes in the roll
         self.preview.verticalScrollBar().setValue(0)
         try:
             self.roll.horizontalScrollBar().setValue(max(0, int(self.barmap.anchors[0] * self.roll.pps) - 8))      # bar 1 at the keys
@@ -2189,11 +2222,9 @@ class Stave(QMainWindow):
             self.refresh_roll()
             self.changed(delay=50)
         else:
-            voices = {(n.track, n.ch) for n in self.notes if n.ch != 9}
-            if len(voices) >= 2:                                  # a file with several tracks: one stave per track, highest first
-                self.layout_kind.blockSignals(True)
-                self.layout_kind.setCurrentIndex(KINDS.index("voices"))
-                self.layout_kind.blockSignals(False)
+            self.layout_kind.blockSignals(True)
+            self.layout_kind.setCurrentIndex(KINDS.index(self.auto_layout()))
+            self.layout_kind.blockSignals(False)
             self.update_name_hint()
             self.detect_bars()
             self._adopt_file_tempo()
@@ -3583,8 +3614,12 @@ class Stave(QMainWindow):
                 self.roll.set_playhead(None)
                 self.highlight_bar(None)
             return
-        beat = t_file * self.barmap.average_bpm() / 60.0          # the preview is written at the average tempo (file time, whatever the playback BPM)
-        sec = self.barmap.beat_to_sec(beat)
+        if self.raw_playing_hook is not None and self.raw_playing_hook():
+            sec = t_file                                              # the take itself is playing (not the roll's preview): file time IS the roll's time
+            beat = self.barmap.sec_to_beat(sec)
+        else:
+            beat = t_file * self.barmap.average_bpm() / 60.0      # the preview is written at the average tempo (file time, whatever the playback BPM)
+            sec = self.barmap.beat_to_sec(beat)
         self.roll.set_playhead(sec)
         bar = min(self.barmap.bar_count - 1, max(0, int(self.barmap.bar_of_beat(beat))))
         self.highlight_bar(bar)

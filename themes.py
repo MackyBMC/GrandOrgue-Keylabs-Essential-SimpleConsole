@@ -12,6 +12,7 @@ Settings (family, accent override, radius, density, font size, Qt style, icons) 
 "KeyLabGrandOrgue / Appearance" and shared by all windows.
 
 CHANGELOG
+2026-11-24  GUI layout metrics are loaded from config.yaml and applied to frame, padding, and spacing values.
 2026-11-23  The floating LCD colour schemes (Amber, Green, Ice blue, Red, Grey-green) are also app themes ("LCD ...").
 2026-11-12  "Text size %" now scales the whole look: paddings, tab / menu / header spacing, scroll bars, slider handles, check marks, title and LCD fonts
             (not only the text), so a smaller setting gives the room back; range 60-160 %.
@@ -80,6 +81,9 @@ CONTRAST = dict(window="#ffffff", base="#ffffff", alt="#f0f0f0", text="#000000",
 ACCENTS = {"Blue": "#3584e4", "Sky": "#3daee9", "Teal": "#14b8a6", "Green": "#30a46c", "Amber": "#e5a50a",
            "Orange": "#f97316", "Red": "#e5484d", "Pink": "#ec4899", "Purple": "#8b5cf6", "Slate": "#64748b"}
 DEFAULTS = dict(family="Console", mode="dark", accent="", radius=6, density=0, font=100, style="Fusion", detailed=True)
+LAYOUT_DEFAULTS = dict(control_spacing=8, control_padding=3, frame_thickness=1,
+                       outer_margin=6, column_gap=8, active_column_width=28,
+                       side_column_width=320, live_split_ratio=(4, 3, 3))
 
 
 class _Bus(QObject):
@@ -128,6 +132,44 @@ def save(**changes):
         s.setValue(key, value)
 
 
+def layout_state():
+    """Read the live GUI layout metrics. Appearance changes use QSettings; config.yaml supplies startup defaults."""
+    s = _settings()
+    out = dict(LAYOUT_DEFAULTS)
+    for key, default in LAYOUT_DEFAULTS.items():
+        value = s.value("layout_" + key)
+        if value is None:
+            continue
+        if isinstance(default, tuple):
+            if isinstance(value, (list, tuple)):
+                out[key] = tuple(max(1, int(v)) for v in value[:3])
+            else:
+                try:
+                    out[key] = tuple(max(1, int(v.strip())) for v in str(value).split(",")[:3])
+                except (TypeError, ValueError):
+                    pass
+        else:
+            try:
+                out[key] = type(default)(value)
+            except (TypeError, ValueError):
+                pass
+    return out
+
+
+def layout_save(**changes):
+    s = _settings()
+    for key, value in changes.items():
+        s.setValue("layout_" + key, list(value) if isinstance(value, tuple) else value)
+
+
+def apply_layout_config(raw):
+    """Load gui_layout metrics from config.yaml into QSettings before the first application theme is applied."""
+    section = raw.get("gui_layout") if isinstance(raw, dict) else None
+    if not isinstance(section, dict):
+        return
+    layout_save(**{key: value for key, value in section.items() if key in LAYOUT_DEFAULTS})
+
+
 def tokens(st=None, mode=None):
     st = st or state()
     mode = mode or st["mode"]
@@ -174,7 +216,10 @@ def stylesheet(st=None, mode=None):
     r = int(st["radius"])
     k = max(0.5, float(st["font"]) / 100.0)
     S = lambda n: max(1, round(n * k))                       # a size in px that follows the text size
-    pad = max(2, round({0: 3, 1: 5, 2: 8}.get(int(st["density"]), 5) * k))
+    layout = layout_state()
+    pad = max(2, round(int(layout["control_padding"]) * k))
+    frame = max(0, int(layout["frame_thickness"]))
+    spacing = max(0, int(layout["control_spacing"]))
     # frame metrics follow the density: Compact (0) is the floating-LCD look - thin titles, tight group boxes, small tabs
     g_top, g_in, g_left, d_title, t_side = {0: (13, 5, 7, 2, 9), 1: (18, 9, 10, 4, 12), 2: (22, 12, 12, 6, 14)}.get(int(st["density"]), (18, 9, 10, 4, 12))
     win, base, alt, text, muted, border, accent = (t[k] for k in KEYS)
@@ -191,9 +236,9 @@ def stylesheet(st=None, mode=None):
         QLabel#windowTitle {{ color: {accent}; font-size: {S(18)}px; font-weight: 600; }}
         QLabel#lcdText {{ background: {alt}; color: {text}; font-size: {S(17)}px; font-weight: 600; border-radius: {r}px; }}
         QLabel#statusLabel {{ background: {alt}; padding: {S(7)}px; color: {text}; border-radius: {r}px; }}
-        QGroupBox {{ background: {alt}; border: 1px solid {soft}; border-radius: {r + 2}px; margin-top: {S(g_top)}px; padding: {S(g_in)}px {S(g_in)}px {S(g_in - 1)}px {S(g_in)}px; }}
+        QGroupBox {{ background: {alt}; border: {frame}px solid {soft}; border-radius: {r + 2}px; margin-top: {S(g_top)}px; padding: {S(g_in)}px {S(g_in)}px {S(g_in - 1)}px {S(g_in)}px; }}
         QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: {S(g_left)}px; top: 0px; padding: 0 {S(4)}px; color: {accent}; font-weight: 600; font-size: {S(11 if int(st["density"]) == 0 else 12)}px; }}
-        QPushButton, QToolButton {{ background: {alt}; color: {text}; border: 1px solid {soft}; border-radius: {r}px; padding: {pad}px {pad * 2 + S(2)}px; }}
+        QPushButton, QToolButton {{ background: {alt}; color: {text}; border: {frame}px solid {soft}; border-radius: {r}px; padding: {pad}px {pad * 2 + S(2)}px; }}
         QPushButton:hover, QToolButton:hover {{ background: {hover}; border-color: {_mix(accent, win, 0.35)}; }}
         QPushButton:pressed, QToolButton:pressed {{ background: {pressed}; border-color: {accent}; }}
         QPushButton:checked, QToolButton:checked {{ background: {_mix(alt, accent, 0.4)}; border: 1px solid {accent}; }}
@@ -204,7 +249,7 @@ def stylesheet(st=None, mode=None):
         QToolButton:hover {{ border: 1px solid {_mix(accent, win, 0.45)}; background: {hover}; }}
         QToolButton:checked {{ border: 1px solid {accent}; }}
         QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit, QTextEdit, QTextBrowser, QTreeWidget, QListWidget, QTableWidget {{
-            background: {base}; color: {text}; border: 1px solid {soft}; border-radius: {r}px; padding: {max(2, pad - 1)}px {S(7)}px;
+            background: {base}; color: {text}; border: {frame}px solid {soft}; border-radius: {r}px; padding: {max(2, pad - 1)}px {S(7)}px;
             selection-background-color: {accent}; selection-color: {sel_text}; }}
         QListWidget, QTreeWidget, QTableWidget, QTextEdit, QPlainTextEdit, QTextBrowser {{ padding: 2px; }}
         QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus {{ border: 1px solid {accent}; }}
@@ -236,22 +281,22 @@ def stylesheet(st=None, mode=None):
         QMenuBar {{ background: {win}; }}
         QMenuBar::item {{ padding: {S(5)}px {S(11)}px; border-radius: {max(3, r - 1)}px; background: transparent; }}
         QMenuBar::item:selected {{ background: {hover}; }}
-        QMenu {{ background: {base}; border: 1px solid {soft}; border-radius: {r}px; padding: 5px; }}
+        QMenu {{ background: {base}; border: {frame}px solid {soft}; border-radius: {r}px; padding: 5px; }}
         QMenu::item {{ padding: {S(6)}px {S(24)}px {S(6)}px {S(12)}px; border-radius: {max(3, r - 2)}px; }}
         QMenu::item:selected {{ background: {accent}; color: {sel_text}; }}
         QMenu::separator {{ height: 1px; background: {soft}; margin: 4px 8px; }}
-        QToolBar {{ background: {alt}; border: 1px solid {soft}; border-radius: {r + 2}px; spacing: 3px; padding: 3px; }}
+        QToolBar {{ background: {alt}; border: {frame}px solid {soft}; border-radius: {r + 2}px; spacing: {spacing}px; padding: {pad}px; }}
         QToolBar::handle {{ background: {soft}; width: 6px; height: 6px; margin: 4px; border-radius: 3px; }}
         QToolBar::separator {{ background: {soft}; width: 1px; height: 1px; margin: 5px; }}
-        QDockWidget {{ border: 1px solid {soft}; }}
+        QDockWidget {{ border: {frame}px solid {soft}; }}
         QDockWidget::title {{ background: {alt}; padding: {S(d_title)}px {S(6)}px; border-bottom: 1px solid {soft}; }}
         QStatusBar {{ background: {alt}; border-top: 1px solid {soft}; }}
         QSplitter::handle {{ background: {soft}; }}
         QMainWindow::separator {{ background: {soft}; width: {S(3)}px; height: {S(3)}px; }}
         QMainWindow::separator:hover {{ background: {accent}; }}
         QSplitter::handle:hover {{ background: {accent}; }}
-        QTabWidget::pane {{ border: 1px solid {soft}; border-radius: {r}px; top: -1px; }}
-        QTabBar::tab {{ background: {alt}; padding: {pad + 1}px {S(t_side)}px; border: 1px solid {soft}; border-bottom: none; border-top-left-radius: {r}px; border-top-right-radius: {r}px; margin-right: 2px; }}
+        QTabWidget::pane {{ border: {frame}px solid {soft}; border-radius: {r}px; top: -1px; }}
+        QTabBar::tab {{ background: {alt}; padding: {pad + 1}px {S(t_side)}px; border: {frame}px solid {soft}; border-bottom: none; border-top-left-radius: {r}px; border-top-right-radius: {r}px; margin-right: 2px; }}
         QTabBar::tab:selected {{ background: {tint}; color: {accent}; border-color: {_mix(accent, win, 0.4)}; }}
         QTabBar::tab:hover:!selected {{ background: {hover}; }}
         QSvgWidget, QGraphicsView {{ border: none; }}

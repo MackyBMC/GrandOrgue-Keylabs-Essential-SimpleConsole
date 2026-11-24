@@ -2,6 +2,8 @@
 strip, a keyboard and a velocity lane that all share two scroll bars (one horizontal, one vertical).
 
 CHANGELOG
+2026-11-25  File > Open MIDI / take... (shared picker).
+2026-11-25  A newly loaded file is zoomed (key height) and centred so all its notes are visible; no scrolling down from C9.
 2026-11-23  Tool bar: compact tempo control (one row), 18 px icons; a new file scrolls so bar 1 sits at the keys (no empty lead-in).
 2026-11-15  Import MIDI / MusicXML is Ctrl+Shift+I (Ctrl+M now belongs to the main window's Mixer).
 2026-11-13  FL-style snapping: snap is ON by default and new option "Note length" (snap to the New note length); placing, moving and both ends of a note
@@ -335,6 +337,7 @@ class RollWindow(QMainWindow):
         st, roll = self.stave, self.stave.roll
         a = self._menus_action
         m = self.menuBar().addMenu("&File")
+        a(m, "Open MIDI / take...", st.open_dialog, "Ctrl+O")
         a(m, "Import MIDI / MusicXML...", st.open_dialog, "Ctrl+Shift+I")
         a(m, "New blank score...", st.new_blank, "Ctrl+N")
         a(m, "Save as MIDI...", st.save_edited_midi, "Ctrl+S")
@@ -433,10 +436,26 @@ class RollWindow(QMainWindow):
         roll.verticalScrollBar().setValue(int((roll.top - max(n.pitch for n in notes) - 3) * self.M.ROW))
 
     def center_on_notes(self):
+        """Zoom the keys so every note is visible and centre on them (a newly loaded file; the roll no longer opens at C9)."""
         st, roll = self.stave, self.stave.roll
-        if st.notes:
-            mid = sum(n.pitch for n in st.notes) / len(st.notes)
-            roll.verticalScrollBar().setValue(int((roll.top - mid) * self.M.ROW - roll.viewport().height() / 2))
+        if not st.notes:
+            return
+        height = roll.viewport().height()
+        if height < 60:                                          # not laid out yet (hidden tab): fit when it is shown
+            self._fit_pending = True
+            return
+        self._fit_pending = False
+        lo, hi = min(n.pitch for n in st.notes), max(n.pitch for n in st.notes)
+        row = max(self.v_zoom.minimum(), min(self.v_zoom.maximum(), int(height / (hi - lo + 6))))
+        if row != self.M.ROW:
+            self.v_zoom.setValue(row)                            # the slider re-draws the roll at the new key height
+        mid = (lo + hi) / 2.0
+        roll.verticalScrollBar().setValue(int((roll.top - mid) * self.M.ROW - roll.viewport().height() / 2))
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if getattr(self, "_fit_pending", False):
+            QTimer.singleShot(80, self.center_on_notes)
 
     # ---- layouts: zoom, snap, grid, panels, window and toolbar arrangement
     TOGGLES = (("Note names on the notes", "labels"), ("Show the score's quantised notes as shadows", "ghosts"),

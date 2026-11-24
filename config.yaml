@@ -13,6 +13,16 @@ language: en                # en, de, fr, or es; installer choice is stored in l
 ui: gui                # textual, simple, gui, both, or none; --ui overrides this at launch
 theme: light             # light, dark, or contrast; GUI/TUI changes are persisted in theme.txt
 combination_set: 'Friesach' # folder under Combinations containing setter presets for this organ
+
+gui_layout:
+  control_spacing: 8       # pixels between toolbar and control groups
+  control_padding: 3       # pixels inside buttons and controls
+  frame_thickness: 1       # pixels for Qt application frames and group boxes
+  outer_margin: 6          # pixels around the main application frame
+  column_gap: 8            # pixels between live-console columns
+  active_column_width: 28  # active/tick column width in registration lists
+  side_column_width: 320   # preferred side-column width at startup
+  live_split_ratio: [4, 3, 3] # live console column proportions
 preset_activation: staged # staged cues until sustain/Jog loads; direct activates on list selection
 
 ports:

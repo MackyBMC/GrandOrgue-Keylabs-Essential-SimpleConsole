@@ -1,0 +1,23 @@
+Status: READY, not applied
+Patch: v2.0.9-60-live-gui-layout.patch
+Base: d881d2b (HEAD/origin/release-2.0)
+
+What changed:
+- Adds gui_layout startup metrics to config.yaml and loads them before Qt theme application.
+- Adds a Layout tab to AppearanceDialog with live sliders/spinners and a miniature Qt preview.
+- Adds QSettings-backed layout metric state; live changes update frame, padding, toolbar spacing, and corner-related styles immediately.
+- Saves layout metrics to gui_layout keys in config.yaml.
+
+Checks:
+- git apply --check: PASS against d881d2b after removing this patch from the worktree.
+- python -m py_compile themes.py themes_ui.py keylab_go_bridge.py: PASS.
+- Pylance diagnostics for themes.py, themes_ui.py, keylab_go_bridge.py: clean.
+- Real app and organ behaviour: UNVERIFIED.
+- Windows Qt visual preview: UNVERIFIED until applied and run.
+
+Source/worktree:
+- Patch intentionally excludes CHANGELOG.md because it already contains unrelated pending edits in the dirty worktree.
+- Existing qt_gui.py and other pending source edits are untouched.
+
+Open questions:
+- None. Runtime limits and exact startup width behavior can be adjusted in a follow-up patch after owner testing.

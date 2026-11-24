@@ -3,12 +3,19 @@
 ## Unreleased
 
 ### New
+- One "Open MIDI / take" picker (recordings first, Browse... for others) in the main window, Stave Station and Piano Roll; the Stave Station's takes list now reads the bridge's MIDI folder, so recordings appear there.
+- Stave Station picks the default layout from the notes: one clef -> solo, both -> grand staff, pedal-range voice -> organ + pedal, four voices -> choir, more -> one stave per track.
+- Tracks: Organ column always shows manual + registration; Instrument defaults to the registration / setter name; right-click Instrument or Organ for choices.
 - Theme choices: the floating LCD colour schemes ("LCD ...") are app themes too.
 - Tracks: per-column alignment (right-click the header); Instrument is editable; Organ column shows the registration in short form, full names on hover.
 - Piano Roll: compact tempo control (one row, options under the ... menu).
 - KeyLab Record key LED (id 95) lights while recording or counting in.
 
 ### Fixed
+- Piano Roll: a loaded file is zoomed and centred on its notes (no more scrolling down from C9).
+- Opening a take in the editor no longer stops the playback that has just started (Record center Play / Stop; the editor seemed dead after opening recordings).
+- Piano Roll: Play of a recorded take no longer shows the playhead one lead-in (about a bar) ahead of the audio.
+- Tracks: column alignment now covers every cell, not only the header.
 - Piano Roll: a loaded file scrolls to bar 1 (no empty gap after the keys). Dock resize grip sits 3 px further in.
 - Floating dock: the dotted resize grip sits in the real bottom-right corner.
 - Record center: Open in roll loads the take into the roll at once; Play / Stop shows what is playing, or why it could not start.
