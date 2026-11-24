@@ -90,7 +90,7 @@ class AppearanceDialog(QDialog):
         form = QFormLayout(page)
         self.family = QComboBox()
         self.family.addItems(list(themes.FAMILIES))
-        self.family.setCurrentText(st["family"])
+        self.family.setCurrentText(str(st["family"]))
         self.mode = QComboBox()
         for label, key in (("Light", "light"), ("Dark", "dark"), ("High contrast", "contrast")):
             self.mode.addItem(label, key)
@@ -119,21 +119,21 @@ class AppearanceDialog(QDialog):
         self.style_box.setCurrentText(st["style"] if st["style"] in QStyleFactory.keys() else "Fusion")
         form.addRow("Qt style engine", self.style_box)
         self.detailed = QCheckBox("Apply the full theme (turn off for the plain native look of the style engine)")
-        self.detailed.setChecked(st["detailed"])
+        self.detailed.setChecked(bool(st["detailed"]))
         form.addRow(self.detailed)
         self.radius = QSlider(Qt.Orientation.Horizontal)
         self.radius.setRange(0, 14)
-        self.radius.setValue(st["radius"])
+        self.radius.setValue(int(st["radius"]))
         form.addRow("Corner radius", self.radius)
         self.density = QComboBox()
         for label, v in (("Compact", 0), ("Comfortable", 1), ("Spacious", 2)):
             self.density.addItem(label, v)
         self.density.setCurrentIndex(max(0, self.density.findData(st["density"])))
         form.addRow("Density", self.density)
-        self.font = QSlider(Qt.Orientation.Horizontal)
-        self.font.setRange(60, 160)
-        self.font.setValue(st["font"])
-        form.addRow("Text size %", self.font)
+        self.font_scale_slider = QSlider(Qt.Orientation.Horizontal)
+        self.font_scale_slider.setRange(60, 160)
+        self.font_scale_slider.setValue(int(st["font"]))
+        form.addRow("Text size %", self.font_scale_slider)
         tabs.addTab(page, "Theme")
 
         # ---- layout
@@ -161,7 +161,6 @@ class AppearanceDialog(QDialog):
         layout_spin("Active column width", "active_column_width", 16, 64)
         layout_spin("Preferred side-column width", "side_column_width", 220, 1200)
 
-        form.addRow("Live column ratio")
         ratio_row = QHBoxLayout()
         self.layout_ratio = []
         for index, value in enumerate(layout_state["live_split_ratio"]):
@@ -191,10 +190,7 @@ class AppearanceDialog(QDialog):
         # ---- icons & toolbars
         page = QWidget()
         form = QFormLayout(page)
-        try:
-            from midi_stave import chrome
-        except ImportError:
-            import chrome
+        from midi_stave import chrome
         self.chrome = chrome
         s = chrome.STYLE
         self.pack = QComboBox()
@@ -203,14 +199,15 @@ class AppearanceDialog(QDialog):
         self.look = QComboBox()
         for key, label in chrome.LOOK_LABELS.items():
             self.look.addItem(label, key)
-        self.size = QComboBox()
+        self.icon_size_box = QComboBox()
         for px in chrome.SIZES:
-            self.size.addItem(f"{px} px", px)
-        for box, key in ((self.pack, "pack"), (self.look, "look"), (self.size, "size")):
+            self.icon_size_box.addItem(f"{px} px", px)
+
+        for box, key in ((self.pack, "pack"), (self.look, "look"), (self.icon_size_box, "size")):
             box.setCurrentIndex(max(0, box.findData(s[key])))
         form.addRow("Icon pack", self.pack)
         form.addRow("Icon look", self.look)
-        form.addRow("Default icon size", self.size)
+        form.addRow("Default icon size", self.icon_size_box)
         self.tbstyle = QComboBox()
         self.tbstyle.addItems(list(TB_STYLES))
         self.tbstyle.setCurrentText(str(themes._settings().value("tb_style", "Icons only")))
@@ -245,9 +242,9 @@ class AppearanceDialog(QDialog):
             w.currentIndexChanged.connect(self._theme_changed)
         self.detailed.toggled.connect(self._theme_changed)
         self.radius.valueChanged.connect(self._theme_changed)
-        self.font.sliderReleased.connect(self._theme_changed)
-        self.font.valueChanged.connect(lambda _v: (not self.font.isSliderDown()) and self._theme_changed())
-        for w, k in ((self.pack, "pack"), (self.look, "look"), (self.size, "size")):
+        self.font_scale_slider.sliderReleased.connect(self._theme_changed)
+        self.font_scale_slider.valueChanged.connect(lambda _v: (not self.font_scale_slider.isSliderDown()) and self._theme_changed())
+        for w, k in ((self.pack, "pack"), (self.look, "look"), (self.icon_size_box, "size")):
             w.currentIndexChanged.connect(lambda _i, w=w, k=k: self._icon_changed(k, w.currentData()))
         self.tbstyle.currentTextChanged.connect(self._tb_style)
 
@@ -300,7 +297,7 @@ class AppearanceDialog(QDialog):
 
     def _theme_changed(self, *_):
         themes.save(family=self.family.currentText(), mode=self.mode.currentData(), style=self.style_box.currentText(),
-                    density=self.density.currentData(), radius=self.radius.value(), font=self.font.value(),
+                    density=self.density.currentData(), radius=self.radius.value(), font=self.font_scale_slider.value(),
                     detailed=self.detailed.isChecked())
         themes.apply()
 
@@ -328,7 +325,8 @@ class AppearanceDialog(QDialog):
         self.bar_list.blockSignals(True)
         self.bar_list.clear()
         if self.stave is not None:
-            bars = sorted(_bars(self.stave), key=lambda b: (self.stave.toolBarArea(b).value, b.y(), b.x()))
+            stave = self.stave
+            bars = sorted(_bars(stave), key=lambda b: (stave.toolBarArea(b).value, b.y(), b.x()))
             for bar in bars:
                 item = QListWidgetItem(bar.windowTitle() or _key(bar))
                 item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)

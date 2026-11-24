@@ -20,6 +20,7 @@ CHANGELOG
 """
 import json
 import os
+from typing import TypedDict, cast
 
 from PySide6.QtCore import QObject, QSettings, Signal
 from PySide6.QtGui import QColor, QPalette
@@ -81,9 +82,40 @@ CONTRAST = dict(window="#ffffff", base="#ffffff", alt="#f0f0f0", text="#000000",
 ACCENTS = {"Blue": "#3584e4", "Sky": "#3daee9", "Teal": "#14b8a6", "Green": "#30a46c", "Amber": "#e5a50a",
            "Orange": "#f97316", "Red": "#e5484d", "Pink": "#ec4899", "Purple": "#8b5cf6", "Slate": "#64748b"}
 DEFAULTS = dict(family="Console", mode="dark", accent="", radius=6, density=0, font=100, style="Fusion", detailed=True)
-LAYOUT_DEFAULTS = dict(control_spacing=8, control_padding=3, frame_thickness=1,
-                       outer_margin=6, column_gap=8, active_column_width=28,
-                       side_column_width=320, live_split_ratio=(4, 3, 3))
+
+
+class ThemeState(TypedDict):
+    family: str
+    mode: str
+    accent: str
+    radius: int
+    density: int
+    font: int
+    style: str
+    detailed: bool
+
+
+class LayoutState(TypedDict):
+    control_spacing: int
+    control_padding: int
+    frame_thickness: int
+    outer_margin: int
+    column_gap: int
+    active_column_width: int
+    side_column_width: int
+    live_split_ratio: tuple[int, int, int]
+
+
+LAYOUT_DEFAULTS: LayoutState = {
+    "control_spacing": 8,
+    "control_padding": 3,
+    "frame_thickness": 1,
+    "outer_margin": 6,
+    "column_gap": 8,
+    "active_column_width": 28,
+    "side_column_width": 320,
+    "live_split_ratio": (4, 3, 3),
+}
 
 
 class _Bus(QObject):
@@ -114,7 +146,7 @@ def load_user_themes():
 load_user_themes()
 
 
-def state():
+def state() -> ThemeState:
     s, out = _settings(), dict(DEFAULTS)
     for key, default in DEFAULTS.items():
         value = s.value(key)
@@ -123,7 +155,7 @@ def state():
         out[key] = (str(value).lower() in ("true", "1")) if isinstance(default, bool) else (type(default)(value) if not isinstance(default, str) else str(value))
     if out["family"] not in FAMILIES:
         out["family"] = DEFAULTS["family"]
-    return out
+    return cast(ThemeState, out)
 
 
 def save(**changes):
@@ -132,27 +164,53 @@ def save(**changes):
         s.setValue(key, value)
 
 
-def layout_state():
+def layout_state() -> LayoutState:
     """Read the live GUI layout metrics. Appearance changes use QSettings; config.yaml supplies startup defaults."""
     s = _settings()
-    out = dict(LAYOUT_DEFAULTS)
-    for key, default in LAYOUT_DEFAULTS.items():
+    out: LayoutState = {
+        "control_spacing": int(LAYOUT_DEFAULTS["control_spacing"]),
+        "control_padding": int(LAYOUT_DEFAULTS["control_padding"]),
+        "frame_thickness": int(LAYOUT_DEFAULTS["frame_thickness"]),
+        "outer_margin": int(LAYOUT_DEFAULTS["outer_margin"]),
+        "column_gap": int(LAYOUT_DEFAULTS["column_gap"]),
+        "active_column_width": int(LAYOUT_DEFAULTS["active_column_width"]),
+        "side_column_width": int(LAYOUT_DEFAULTS["side_column_width"]),
+        "live_split_ratio": (4, 3, 3),
+    }
+    integer_keys = ("control_spacing", "control_padding", "frame_thickness", "outer_margin",
+                    "column_gap", "active_column_width", "side_column_width")
+    for key in integer_keys:
         value = s.value("layout_" + key)
-        if value is None:
-            continue
-        if isinstance(default, tuple):
-            if isinstance(value, (list, tuple)):
-                out[key] = tuple(max(1, int(v)) for v in value[:3])
-            else:
-                try:
-                    out[key] = tuple(max(1, int(v.strip())) for v in str(value).split(",")[:3])
-                except (TypeError, ValueError):
-                    pass
-        else:
+        if value is not None:
             try:
-                out[key] = type(default)(value)
+                if key == "control_spacing":
+                    out["control_spacing"] = int(value)
+                elif key == "control_padding":
+                    out["control_padding"] = int(value)
+                elif key == "frame_thickness":
+                    out["frame_thickness"] = int(value)
+                elif key == "outer_margin":
+                    out["outer_margin"] = int(value)
+                elif key == "column_gap":
+                    out["column_gap"] = int(value)
+                elif key == "active_column_width":
+                    out["active_column_width"] = int(value)
+                elif key == "side_column_width":
+                    out["side_column_width"] = int(value)
             except (TypeError, ValueError):
                 pass
+    value = s.value("layout_live_split_ratio")
+    if isinstance(value, (list, tuple)):
+        values = tuple(max(1, int(v)) for v in value[:3])
+        if len(values) == 3:
+            out["live_split_ratio"] = (values[0], values[1], values[2])
+    elif value is not None:
+        try:
+            values = tuple(max(1, int(v.strip())) for v in str(value).split(",")[:3])
+            if len(values) == 3:
+                out["live_split_ratio"] = (values[0], values[1], values[2])
+        except (TypeError, ValueError):
+            pass
     return out
 
 
@@ -310,22 +368,23 @@ def apply(mode=None, app=None):
     app = app or QApplication.instance()
     if app is None:
         return
+    qt_app = cast(QApplication, app)
     st = state()
     if mode in ("light", "dark", "contrast"):
         save(mode=mode)
         st["mode"] = mode
     style_name = st["style"] if st["style"] in QStyleFactory.keys() else "Fusion"
-    if app.style().objectName().lower() != style_name.lower():
-        app.setStyle(QStyleFactory.create(style_name))
+    if qt_app.style().objectName().lower() != style_name.lower():
+        qt_app.setStyle(QStyleFactory.create(style_name))
     t = tokens(st)
-    app.setPalette(palette(t))
-    base_font = getattr(app, "_base_font", None) or QFont(app.font())
-    app._base_font = base_font
+    qt_app.setPalette(palette(t))
+    base_font = getattr(qt_app, "_base_font", None) or QFont(qt_app.font())
+    setattr(qt_app, "_base_font", base_font)
     font = QFont(base_font)
     if base_font.pointSizeF() > 0:
         font.setPointSizeF(base_font.pointSizeF() * st["font"] / 100.0)
-    app.setFont(font)
-    app.setStyleSheet(stylesheet(st) if st["detailed"] else "")
+    qt_app.setFont(font)
+    qt_app.setStyleSheet(stylesheet(st) if st["detailed"] else "")
     bus.changed.emit()
 
 
