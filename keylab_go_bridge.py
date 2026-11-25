@@ -53,11 +53,13 @@ solution on awkward driver setups - use --kl-main (no relay) whenever direct sha
   (then point GrandOrgue's MIDI input at "KL2GO" instead of the KeyLab MAIN device)
 
 CHANGELOG
+2026-11-25  GUI metrics (gui_metrics.yaml next to config.yaml) are loaded, and the graphics backend chosen, before the Qt application is created.
 2026-11-24  Load gui_layout metrics from config.yaml before the first Qt theme application.
 2026-11-12  Only one bridge per config folder: a second launch says so and exits (keylab_bridge/instance.py).
 """
 
 import argparse
+import os
 import signal
 import sys
 
@@ -118,8 +120,11 @@ def main():
     cfg_defaults, raw = load_config(cfg_path)
     ap.set_defaults(**cfg_defaults)
     a = ap.parse_args()
+    import gui_metrics
     import themes
+    gui_metrics.set_path(os.path.join(os.path.dirname(os.path.abspath(cfg_path)), gui_metrics.FILE_NAME))
     themes.apply_layout_config(raw)
+    gui_metrics.startup()
     apply_layout(raw, cfg_path)
     apply_lcd_names(raw)
     br_settings = bridge_settings(raw)

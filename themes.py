@@ -12,6 +12,7 @@ Settings (family, accent override, radius, density, font size, Qt style, icons) 
 "KeyLabGrandOrgue / Appearance" and shared by all windows.
 
 CHANGELOG
+2026-11-25  All metrics come from gui_metrics.py (gui_metrics.yaml): the style sheet gets one extra fragment for every value that differs from its default; fonts and runtime options are applied in apply().
 2026-11-24  GUI layout metrics are loaded from config.yaml and applied to frame, padding, and spacing values.
 2026-11-23  The floating LCD colour schemes (Amber, Green, Ice blue, Red, Grey-green) are also app themes ("LCD ...").
 2026-11-12  "Text size %" now scales the whole look: paddings, tab / menu / header spacing, scroll bars, slider handles, check marks, title and LCD fonts
@@ -21,6 +22,8 @@ CHANGELOG
 import json
 import os
 from typing import TypedDict, cast
+
+import gui_metrics
 
 from PySide6.QtCore import QObject, QSettings, Signal
 from PySide6.QtGui import QColor, QPalette
@@ -95,29 +98,6 @@ class ThemeState(TypedDict):
     detailed: bool
 
 
-class LayoutState(TypedDict):
-    control_spacing: int
-    control_padding: int
-    frame_thickness: int
-    outer_margin: int
-    column_gap: int
-    active_column_width: int
-    side_column_width: int
-    live_split_ratio: tuple[int, int, int]
-
-
-LAYOUT_DEFAULTS: LayoutState = {
-    "control_spacing": 8,
-    "control_padding": 3,
-    "frame_thickness": 1,
-    "outer_margin": 6,
-    "column_gap": 8,
-    "active_column_width": 28,
-    "side_column_width": 320,
-    "live_split_ratio": (4, 3, 3),
-}
-
-
 class _Bus(QObject):
     changed = Signal()
 
@@ -164,68 +144,9 @@ def save(**changes):
         s.setValue(key, value)
 
 
-def layout_state() -> LayoutState:
-    """Read the live GUI layout metrics. Appearance changes use QSettings; config.yaml supplies startup defaults."""
-    s = _settings()
-    out: LayoutState = {
-        "control_spacing": int(LAYOUT_DEFAULTS["control_spacing"]),
-        "control_padding": int(LAYOUT_DEFAULTS["control_padding"]),
-        "frame_thickness": int(LAYOUT_DEFAULTS["frame_thickness"]),
-        "outer_margin": int(LAYOUT_DEFAULTS["outer_margin"]),
-        "column_gap": int(LAYOUT_DEFAULTS["column_gap"]),
-        "active_column_width": int(LAYOUT_DEFAULTS["active_column_width"]),
-        "side_column_width": int(LAYOUT_DEFAULTS["side_column_width"]),
-        "live_split_ratio": (4, 3, 3),
-    }
-    integer_keys = ("control_spacing", "control_padding", "frame_thickness", "outer_margin",
-                    "column_gap", "active_column_width", "side_column_width")
-    for key in integer_keys:
-        value = s.value("layout_" + key)
-        if value is not None:
-            try:
-                if key == "control_spacing":
-                    out["control_spacing"] = int(value)
-                elif key == "control_padding":
-                    out["control_padding"] = int(value)
-                elif key == "frame_thickness":
-                    out["frame_thickness"] = int(value)
-                elif key == "outer_margin":
-                    out["outer_margin"] = int(value)
-                elif key == "column_gap":
-                    out["column_gap"] = int(value)
-                elif key == "active_column_width":
-                    out["active_column_width"] = int(value)
-                elif key == "side_column_width":
-                    out["side_column_width"] = int(value)
-            except (TypeError, ValueError):
-                pass
-    value = s.value("layout_live_split_ratio")
-    if isinstance(value, (list, tuple)):
-        values = tuple(max(1, int(v)) for v in value[:3])
-        if len(values) == 3:
-            out["live_split_ratio"] = (values[0], values[1], values[2])
-    elif value is not None:
-        try:
-            values = tuple(max(1, int(v.strip())) for v in str(value).split(",")[:3])
-            if len(values) == 3:
-                out["live_split_ratio"] = (values[0], values[1], values[2])
-        except (TypeError, ValueError):
-            pass
-    return out
-
-
-def layout_save(**changes):
-    s = _settings()
-    for key, value in changes.items():
-        s.setValue("layout_" + key, list(value) if isinstance(value, tuple) else value)
-
-
 def apply_layout_config(raw):
-    """Load gui_layout metrics from config.yaml into QSettings before the first application theme is applied."""
-    section = raw.get("gui_layout") if isinstance(raw, dict) else None
-    if not isinstance(section, dict):
-        return
-    layout_save(**{key: value for key, value in section.items() if key in LAYOUT_DEFAULTS})
+    """config.yaml 'gui_layout' (first layout patch) is read once as defaults; the metrics now live in gui_metrics.yaml (see gui_metrics.py)."""
+    gui_metrics.load_legacy(raw)
 
 
 def tokens(st=None, mode=None):
@@ -274,10 +195,9 @@ def stylesheet(st=None, mode=None):
     r = int(st["radius"])
     k = max(0.5, float(st["font"]) / 100.0)
     S = lambda n: max(1, round(n * k))                       # a size in px that follows the text size
-    layout = layout_state()
-    pad = max(2, round(int(layout["control_padding"]) * k))
-    frame = max(0, int(layout["frame_thickness"]))
-    spacing = max(0, int(layout["control_spacing"]))
+    pad = max(2, round(int(gui_metrics.get("control_padding")) * k))
+    frame = max(0, int(gui_metrics.get("frame_thickness")))
+    spacing = max(0, int(gui_metrics.get("control_spacing")))
     # frame metrics follow the density: Compact (0) is the floating-LCD look - thin titles, tight group boxes, small tabs
     g_top, g_in, g_left, d_title, t_side = {0: (13, 5, 7, 2, 9), 1: (18, 9, 10, 4, 12), 2: (22, 12, 12, 6, 14)}.get(int(st["density"]), (18, 9, 10, 4, 12))
     win, base, alt, text, muted, border, accent = (t[k] for k in KEYS)
@@ -286,7 +206,7 @@ def stylesheet(st=None, mode=None):
     pressed = _mix(alt, accent, 0.32)
     sel_text = on_accent(t)
     tint = _mix(win, accent, 0.14)
-    return f"""
+    css = f"""
         QWidget {{ color: {text}; }}
         QMainWindow, QDialog {{ background: {win}; }}
         QWidget:disabled {{ color: {_mix(text, win, 0.6)}; }}
@@ -359,6 +279,7 @@ def stylesheet(st=None, mode=None):
         QTabBar::tab:hover:!selected {{ background: {hover}; }}
         QSvgWidget, QGraphicsView {{ border: none; }}
     """
+    return css + "\n" + gui_metrics.qss(t, k)                 # the metrics that differ from their default (gui_metrics.py)
 
 
 def apply(mode=None, app=None):
@@ -380,11 +301,12 @@ def apply(mode=None, app=None):
     qt_app.setPalette(palette(t))
     base_font = getattr(qt_app, "_base_font", None) or QFont(qt_app.font())
     setattr(qt_app, "_base_font", base_font)
-    font = QFont(base_font)
-    if base_font.pointSizeF() > 0:
-        font.setPointSizeF(base_font.pointSizeF() * st["font"] / 100.0)
+    font = gui_metrics.styled_font(base_font)                # interface font family / size / hinting / smoothing metrics
+    if font.pointSizeF() > 0:
+        font.setPointSizeF(font.pointSizeF() * st["font"] / 100.0)
     qt_app.setFont(font)
     qt_app.setStyleSheet(stylesheet(st) if st["detailed"] else "")
+    gui_metrics.apply_runtime(qt_app)
     bus.changed.emit()
 
 

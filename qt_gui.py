@@ -1,6 +1,7 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
+2026-11-25  Main window: outer margin, live console column gap / proportions and the sheet music file-list width come from gui_metrics (Appearance > Studio).
 2026-11-25  Following a take into the editor no longer stops the playback that has just started (Record center Play / Stop, roll Play).
 2026-11-25  Open MIDI: one shared picker (open_midi.py) in the main window, Stave Station and Piano Roll.
 2026-11-25  Playhead of the roll follows the real file time when the take itself plays (no one-bar lead on the visuals).
@@ -113,6 +114,7 @@ CHANGELOG
 """
 
 import importlib
+import gui_metrics
 import lastdir
 import polish
 from transport_widget import TransportBar
@@ -320,7 +322,7 @@ class SheetMusicWindow(QDialog):
         self.main_split.setStretchFactor(2, 1)
         saved_width = WINDOW_MEMORY.value("SheetMusicSideWidth") if WINDOW_MEMORY is not None else None
         self.side_panel.setMinimumWidth(220)
-        self.main_split.setSizes([int(saved_width) if isinstance(saved_width, (int, float)) and saved_width >= 220 else 320, 900, 900])
+        self.main_split.setSizes([int(saved_width) if isinstance(saved_width, (int, float)) and saved_width >= 220 else int(gui_metrics.get("side_column_width")), 900, 900])
         self.main_split.splitterMoved.connect(
             lambda *_: WINDOW_MEMORY and WINDOW_MEMORY.store("SheetMusicSideWidth", self.side_panel.width()))
         layout.addWidget(self.main_split, 1)
@@ -1564,15 +1566,15 @@ class OrganFaqDialog(QDialog):
         split.addWidget(self.preview)
         split.setSizes([550, 550])
         layout.addWidget(split, 1)
-        self.actions = QWidget()
-        row = QHBoxLayout(self.actions)
+        self.action_bar = QWidget()
+        row = QHBoxLayout(self.action_bar)
         row.setContentsMargins(0, 0, 0, 0)
         self.reset_button = QPushButton("Reset to shipped text")
         self.save_button = QPushButton("Save")
         self.close_button = QPushButton("Close")
         row.addWidget(self.reset_button)
         row.addWidget(self.save_button)
-        layout.addWidget(self.actions)
+        layout.addWidget(self.action_bar)
         close_row = QHBoxLayout()
         close_row.addStretch(1)
         close_row.addWidget(self.close_button)
@@ -1590,7 +1592,7 @@ class OrganFaqDialog(QDialog):
 
     def _edit_toggled(self, editing):
         self.edit_button.setText("Hide editor" if editing else "Edit")
-        for widget in (self.toolbar, self.editor, self.actions):
+        for widget in (self.toolbar, self.editor, self.action_bar):
             widget.setVisible(editing)
         if editing:
             self._split.setSizes([550, 550])
@@ -2182,6 +2184,9 @@ class BridgeWindow(QMainWindow):
         self.record_center = RecordCenter(self.bridge)
         self.record_center.open_hook = self._record_open
         self.top_tabs.currentChanged.connect(self._on_top_tab)
+        import themes
+        themes.bus.changed.connect(self._apply_metrics)
+        self._apply_metrics()
         self.setCentralWidget(self.top_tabs)
         self._build_menus()
 
@@ -2400,7 +2405,7 @@ class BridgeWindow(QMainWindow):
         stops_controls.addWidget(self.active_box, 1)
         self.live_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.live_splitter.setChildrenCollapsible(False)
-        self.live_splitter.setHandleWidth(7)
+        self.live_splitter.setHandleWidth(int(gui_metrics.get("column_gap")))
         middle_widget = QWidget()
         stops_controls.setContentsMargins(0, 0, 0, 0)
         middle_widget.setLayout(stops_controls)
@@ -2412,7 +2417,7 @@ class BridgeWindow(QMainWindow):
         for index, part in enumerate((self.setter_box, middle_widget, right_col)):
             part.setMinimumWidth(120)
             self.live_splitter.addWidget(part)
-            self.live_splitter.setStretchFactor(index, (4, 3, 3)[index])
+            self.live_splitter.setStretchFactor(index, self._live_ratio()[index])
         saved = QSettings("KeyLabGrandOrgue", "LiveLayout").value("splitter")
         if saved:
             self.live_splitter.restoreState(saved)
@@ -2599,12 +2604,29 @@ class BridgeWindow(QMainWindow):
             return True
         splitter = getattr(self, "live_splitter", None)
         if splitter is not None and obj is splitter and event.type() == QEvent.Type.Resize and not self._live_sized and splitter.width() > 300:
-            splitter.setSizes([round(splitter.width() * w / 10) for w in (4, 3, 3)])      # until the first drag (or a saved layout)
+            splitter.setSizes([round(splitter.width() * w / sum(self._live_ratio())) for w in self._live_ratio()])      # until the first drag (or a saved layout)
         if splitter is not None and event.type() == QEvent.Type.MouseButtonDblClick and obj in (splitter.handle(1), splitter.handle(2)):
             total = max(1, sum(splitter.sizes()))
-            splitter.setSizes([round(total * w / 10) for w in (4, 3, 3)])          # double-click a wall: default widths
+            splitter.setSizes([round(total * w / sum(self._live_ratio())) for w in self._live_ratio()])          # double-click a wall: default widths
             return True
         return super().eventFilter(obj, event)
+
+    def _live_ratio(self):
+        return tuple(int(gui_metrics.get(f"live_ratio_{i}")) for i in (1, 2, 3))
+
+    def _apply_metrics(self, *_):
+        """GUI metrics of the main window (outer margin, live console columns); runs at start and whenever Appearance > Studio changes one."""
+        margin = int(gui_metrics.get("outer_margin"))
+        if margin or getattr(self, "_outer_margin_set", False):
+            self.setContentsMargins(margin, margin, margin, margin)
+            self._outer_margin_set = True
+        splitter = getattr(self, "live_splitter", None)
+        if splitter is not None:
+            splitter.setHandleWidth(int(gui_metrics.get("column_gap")))
+            for index, weight in enumerate(self._live_ratio()):
+                splitter.setStretchFactor(index, weight)
+            if not self._live_sized and splitter.width() > 300:
+                splitter.setSizes([round(splitter.width() * w / sum(self._live_ratio())) for w in self._live_ratio()])
 
     def _live_splitter_moved(self, *_):
         self._live_sized = True                                # the user chose the widths: stop auto-sizing, remember them

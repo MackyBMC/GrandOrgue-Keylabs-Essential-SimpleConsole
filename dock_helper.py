@@ -5,6 +5,7 @@ Look: a slim title bar (small text, float and close buttons, double-click floats
 translucent from its right-click menu (remembered per dock), like the floating LCD.
 
 CHANGELOG
+2026-11-25  Optional soft panel shadow inside the frame (gui_metrics: shadow_*); preview mode for the Appearance > Studio miniature.
 2026-11-23  Grip sits 3 px further in from the corner.
 2026-11-23  The corner grip is our own widget placed in the real bottom-right corner (QSizeGrip placed itself wrongly inside the dock).
 2026-11-23  DockFrame: the floating LCD's layered frame (grey, accent line, darker panel, small margin) and a corner grip while floating.
@@ -63,19 +64,43 @@ class DockFrame(QWidget):
     """The floating LCD's frame around a dock's content: window grey, a thin accent line, a darker panel, a small margin, and (floating)
     the dotted corner grip that shows it can be resized."""
 
-    def __init__(self, inner: QWidget, dock: QDockWidget):
+    def __init__(self, inner: QWidget, dock: QDockWidget, preview: bool = False):
         super().__init__()
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 5, 6, 6)
-        layout.setSpacing(0)
-        layout.addWidget(inner)
+        self._layout = QVBoxLayout(self)
+        self._layout.setSpacing(0)
+        self._layout.addWidget(inner)
         self.grip = Grip(self)
-        self.grip.setVisible(dock.isFloating())
-        dock.topLevelChanged.connect(self.grip.setVisible)
+        self.grip.setVisible(preview or dock.isFloating())
+        if not preview:
+            dock.topLevelChanged.connect(self.grip.setVisible)
+        self._restyle()
+        try:
+            import themes
+            themes.bus.changed.connect(self._restyle)        # shadow metrics changed in Appearance > Studio
+        except Exception:
+            pass
+
+    def _shadow(self) -> tuple[bool, int, int, int, float]:
+        """(on, blur, dx, dy, strength) of the panel shadow metrics."""
+        try:
+            import gui_metrics as gm
+            return (bool(gm.get("shadow_enabled")), int(gm.get("shadow_blur")), int(gm.get("shadow_dx")),
+                    int(gm.get("shadow_dy")), int(gm.get("shadow_opacity")) / 100.0)
+        except Exception:
+            return False, 0, 0, 0, 0.0
+
+    def _pad(self) -> int:
+        on, blur, dx, dy, _strength = self._shadow()
+        return (-(-blur // 3) + max(abs(dx), abs(dy)) // 2) if on else 0
+
+    def _restyle(self) -> None:
+        pad = self._pad()
+        self._layout.setContentsMargins(6 + pad, 5 + pad, 6 + pad, 6 + pad)
+        self.update()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self.grip.move(self.width() - Grip.SIZE - 4, self.height() - Grip.SIZE - 4)
+        self.grip.move(self.width() - Grip.SIZE - 4 - self._pad(), self.height() - Grip.SIZE - 4 - self._pad())
         self.grip.raise_()
 
     def paintEvent(self, event) -> None:
@@ -87,7 +112,17 @@ class DockFrame(QWidget):
             window, base, accent = QColor("#31363b"), QColor("#232629"), QColor("#3daee9")
         painter = QPainter(self)
         painter.fillRect(self.rect(), window)
-        panel = QRectF(self.rect()).adjusted(2.5, 1.5, -2.5, -2.5)
+        pad = self._pad()
+        panel = QRectF(self.rect()).adjusted(2.5 + pad, 1.5 + pad, -2.5 - pad, -2.5 - pad)
+        on, _blur, dx, dy, strength = self._shadow()
+        if on and strength > 0:                                    # soft shadow: stacked translucent rounded rects inside the frame margin
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            steps = max(1, pad + 2)
+            for i in range(steps, 0, -1):
+                alpha = int(255 * strength * 0.5 * (1.0 - i / (steps + 1)) ** 2)
+                painter.setBrush(QColor(0, 0, 0, alpha))
+                painter.drawRoundedRect(panel.translated(dx, dy).adjusted(-i, -i, i, i), 2 + i, 2 + i)
         painter.setPen(QPen(accent, 1))
         painter.setBrush(base.darker(125))
         painter.drawRoundedRect(panel, 2, 2)
@@ -149,7 +184,7 @@ def set_opacity(dock: QDockWidget, value: float) -> None:
 
 def apply_opacity(dock: QDockWidget) -> None:
     try:
-        value = float(_settings().value("opacity/" + dock.objectName(), 1.0))
+        value = float(str(_settings().value("opacity/" + dock.objectName(), 1.0)))
     except (TypeError, ValueError):
         value = 1.0
     dock.setWindowOpacity(value if dock.isFloating() else 1.0)
@@ -168,7 +203,7 @@ def dock_in(window: QMainWindow, widget: QWidget, title: str, name: str,
     window.addDockWidget(area, dock)
     for action in window.menuBar().actions():
         menu = action.menu()
-        if menu is not None and action.text().replace("&", "") == "View":
+        if isinstance(menu, QMenu) and action.text().replace("&", "") == "View":
             menu.addSeparator()
             menu.addAction(dock.toggleViewAction())
             break

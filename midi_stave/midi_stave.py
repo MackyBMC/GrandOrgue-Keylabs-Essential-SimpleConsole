@@ -1,5 +1,6 @@
 """
 CHANGELOG
+2026-11-25  The roll view takes its drawing options (smoothing, GPU viewport) from gui_metrics (Appearance > Studio > Performance & GPU).
 2026-11-24  Default stave layout from the notes (auto_layout): solo / grand / organ + pedal / choir / one stave per channel or track.
 2026-11-25  Playhead: when the recorded take itself plays (Play from the shared transport), file time is the roll time. It was read as if bar 1 were time 0,
             so the playhead ran one lead-in (about a bar) ahead of the audio.
@@ -1757,6 +1758,7 @@ class Stave(QMainWindow):
         self.body.addWidget(self.splitter)
         self.roll = RollView()
         self.roll.window_ref = self
+        self._roll_metrics()
         self.roll.barMoved.connect(self.bar_moved)
         self.roll.barSelected.connect(self.select_bar)
         self.roll.insertRequested.connect(self.insert_bar_line)
@@ -2696,6 +2698,15 @@ class Stave(QMainWindow):
                 for x in self.setters]
 
     # ---- bar editing
+    def _roll_metrics(self):
+        """Piano roll drawing options (edge smoothing, picture scaling, OpenGL viewport) from the GUI metrics; re-applied when they change."""
+        import gui_metrics
+        import themes
+        gui_metrics.apply_roll(self.roll)
+        if not getattr(self, "_roll_metrics_hooked", False):
+            self._roll_metrics_hooked = True
+            themes.bus.changed.connect(lambda: gui_metrics.apply_roll(self.roll))
+
     def detect_bars(self, *_):
         if not self.notes:
             return
