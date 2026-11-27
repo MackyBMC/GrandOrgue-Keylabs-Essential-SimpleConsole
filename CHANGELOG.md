@@ -21,6 +21,10 @@
 - Record center: Open in roll loads the take into the roll at once; Play / Stop shows what is playing, or why it could not start.
 
 ### Changed
+- Internal: 11 widget / dialog classes and the config editor moved from qt_gui.py to the new gui/ package (no behaviour change).
+- Internal: ActiveTickDelegate flag clearing rewritten so pyright is clean (same behaviour).
+- Internal: SheetMusicWindow moved to gui/sheet_music.py; it no longer imports the main window (parent check via a Protocol).
+- Internal: Stave editor widgets and dialogs moved from midi_stave.py to score_widgets.py, roll_widgets.py and stave_dialogs.py (no behaviour change).
 - Docks use the floating LCD's frame (grey, thin accent line, darker panel, small margin, corner grip when floating); the Record center is a plain widget with tight margins and the main-window dock separators are thin, so no space is wasted around the Velocity lane and the Record center.
 - Compact frames, in the style of the floating LCD: group boxes, dock titles and tabs use much less space (the Density setting drives it; Compact is the new default, Appearance... changes it). Docks get a slim title bar (float and close buttons, double-click floats / docks) and a floating dock can be made translucent from its right-click menu (remembered).
 - The one-off apply scripts used while the tree diverged (add_record_center, record_center_v2 / v3, apply_copyright, fix_about, hide_padmap, wiki_apply_to_organ) are removed from the repository; their changes are in the code.
