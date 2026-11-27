@@ -12,6 +12,10 @@
 - KeyLab Record key LED (id 95) lights while recording or counting in.
 
 ### Fixed
+- Piano roll: key-height zoom (Ctrl+Up / Ctrl+Down) changes the note height again (regression of the module split).
+- Internal: module-split patch labels in source comments follow the v2.0.9 numbering.
+- Internal: gui/ package docstring cleaned up (comment only).
+- Piano roll: the quantised-note shadows of the tracks that are not active fade together with their notes.
 - Piano Roll: a loaded file is zoomed and centred on its notes (no more scrolling down from C9).
 - Opening a take in the editor no longer stops the playback that has just started (Record center Play / Stop; the editor seemed dead after opening recordings).
 - Piano Roll: Play of a recorded take no longer shows the playhead one lead-in (about a bar) ahead of the audio.

@@ -2,6 +2,8 @@
 strip, a keyboard and a velocity lane that all share two scroll bars (one horizontal, one vertical).
 
 CHANGELOG
+2026-11-28  Changelog labels of the module split now use the v2.0.9 patch numbers (comments only, no code change).
+2026-11-28  Fix: key-height zoom (Ctrl+Up / Ctrl+Down, the key slider) also sets ROW in the module that draws the roll (roll_widgets); since the split the notes kept their size.
 2026-11-25  File > Open MIDI / take... (shared picker).
 2026-11-25  A newly loaded file is zoomed (key height) and centred so all its notes are visible; no scrolling down from C9.
 2026-11-23  Tool bar: compact tempo control (one row), 18 px icons; a new file scrolls so bar 1 sits at the keys (no empty lead-in).
@@ -16,6 +18,7 @@ CHANGELOG
 2026-10-26  Renamed MIDI Track / Piano Roll Editor; track list panel (track_panel.py): active track, show, names, channel, add / remove.
 """
 import json
+import sys
 from PySide6.QtCore import QByteArray, QRectF, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtWidgets import (QComboBox, QGridLayout, QLabel, QMainWindow, QScrollBar, QSlider, QSpacerItem, QToolBar,
@@ -305,6 +308,7 @@ class RollWindow(QMainWindow):
         vbar = roll.verticalScrollBar()
         centre = roll.top - (vbar.value() + roll.viewport().height() / 2) / max(1, M.ROW)
         M.ROW = int(value)
+        setattr(sys.modules[type(roll).__module__], "ROW", M.ROW)      # RollView / NoteItem / PianoKeys read ROW in their own module (roll_widgets since v2.0.9-69)
         self.stave.refresh_roll(keep_view=True)
         vbar.setValue(int((roll.top - centre) * M.ROW - roll.viewport().height() / 2))
         self.stave.keys.update()

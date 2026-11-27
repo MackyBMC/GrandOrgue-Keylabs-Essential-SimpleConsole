@@ -3,8 +3,9 @@
 Split out of qt_gui.py without behaviour change.
 
 CHANGELOG
+2026-11-28  Changelog labels of the module split now use the v2.0.9 patch numbers (comments only, no code change).
 2026-11-27  ActiveTickDelegate.paint clears HasCheckIndicator through the flag's integer value (same result; no Flag operator typing for pyright).
-2026-11-27  Moved verbatim from qt_gui.py (v3.0.0 modularisation, patch 06).
+2026-11-27  Moved verbatim from qt_gui.py (modularisation, v2.0.9-65).
 """
 
 from PySide6.QtWidgets import (

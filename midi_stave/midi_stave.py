@@ -1,6 +1,8 @@
 """
 CHANGELOG
-2026-11-27  v3.0.0 modularisation (patch 10): BarLine, ScorePage, NoteItem, PianoKeys, VelocityLane, RollView (+ ROW), SolfaDialog, LyricsDialog, StopPicker, _Ticked, VoiceRegDialog, SetterPicker moved verbatim to score_widgets.py / roll_widgets.py / stave_dialogs.py and re-imported here (roll_window.py still reads them as midi_stave.<Name>); Stave stays.
+2026-11-28  Changelog labels of the module split now use the v2.0.9 patch numbers (comments only, no code change).
+2026-11-28  refresh_roll passes each quantised note's track and channel with its shadow so the roll can fade the shadows of inactive tracks.
+2026-11-27  Modularisation (v2.0.9-69): BarLine, ScorePage, NoteItem, PianoKeys, VelocityLane, RollView (+ ROW), SolfaDialog, LyricsDialog, StopPicker, _Ticked, VoiceRegDialog, SetterPicker moved verbatim to score_widgets.py / roll_widgets.py / stave_dialogs.py and re-imported here (roll_window.py still reads them as midi_stave.<Name>); Stave stays.
 2026-11-25  The roll view takes its drawing options (smoothing, GPU viewport) from gui_metrics (Appearance > Studio > Performance & GPU).
 2026-11-24  Default stave layout from the notes (auto_layout): solo / grand / organ + pedal / choir / one stave per channel or track.
 2026-11-25  Playhead: when the recorded take itself plays (Play from the shared transport), file time is the roll time. It was read as if bar 1 were time 0,
@@ -2626,7 +2628,7 @@ class Stave(QMainWindow):
         value = bar.value()
         ghosts = []
         for q in (self.qnotes if self.roll.show_ghosts else []):
-            ghosts.append((self.barmap.beat_to_sec(float(q.start)), self.barmap.beat_to_sec(float(q.end)), q.pitch))
+            ghosts.append((self.barmap.beat_to_sec(float(q.start)), self.barmap.beat_to_sec(float(q.end)), q.pitch, q.track, q.ch))
         self.roll.populate(self.notes, self.barmap, ghosts, self.selected_bar, self.sel_notes)
         if self.roll_window is not None:
             self.keys.update()

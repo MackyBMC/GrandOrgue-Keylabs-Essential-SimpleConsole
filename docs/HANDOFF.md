@@ -22,6 +22,8 @@ Release: bump `version.py`, tag `v<version>`, push; the GitHub Actions workflow 
 - `keylab_bridge/paths.py` (`go_folder()`), `preset_store.py`, `organ_layout.py`, `stop_grid.py`.
 - `midi_stave/core.py`: notes, `BarMap`, bar detection, quantise/shape (`shape_notes`), `make_staves`/`organ_staves`/`NAME_SETS`, `stave_go_channels`, `export_fixed_midi`.
 - `midi_stave/midi_stave.py`: `Stave` main window, `PianoRoll`, layouts, per-stave manual rows, registration dialogs, audition, playback hooks.
+- `gui/`: dialogs and widgets split out of `qt_gui.py` (window_memory, widgets, stop_grid, organ_faq, setter_wiki, config_editor, sheet_music); `qt_gui.py` re-imports every name, so `qt_gui.X` still works. A new package or module must be added to the include list in `packaging/nuitka_build.py`.
+- `midi_stave/score_widgets.py`, `roll_widgets.py`, `stave_dialogs.py`: widgets and dialogs split out of `midi_stave.py`, which re-imports them. `ROW` (key height) lives in `roll_widgets.py`; change it only through `roll_window._set_row`, which updates both copies.
 - `midi_stave/roll_window.py`, `track_panel.py` (track list, `OrganDialog`), `quant_tools.py`, `render.py` (MusicXML/Verovio), `sessionmeta.py` (manual slots, suggestions), `chrome.py`.
 - `packaging/`: Nuitka, Inno Setup (Standard/Portable page + GrandOrgue folder page), Linux/mac experimental.
 

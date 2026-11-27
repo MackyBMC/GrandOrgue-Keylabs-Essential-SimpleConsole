@@ -3,7 +3,9 @@
 Split out of midi_stave.py without behaviour change (imported by bare name like core / render; midi_stave.py re-imports every name).
 
 CHANGELOG
-2026-11-27  Moved verbatim from midi_stave.py (v3.0.0 modularisation, patch 10).
+2026-11-28  Changelog labels of the module split now use the v2.0.9 patch numbers (comments only, no code change).
+2026-11-28  Quantised-note shadows (ghost outlines) of the tracks that are not active fade with their notes (same 0.4 transparency); populate() accepts ghosts as (start, end, pitch[, track, channel]).
+2026-11-27  Moved verbatim from midi_stave.py (modularisation, v2.0.9-69).
 """
 
 from PySide6.QtGui import (
@@ -204,6 +206,7 @@ class VelocityLane(QWidget):
 
 
 class RollView(QGraphicsView):
+    DIM_OPACITY = 0.4                        # same transparency as NoteItem.style gives the notes of the other tracks
     hoverInfo = Signal(str)
     barMoved = Signal(int, float)
     barSelected = Signal(int)
@@ -310,10 +313,13 @@ class RollView(QGraphicsView):
             scene.addItem(r)
             self.note_items.append(r)
         pen = QPen(QColor(242, 163, 58), 1)
-        for g_start, g_end, pitch in ghosts:
+        for ghost in ghosts:
+            g_start, g_end, pitch = ghost[0], ghost[1], ghost[2]
             r = scene.addRect(g_start * self.pps, (hi - pitch) * ROW, max(2.0, (g_end - g_start) * self.pps), ROW, pen,
                               QBrush(Qt.BrushStyle.NoBrush))
             r.setZValue(0.5)                       # under the notes so clicks reach the notes
+            if len(ghost) > 4 and self.dim_inactive and active is not None and (ghost[3], ghost[4]) != active and len(palette) > 1:
+                r.setOpacity(self.DIM_OPACITY)     # the shadow of a faded track fades with its notes (same transparency)
         for i, t in enumerate(barmap.anchors):
             item = BarLine(i, t * self.pps, height, self)
             scene.addItem(item)

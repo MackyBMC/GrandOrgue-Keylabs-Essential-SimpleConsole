@@ -1,8 +1,9 @@
 """Optional PySide6 dashboard for the KeyLab bridge.
 
 CHANGELOG
-2026-11-27  v3.0.0 modularisation (patch 09): SheetMusicWindow moved to gui/sheet_music.py (parent check is now a runtime Protocol, SheetMusicHost); BridgeWindow is the only class left here.
-2026-11-27  v3.0.0 modularisation (patch 06): WindowMemory, ActiveTickDelegate, _MiniRoll, StarRating, OrganImageLabel, StopGridWidget / Dialog, OrganFaqDialog, SetterWikiPage, SetterGuidePanel, ConfigEditor (+ its tables) moved verbatim to the gui/ package and re-imported here; no behaviour change. SheetMusicWindow and BridgeWindow stay (SheetMusicWindow checks isinstance(parent, BridgeWindow)).
+2026-11-28  Changelog labels of the module split now use the v2.0.9 patch numbers (comments only, no code change).
+2026-11-27  Modularisation (v2.0.9-68): SheetMusicWindow moved to gui/sheet_music.py (parent check is now a runtime Protocol, SheetMusicHost); BridgeWindow is the only class left here.
+2026-11-27  Modularisation (v2.0.9-65): WindowMemory, ActiveTickDelegate, _MiniRoll, StarRating, OrganImageLabel, StopGridWidget / Dialog, OrganFaqDialog, SetterWikiPage, SetterGuidePanel, ConfigEditor (+ its tables) moved verbatim to the gui/ package and re-imported here; no behaviour change. SheetMusicWindow and BridgeWindow stay (SheetMusicWindow checks isinstance(parent, BridgeWindow)).
 2026-11-25  Main window: outer margin, live console column gap / proportions and the sheet music file-list width come from gui_metrics (Appearance > Studio).
 2026-11-25  Following a take into the editor no longer stops the playback that has just started (Record center Play / Stop, roll Play).
 2026-11-25  Open MIDI: one shared picker (open_midi.py) in the main window, Stave Station and Piano Roll.

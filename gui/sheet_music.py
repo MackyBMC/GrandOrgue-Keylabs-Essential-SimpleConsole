@@ -3,7 +3,8 @@
 Split out of qt_gui.py.
 
 CHANGELOG
-2026-11-27  Moved from qt_gui.py (v3.0.0 modularisation, patch 09). isinstance(parent, BridgeWindow) became isinstance(parent, SheetMusicHost) (a runtime Protocol, same single parent in practice); window memory comes from gui.window_memory.current().
+2026-11-28  Changelog labels of the module split now use the v2.0.9 patch numbers (comments only, no code change).
+2026-11-27  Moved from qt_gui.py (modularisation, v2.0.9-68). isinstance(parent, BridgeWindow) became isinstance(parent, SheetMusicHost) (a runtime Protocol, same single parent in practice); window memory comes from gui.window_memory.current().
 """
 
 from typing import Protocol, runtime_checkable

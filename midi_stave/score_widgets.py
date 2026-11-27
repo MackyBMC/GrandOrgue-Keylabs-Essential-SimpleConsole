@@ -3,7 +3,8 @@
 Split out of midi_stave.py without behaviour change (imported by bare name like core / render; midi_stave.py re-imports every name).
 
 CHANGELOG
-2026-11-27  Moved verbatim from midi_stave.py (v3.0.0 modularisation, patch 10).
+2026-11-28  Changelog labels of the module split now use the v2.0.9 patch numbers (comments only, no code change).
+2026-11-27  Moved verbatim from midi_stave.py (modularisation, v2.0.9-69).
 """
 
 from PySide6.QtGui import (

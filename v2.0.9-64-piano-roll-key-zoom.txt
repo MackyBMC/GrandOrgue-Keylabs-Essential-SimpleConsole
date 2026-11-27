@@ -1,0 +1,24 @@
+Status: Rebuilt after the user's apply-check failure; Git is blocked by the current sandbox, so the base commit and apply check could not be verified.
+Patch: v2.0.9-64-piano-roll-key-zoom.patch
+Base commit: UNVERIFIED (intended to follow v2.0.9-63-setter-already-loaded.patch; obtain the exact current HEAD before applying).
+
+What changed:
+- Updates the module that defines the live Piano Roll widget's ROW constant whenever key-height zoom changes.
+- Retains the Stave module's ROW update for its own pitch calculations.
+- Adds dated source and project changelog entries.
+
+Rebuild details:
+- Replaced the line-1 changelog anchor with the v2 changelog's `### Fixed` section location.
+- Normalized the patch to LF line endings and checked all unified-diff hunk counts.
+
+Checks:
+- Root cause evidence: the v3 modularisation puts the drawing widgets in `roll_widgets.py`, whose ROW is separate from the Stave module's imported ROW. A QtTest probe confirmed Ctrl+Up changes the slider and Stave alias while the drawing module remains at ROW=6. VERIFIED for the inspected v3 code.
+- v2 behavior / patch applicability: UNVERIFIED; this workspace contains the v3 modularised source, not the v2 base.
+- `git apply --check`: UNVERIFIED (Git command blocked by sandbox; user's prior attempt failed on the earlier draft).
+- `python -m py_compile`: UNVERIFIED (patch not applied).
+- Pylance/pyright: UNVERIFIED (patch not applied).
+- Real app visual behaviour: UNVERIFIED.
+- Real organ / hardware behaviour: not applicable.
+
+Patch order: after v2.0.9-63-setter-already-loaded.patch.
+Open questions: none.
