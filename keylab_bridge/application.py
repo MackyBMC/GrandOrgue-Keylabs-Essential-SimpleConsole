@@ -1,6 +1,8 @@
 """Bridge application state, event handling, and lifecycle.
 
 CHANGELOG
+2026-11-26  A SETTER marker at the start of a recording no longer reloads the setter the organ is already on (the reload muted GrandOrgue for seconds while the picture ran: sound started late on every recording).
+2026-11-25  The take player waits for the organ to load the opening setter before the first note (sound and picture start together).
 2026-11-25  A live recording without count-in is trimmed to start at its first note; with a count-in time 0 stays the downbeat after the count-in.
 2026-11-21  Organ map (Organs/<organ>.map.yaml): the bridge's keys -> the organ's ids and exact names; setter files take their names from it.
 2026-11-21  Snapshot "busy": what the bridge is waiting for (GrandOrgue still loading, loading a setter, confirming), shown with an animation in the setter list header.
@@ -182,6 +184,7 @@ class BridgeApp:
                                       int(forced) - 1 if forced else None,
                                       on_marker=lambda text: self.post_ui_event("setter_marker", text))
         self.take_player.set_tempo_bpm(self.tempo.bpm)
+        self.take_player.settle_wait = lambda: time.time() < getattr(self, "_activation_until", 0.0)      # organ still loading a setter
         self.language = load_language(cfg_path, raw)
         self._apply_organ_names()
         self.language_path = os.path.join(os.path.dirname(cfg_path), "language.txt") if cfg_path else ""
@@ -1798,11 +1801,20 @@ class BridgeApp:
         if index is None:
             self.log(f"MIDI file asks for setter {internal_id} {name} [{filename}], which is not in the setter list", level="WARN")
             return
+        if self._organ_already_on(index):
+            self.log(f"Setter {internal_id} {self.combinations[index]['name']} ({filename}): organ is already on it, not reloaded", notify=False)
+            return                                                   # a reload re-selects the file and mutes GrandOrgue while it loads
         self._activate_index(index)
         self.log(f"Setter {internal_id} {self.combinations[index]['name']} ({filename})", notify=False)
         if self._voice_regs:                       # the setter overwrote every manual: put the voice registrations back
             import threading
             threading.Timer(3.0, lambda: self.post_ui_event("regs_apply")).start()
+
+    def _organ_already_on(self, index):
+        """True when GrandOrgue reports exactly this setter file + step and we are not waiting on a load."""
+        if time.time() < getattr(self, "_activation_until", 0.0):
+            return False
+        return self.loaded_combination_index == index and self._combination_index_from_feedback() == index
 
     def _find_combination(self, filename, internal_id):
         for index, c in enumerate(self.combinations):
@@ -1962,7 +1974,7 @@ class BridgeApp:
         self.take_player.error = ""
         self.take_player.start(path, offset=offset, on_done=lambda: self.log(
             f"Playback finished: {self.take_player.sent} messages sent, {self.take_player.failed} not sent"
-            + f"; worst lateness {self.take_player.max_late * 1000:.0f} ms, {self.take_player.reanchors} stall(s) absorbed" + (f": {self.take_player.error}" if self.take_player.error else ""),
+            + f"; worst lateness {self.take_player.max_late * 1000:.0f} ms, {self.take_player.reanchors} stall(s) absorbed, waited {self.take_player.settled_s:.1f} s for the organ to load a setter" + (f": {self.take_player.error}" if self.take_player.error else ""),
             notify=False))
         self.log(f"Playing {os.path.basename(path)} on the organ (GrandOrgue must listen on the manual channels: run "
                  "make_go_midi_import.py and import the result, once)", notify=False)

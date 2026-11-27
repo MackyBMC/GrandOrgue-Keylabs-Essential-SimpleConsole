@@ -1,0 +1,59 @@
+# GrandOrgue KeyLab console: GUI metrics. Edit here or live in Appearance > Studio (Studio saves this file).
+# A missing key means its default. Delete the file to go back to the stock look.
+
+frames_bevel:
+  frame_thickness: 1   # Frame thickness (0..8 px)
+  frame_style: "flat"   # Panel bevel (flat/raised/sunken/groove/ridge)
+  button_style: "flat"   # Button bevel (flat/raised/sunken)
+  input_style: "flat"   # Input field bevel (flat/sunken/raised/groove)
+  frame_contrast: 0   # Edge contrast (0..100 %)
+
+spacing:
+  control_spacing: 3   # Tool bar spacing (0..32 px)
+  control_padding: 3   # Control padding (vertical) (1..16 px)
+  control_padding_h: 0   # Button padding (sides) (0..24 px)
+  group_padding: 0   # Group box padding (0..20 px)
+  outer_margin: 0   # Outer window margin (0..24 px)
+  tab_padding_h: 0   # Tab padding (sides) (0..30 px)
+  tab_gap: 2   # Gap between tabs (0..12 px)
+  splitter_width: 3   # Dock separator width (1..12 px)
+  scrollbar_width: 12   # Scroll bar width (6..28 px)
+
+tables_columns:
+  row_height: 0   # Row height (0..48 px)
+  header_padding: 0   # Column header padding (0..16 px)
+  column_offset: 0   # Cell text offset (0..24 px)
+  alternate_rows: true   # Alternating row colours
+  alternate_tint: 6   # Row tint strength (1..30 %)
+  grid_lines: false   # Grid lines in tables
+
+fonts:
+  ui_font_family: ""   # Interface font
+  ui_font_pt: 0.0   # Interface font size (0..24 pt)
+  list_font_family: ""   # List / table font
+  lcd_font_family: ""   # LCD readout font
+  title_weight: 400   # Title weight (400..900)
+  font_hinting: "default"   # Font hinting (default/none/vertical/full)
+  font_smoothing: "on"   # Font smoothing (default/off/on)
+
+shadows:
+  shadow_enabled: false   # Panel shadows
+  shadow_blur: 14   # Shadow size (0..40 px)
+  shadow_dx: 0   # Shadow offset right (-12..12 px)
+  shadow_dy: 3   # Shadow offset down (-12..12 px)
+  shadow_opacity: 45   # Shadow strength (0..100 %)
+
+performance_gpu:
+  perf_preset: "Custom"   # Performance profile (Auto/Low power/Balanced/High quality/Custom)
+  gl_backend: "Qt default"   # Graphics backend (Qt default/Desktop OpenGL/OpenGL ES (ANGLE)/Software)
+  roll_gpu: false   # GPU-drawn piano roll
+  roll_antialias: false   # Smooth edges in the roll
+  roll_smooth: false   # Smooth scaling of pictures
+  ui_animations: false   # Menu / tooltip animations
+
+live_console:
+  live_ratio_1: 4   # Live console: column 1 (1..10)
+  live_ratio_2: 3   # Live console: column 2 (1..10)
+  live_ratio_3: 3   # Live console: column 3 (1..10)
+  column_gap: 7   # Live console: column gap (0..32 px)
+  side_column_width: 320   # Sheet music: file list width (220..1200 px)

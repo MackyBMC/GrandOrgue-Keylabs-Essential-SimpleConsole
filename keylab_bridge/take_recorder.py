@@ -6,6 +6,7 @@ silence, so a practice session becomes a row of separate takes. The take in prog
 AUTOSAVE seconds, so a crash or power cut never loses more than that.
 
 CHANGELOG
+2026-11-25  Playback waits (clock and playhead held) for the organ to finish loading the opening setter before the first note (settle_wait).
 2026-11-25  trim_leading_silence(path): a live recording without count-in starts at its first note.
 2026-11-19  Takes are stamped with the session BPM at the start of the take (same real-time timing; tempo meta + tick rate follow it), so playback at the session BPM is speed 1.0.
 2026-11-17  Resume works across the main window and the stave / roll: a paused preview file and the loaded take count as the same place.
@@ -359,6 +360,8 @@ class TakePlayer:
         self.base_bpm = 120.0
         self.pos_file, self.pos_wall = 0.0, 0.0
         self.ac_file, self.ac_wall = 0.0, 0.0          # schedule anchor: file time <-> wall clock at the current speed
+        self.settle_wait = None                        # () -> True while the organ is still loading a setter we asked for (set by the application)
+        self.settled_s = 0.0
         self.max_late, self.reanchors = 0.0, 0
         self.sent = 0
         self.next_file = 0.0
@@ -540,6 +543,24 @@ class TakePlayer:
 
     LATE_RESYNC_S = 0.06       # a message later than this (a stall) moves the schedule instead of bursting out to catch up
 
+    SETTLE_MAX_S = 12.0
+
+    def _settle(self, file_time):
+        """Hold the clock (and so the playhead) while the organ loads the setter a marker asked for, then restart it from `file_time`.
+        Without this the notes were sent on time but GrandOrgue was busy loading: the sound came a bar or more after the picture."""
+        import time as _time
+        if self.settle_wait is None:
+            return
+        start = _time.perf_counter()
+        _time.sleep(0.3)                                       # the application starts the setter change from its own loop
+        while not self.stop_flag and self.settle_wait() and _time.perf_counter() - start < self.SETTLE_MAX_S:
+            _time.sleep(0.05)
+        now = _time.perf_counter()
+        self.settled_s += now - start
+        self.pos_file, self.pos_wall = file_time, now
+        with self._speed_changed:
+            self.ac_file, self.ac_wall = file_time, now
+
     def _wait_until(self, target_file):
         """Block until file time `target_file` is due at the current speed. Absolute schedule: a late message does not
         delay the next ones (no slow-down creep), and a stall is absorbed (no fast catch-up burst)."""
@@ -576,7 +597,15 @@ class TakePlayer:
                 self.ac_file, self.ac_wall = offset, now
             cumulative = 0.0
             skipping, last_marker = offset > 0, None
-            for msg in list(mido.MidiFile(path)):      # parsed up front, so nothing is read from disk mid-play; msg.time = seconds at the file's own tempo
+            messages = list(mido.MidiFile(path))
+            first_note, clock = None, 0.0
+            for msg in messages:                       # when the first note sounds: markers before it are the opening registration
+                clock += msg.time
+                if msg.type == "note_on" and msg.velocity > 0:
+                    first_note = clock
+                    break
+            self.settled_s = 0.0
+            for msg in messages:      # parsed up front, so nothing is read from disk mid-play; msg.time = seconds at the file's own tempo
                 cumulative += msg.time
                 self.next_file = max(cumulative, offset)
                 if skipping:
@@ -594,6 +623,7 @@ class TakePlayer:
                         self.ac_file, self.ac_wall = offset, now
                     if last_marker and self.on_marker:
                         self.on_marker(last_marker)
+                        self._settle(offset)
                 self._wait_until(cumulative)
                 if self.stop_flag:
                     break
@@ -601,6 +631,8 @@ class TakePlayer:
                 if msg.type == "marker":
                     if self.on_marker:
                         self.on_marker(msg.text)
+                        if first_note is not None and cumulative <= first_note + 0.05:
+                            self._settle(cumulative)           # the opening setter / registration must be loaded before the music starts
                 elif msg.type in ("note_on", "note_off", "control_change"):
                     for target in self._targets(msg, cumulative):
                         out = msg.copy(channel=target)
